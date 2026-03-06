@@ -248,6 +248,7 @@ export async function getTeamMembers(orgId: string) {
 export async function updateUserProfile(clerkId: string, data: {
   firstName?: string; lastName?: string; phone?: string
   licenseNumber?: string; mlsAgentId?: string; timezone?: string
+  onboardingComplete?: boolean; onboardingStep?: number
   aiPersona?: { tone: 'professional' | 'friendly' | 'luxury' | 'energetic'; writingStyle: string; tagline: string; specialties: string[]; marketArea: string }
 }) {
   const user = await db.query.users.findFirst({ where: eq(users.clerkId, clerkId) })
