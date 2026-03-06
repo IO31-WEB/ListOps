@@ -11,7 +11,7 @@
     "db:migrate": "drizzle-kit migrate",
     "db:push": "drizzle-kit push",
     "db:studio": "drizzle-kit studio",
-    "postbuild": "drizzle-kit push --force"
+    "postbuild": "drizzle-kit push --accept-data-loss"
   },
   "dependencies": {
     "@anthropic-ai/sdk": "^0.27.0",
