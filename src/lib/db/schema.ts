@@ -332,3 +332,7 @@ export const campaignRelations = relations(campaigns, ({ one }) => ({
   agent: one(users, { fields: [campaigns.agentId], references: [users.id] }),
   brandKit: one(brandKits, { fields: [campaigns.brandKitId], references: [brandKits.id] }),
 }))
+export const subscriptionRelations = relations(subscriptions, ({ one }) => ({
+  organization: one(organizations, { fields: [subscriptions.orgId], references: [organizations.id] }),
+  user: one(users, { fields: [subscriptions.userId], references: [users.id] }),
+}))
