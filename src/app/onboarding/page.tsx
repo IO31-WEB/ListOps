@@ -10,8 +10,8 @@ export default async function OnboardingPage() {
   if (!userId) redirect('/sign-in')
 
   // Check if onboarding already complete
-  // const user = await db.query.users.findFirst({ where: eq(users.clerkId, userId) })
-  // if (user?.onboardingComplete) redirect('/dashboard')
+  const user = await db.query.users.findFirst({ where: eq(users.clerkId, userId) })
+  if (user?.onboardingComplete) redirect('/dashboard')
 
   return <OnboardingClient />
 }
