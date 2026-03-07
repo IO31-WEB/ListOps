@@ -21,7 +21,7 @@ interface CampaignResult {
   campaignId?: string
   isDemo?: boolean
   planTier?: string
-  listing: { address: string; price: string; beds: number; baths: number; sqft: number }
+  listing: { address: string; price: string; beds: number; baths: number; sqft: number; photos?: string[]; description?: string }
   facebook: Array<{ week: number; theme: string; copy: string; hashtags?: string[] }>
   instagram: Array<{ week: number; caption: string; hashtags: string[] }>
   emailJustListed: string
@@ -268,6 +268,23 @@ export default function GeneratePage() {
             </div>
           </div>
 
+          {/* Property Photos */}
+          {result.listing.photos && result.listing.photos.length > 0 && (
+            <div className="bg-white rounded-xl border border-slate-200 overflow-hidden">
+              <div className="px-5 py-3 border-b border-slate-100 flex items-center justify-between">
+                <span className="font-display font-semibold text-slate-900 text-sm">Property Photos</span>
+                <span className="text-xs text-slate-400 bg-slate-100 px-2 py-0.5 rounded-full">{result.listing.photos.length} photos</span>
+              </div>
+              <div className="p-4 grid grid-cols-2 sm:grid-cols-3 gap-3">
+                {result.listing.photos.slice(0, 6).map((photo, i) => (
+                  <a key={i} href={photo} target="_blank" rel="noopener noreferrer" className="aspect-video rounded-xl overflow-hidden bg-slate-100 block hover:opacity-90 transition-opacity">
+                    <img src={photo} alt={`Property photo ${i + 1}`} className="w-full h-full object-cover" />
+                  </a>
+                ))}
+              </div>
+            </div>
+          )}
+
           {/* Facebook */}
           <Section title="Facebook Posts" icon={Facebook} badge={`${result.facebook?.length ?? 0} posts`}>
             <div className="divide-y divide-slate-100">
@@ -424,19 +441,24 @@ export default function GeneratePage() {
           )}
 
           {/* Flyer */}
-          <Section title="Print-Ready Flyer" icon={Printer} badge="Coming Soon">
-            <div className="p-6 text-center">
-              <div className="w-16 h-20 bg-slate-100 rounded-xl mx-auto mb-4 flex items-center justify-center border-2 border-dashed border-slate-200">
-                <Printer className="w-7 h-7 text-slate-400" />
+          <Section title="Print-Ready Flyer" icon={Printer} badge="PDF">
+            <div className="p-5 flex items-center justify-between gap-4">
+              <div>
+                <p className="text-sm font-semibold text-slate-900 mb-1">Listing Flyer</p>
+                <p className="text-xs text-slate-500">Opens a print-ready page — use your browser&apos;s Print → Save as PDF to download.</p>
               </div>
-              <p className="text-sm text-slate-700 font-semibold mb-1">PDF Flyer Generation</p>
-              <p className="text-xs text-slate-500 mb-4 max-w-sm mx-auto">
-                PDF flyer generation is coming in the next update. Your campaign content is saved and ready to use.
-              </p>
-              {result.campaignId && (
-                <Link href={`/dashboard/campaigns/${result.campaignId}`} className="inline-flex items-center gap-2 text-sm font-medium text-amber-700 bg-amber-50 hover:bg-amber-100 px-4 py-2 rounded-xl transition-colors">
-                  View Full Campaign <ArrowRight className="w-3.5 h-3.5" />
-                </Link>
+              {result.campaignId ? (
+                <a
+                  href={`/dashboard/campaigns/${result.campaignId}/flyer`}
+                  target="_blank"
+                  rel="noopener noreferrer"
+                  className="inline-flex items-center gap-2 bg-slate-900 text-white text-sm font-semibold px-4 py-2 rounded-xl hover:bg-slate-800 transition-colors flex-shrink-0"
+                >
+                  <Printer className="w-4 h-4" />
+                  Generate Flyer
+                </a>
+              ) : (
+                <span className="text-xs text-slate-400 italic">Save campaign first</span>
               )}
             </div>
           </Section>
