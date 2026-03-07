@@ -39,6 +39,11 @@ interface Campaign {
     bedrooms?: number; bathrooms?: string; sqft?: number; photos?: string[]
     description?: string
   }
+  brandKit?: {
+    agentName?: string; agentTitle?: string; agentPhone?: string; agentEmail?: string
+    agentPhotoUrl?: string; logoUrl?: string; brokerageLogo?: string
+    brokerageName?: string; tagline?: string; primaryColor?: string; accentColor?: string
+  }
 }
 
 function CopyButton({ text, label }: { text: string; label?: string }) {
@@ -60,7 +65,7 @@ function CopyButton({ text, label }: { text: string; label?: string }) {
 function Section({ title, badge, icon: Icon, children }: {
   title: string; badge?: string; icon: React.ComponentType<{ className?: string }>; children: React.ReactNode
 }) {
-  const [open, setOpen] = useState(true)
+  const [open, setOpen] = useState(false)
   return (
     <div className="bg-white rounded-2xl border border-slate-200 overflow-hidden">
       <button onClick={() => setOpen(!open)} className="w-full flex items-center justify-between p-5 text-left hover:bg-slate-50 transition-colors">
@@ -148,6 +153,17 @@ export default function CampaignDetailPage() {
         </Link>
         <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
           <div>
+            {/* Logos row */}
+            {(campaign.brandKit?.logoUrl || campaign.brandKit?.brokerageLogo) && (
+              <div className="flex items-center gap-3 mb-3">
+                {campaign.brandKit?.logoUrl && (
+                  <img src={campaign.brandKit.logoUrl} alt="Agent Logo" className="h-8 max-w-[100px] object-contain" />
+                )}
+                {campaign.brandKit?.brokerageLogo && (
+                  <img src={campaign.brandKit.brokerageLogo} alt="Brokerage Logo" className="h-7 max-w-[90px] object-contain opacity-80" />
+                )}
+              </div>
+            )}
             <h1 className="font-display text-2xl font-semibold text-slate-900">{address || 'Campaign'}</h1>
             <div className="flex items-center gap-3 mt-1.5 text-xs text-slate-500">
               {campaign.listing?.price && <span>${Number(campaign.listing.price).toLocaleString()}</span>}
