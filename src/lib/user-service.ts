@@ -109,22 +109,42 @@ export async function downgradeToFree(orgId: string) {
 
 // ── Sync plan from Clerk privateMetadata → DB ────────────────
 // This lets you override the plan in Clerk dashboard without needing Stripe.
-// Clerk privateMetadata.planTier takes precedence over DB subscription.
+// Accepts either privateMetadata.planTier OR privateMetadata.plan (both work)
 export async function syncPlanFromClerkMetadata(clerkId: string): Promise<PlanTier | null> {
   try {
     const client = await clerkClient()
     const clerkUser = await client.users.getUser(clerkId)
     const meta = clerkUser.privateMetadata as Record<string, any>
-    const clerkTier = meta?.planTier as PlanTier | undefined
-    const validTiers: PlanTier[] = ['free', 'starter', 'pro', 'brokerage', 'enterprise']
 
-    if (!clerkTier || !validTiers.includes(clerkTier)) return null
+    // Accept both 'planTier' and 'plan' as the metadata key
+    const rawTier = (meta?.planTier ?? meta?.plan) as string | undefined
+    const validTiers: PlanTier[] = ['free', 'starter', 'pro', 'brokerage', 'enterprise']
+    const clerkTier = (rawTier && validTiers.includes(rawTier as PlanTier))
+      ? rawTier as PlanTier
+      : null
+
+    if (!clerkTier) return null
 
     // Find the user's org and update the DB subscription to match
-    const user = await db.query.users.findFirst({
+    let user = await db.query.users.findFirst({
       where: eq(users.clerkId, clerkId),
       with: { organization: true },
     })
+
+    // If user has no org yet, create one so the plan can be stored
+    if (user && !user.orgId) {
+      const email = clerkUser.emailAddresses?.[0]?.emailAddress ?? ''
+      const name = [clerkUser.firstName, clerkUser.lastName].filter(Boolean).join(' ') || email
+      const [newOrg] = await db.insert(organizations).values({
+        name: `${name}'s Organization`,
+        plan: clerkTier,
+      }).returning()
+      await db.update(users)
+        .set({ orgId: newOrg.id, updatedAt: new Date() })
+        .where(eq(users.clerkId, clerkId))
+      user = { ...user, orgId: newOrg.id }
+    }
+
     if (!user?.orgId) return clerkTier
 
     const existing = await db.query.subscriptions.findFirst({
