@@ -1,6 +1,11 @@
 /**
  * Campaign Generation API
- * Uses SimplyRETS demo data when MLS ID not found, so generation always works
+ * Generates only the content types the user's plan includes.
+ *
+ * FREE:     Facebook (6) + Instagram (6) + Email (2) — no brand kit applied
+ * STARTER:  FREE + brand kit applied to content
+ * PRO:      STARTER + Video/Reel Scripts (6)
+ * BROKERAGE/ENTERPRISE: PRO + white-label brand override
  */
 
 import { NextRequest, NextResponse } from 'next/server'
@@ -10,6 +15,8 @@ import { db } from '@/lib/db'
 import { campaigns, listings } from '@/lib/db/schema'
 import { eq, and } from 'drizzle-orm'
 import { getUserWithDetails, checkCampaignQuota, incrementCampaignUsage } from '@/lib/user-service'
+import { canAccessFeature } from '@/lib/stripe'
+import type { PlanTier } from '@/lib/stripe'
 import { z } from 'zod'
 import { slugify } from '@/lib/utils'
 
@@ -19,7 +26,7 @@ const RequestSchema = z.object({
   mlsId: z.string().min(1).max(50),
 })
 
-// ── Demo listing fallback (always works) ──────────────────────
+// ── Demo listing fallback ─────────────────────────────────────
 function getDemoListing(mlsId: string) {
   return {
     mlsId,
@@ -56,19 +63,13 @@ async function fetchMLSListing(mlsId: string) {
 
   try {
     const res = await fetch(`https://api.simplyrets.com/properties/${mlsId}`, {
-      headers: {
-        Authorization: `Basic ${credentials}`,
-        Accept: 'application/json',
-      },
+      headers: { Authorization: `Basic ${credentials}`, Accept: 'application/json' },
       signal: AbortSignal.timeout(8000),
     })
-
     if (!res.ok) {
-      // Fall back to demo data instead of erroring
       console.log(`MLS lookup failed (${res.status}) for ${mlsId} — using demo data`)
       return { data: getDemoListing(mlsId), isDemo: true }
     }
-
     return { data: await res.json(), isDemo: false }
   } catch {
     console.log(`MLS connection failed for ${mlsId} — using demo data`)
@@ -76,8 +77,8 @@ async function fetchMLSListing(mlsId: string) {
   }
 }
 
-// ── Build Claude prompt ───────────────────────────────────────
-function buildCampaignPrompt(listing: any, brandKit?: any) {
+// ── Build prompt — only requests what the plan unlocks ────────
+function buildCampaignPrompt(listing: any, planTier: PlanTier, brandKit?: any) {
   const address = [
     listing.address?.deliveryLine || listing.address?.line1,
     listing.address?.city,
@@ -91,26 +92,61 @@ function buildCampaignPrompt(listing: any, brandKit?: any) {
   const yearBuilt = listing.property?.yearBuilt ?? ''
   const propertyType = listing.property?.type ?? 'Residential'
   const description = listing.remarks ?? ''
-  const features = Array.isArray(listing.property?.features)
-    ? listing.property.features.join(', ')
-    : ''
+  const features = Array.isArray(listing.property?.features) ? listing.property.features.join(', ') : ''
   const city = listing.address?.city ?? ''
 
-  const agentName = brandKit?.agentName || `${listing.agent?.firstName ?? ''} ${listing.agent?.lastName ?? ''}`.trim() || 'Your Agent'
-  const agentPhone = brandKit?.agentPhone || listing.agent?.contact?.office || ''
-  const tone = brandKit?.aiPersona?.tone || 'professional'
-  const tagline = brandKit?.tagline || ''
+  // Brand kit only applied for starter+ plans
+  const hasBrandKit = canAccessFeature(planTier, 'brand_kit') && !!brandKit
+  const agentName = hasBrandKit
+    ? (brandKit?.agentName || `${listing.agent?.firstName ?? ''} ${listing.agent?.lastName ?? ''}`.trim() || 'Your Agent')
+    : `${listing.agent?.firstName ?? ''} ${listing.agent?.lastName ?? ''}`.trim() || 'Your Agent'
+  const agentPhone = hasBrandKit ? (brandKit?.agentPhone || listing.agent?.contact?.office || '') : ''
+  const tone = hasBrandKit ? (brandKit?.aiPersona?.tone || 'professional') : 'professional'
+  const tagline = hasBrandKit ? (brandKit?.tagline || '') : ''
+
+  // White-label: brokerage overrides with their brand
+  const isWhiteLabel = canAccessFeature(planTier, 'white_label') && brandKit?.brokerageName
+  const brandingLine = isWhiteLabel
+    ? `Brokerage: ${brandKit.brokerageName} — remove all CampaignAI mentions`
+    : 'Presented by CampaignAI'
+
   const listingUrl = `https://campaignai.io/l/listing-${listing.mlsId || listing.listingId}`
 
   const toneGuides: Record<string, string> = {
-    professional: 'authoritative, data-driven, and polished. Focus on investment value and market position.',
-    friendly: 'warm, conversational, and approachable. Speak directly to the buyers lifestyle.',
-    luxury: 'elevated, aspirational, and refined. Focus on prestige, exclusivity, and lifestyle.',
-    energetic: 'enthusiastic, compelling, and urgent. Use active language and excitement.',
+    professional: 'authoritative, data-driven, and polished.',
+    friendly: 'warm, conversational, and approachable.',
+    luxury: 'elevated, aspirational, and refined.',
+    energetic: 'enthusiastic, compelling, and urgent.',
   }
   const toneGuide = toneGuides[tone] ?? toneGuides['professional']
 
-  return `You are an expert real estate marketing copywriter. Generate a COMPLETE 6-week social media and email campaign.
+  // Feature flags
+  const includeReelScripts = canAccessFeature(planTier, 'video_script')
+
+  // Build JSON schema based on plan
+  const jsonSchema = `{
+  "facebook": [
+    {"week": 1, "theme": "Just Listed", "copy": "150-250 word post including ${listingUrl}", "hashtags": ["realtor","justlisted","${city.toLowerCase().replace(/\s/g, '')}realestate"]}
+  ],
+  "instagram": [
+    {"week": 1, "caption": "100-150 word caption including ${listingUrl}", "hashtags": ["justlisted","realestate","homeforsale","${city.toLowerCase().replace(/\s/g, '')}homes"]}
+  ],
+  "emailJustListed": "200-300 word just listed email body with full property details and CTA",
+  "emailStillAvailable": "150-200 word still available follow-up with urgency"${includeReelScripts ? `,
+  "reelScripts": [
+    {
+      "week": 1,
+      "title": "Just Listed Hook",
+      "duration": "30–45 sec",
+      "hook": "Opening line spoken to camera — grabs attention in 3 seconds",
+      "script": "Full word-for-word spoken script with scene directions in [brackets]. Natural, energetic, conversational. Include address, price, top features. End with a clear CTA.",
+      "captions": ["on-screen text line 1", "on-screen text line 2", "on-screen text line 3"],
+      "music": "Suggested music vibe"
+    }
+  ]` : ''}
+}`
+
+  return `You are an expert real estate marketing copywriter. Generate a 6-week campaign for this listing.
 
 LISTING:
 - Address: ${address}
@@ -122,31 +158,26 @@ LISTING:
 - City: ${city}
 - URL: ${listingUrl}
 
-AGENT: ${agentName} | ${agentPhone} | Tagline: ${tagline}
+AGENT: ${agentName}${agentPhone ? ` | ${agentPhone}` : ''}${tagline ? ` | "${tagline}"` : ''}
 TONE: ${toneGuide}
+BRANDING: ${brandingLine}
 
 WEEK THEMES:
-1: Just Listed — first impressions
-2: Property Features — best rooms
-3: Neighborhood & Lifestyle
-4: Open House invite
-5: Investment Value
-6: Final Call — urgency
+1: Just Listed — excitement, first impressions
+2: Property Features — best rooms and details
+3: Neighborhood & Lifestyle — area, schools, walkability
+4: Open House — invite and social proof
+5: Investment Value — ROI, market position
+6: Final Call — urgency, still available
 
 Return ONLY valid JSON (no markdown, no code fences):
 
-{
-  "facebook": [
-    {"week": 1, "theme": "Just Listed", "copy": "150-250 word post including ${listingUrl}", "hashtags": ["realtor","justlisted","${city.toLowerCase().replace(/\s/g,'')}realestate"]}
-  ],
-  "instagram": [
-    {"week": 1, "caption": "100-150 word caption including ${listingUrl}", "hashtags": ["justlisted","realestate","homeforsale","${city.toLowerCase().replace(/\s/g,'')}homes"]}
-  ],
-  "emailJustListed": "200-300 word just listed email body with full property details and CTA",
-  "emailStillAvailable": "150-200 word still available follow-up with urgency"
-}
+${jsonSchema}
 
-Generate all 6 weeks for facebook and instagram. Return ONLY the JSON object.`
+Rules:
+- Generate all 6 weeks for facebook and instagram
+${includeReelScripts ? '- Generate all 6 weeks for reelScripts — each unique to its theme\n- Reel scripts must feel authentic, like real agent videos not ads' : ''}
+- Return ONLY the JSON object`
 }
 
 // ── POST handler ──────────────────────────────────────────────
@@ -158,7 +189,7 @@ export async function POST(request: NextRequest) {
     const body = await request.json()
     const { mlsId } = RequestSchema.parse(body)
 
-    // Check quota
+    // checkCampaignQuota syncs Clerk metadata → DB before checking
     const quota = await checkCampaignQuota(userId)
     if (!quota.allowed) {
       return NextResponse.json(
@@ -167,27 +198,28 @@ export async function POST(request: NextRequest) {
       )
     }
 
+    const planTier = quota.planTier
     const user = await getUserWithDetails(userId)
     if (!user) return NextResponse.json({ error: 'User not found' }, { status: 404 })
 
-    const startMs = Date.now()
+    // Only apply brand kit for starter+ plans
+    const brandKit = canAccessFeature(planTier, 'brand_kit') ? user.brandKit : null
 
-    // Fetch MLS listing (falls back to demo data on failure)
+    const startMs = Date.now()
     const { data: mlsData, isDemo } = await fetchMLSListing(mlsId)
 
-    // Cache listing in DB
     const address = [
       mlsData.address?.deliveryLine || mlsData.address?.line1,
       mlsData.address?.city,
       mlsData.address?.state,
     ].filter(Boolean).join(', ')
 
+    // Cache listing in DB
     let listingRecord
     try {
       const existingListing = await db.query.listings.findFirst({
         where: and(eq(listings.mlsId, mlsId), eq(listings.agentId, user.id)),
       })
-
       if (existingListing) {
         listingRecord = existingListing
       } else {
@@ -216,7 +248,6 @@ export async function POST(request: NextRequest) {
       }
     } catch (dbErr) {
       console.error('DB listing error (non-fatal):', dbErr)
-      // Continue even if DB fails — generation still works
     }
 
     // Create campaign record
@@ -227,7 +258,7 @@ export async function POST(request: NextRequest) {
         listingId: listingRecord?.id ?? undefined,
         agentId: user.id,
         orgId: user.orgId ?? undefined,
-        brandKitId: user.brandKit?.id ?? undefined,
+        brandKitId: brandKit?.id ?? undefined,
         status: 'generating',
         micrositeSlug,
       }).returning()
@@ -236,8 +267,8 @@ export async function POST(request: NextRequest) {
       console.error('DB campaign error (non-fatal):', dbErr)
     }
 
-    // Generate with Claude
-    const prompt = buildCampaignPrompt(mlsData, user.brandKit)
+    // Generate — prompt scoped to plan
+    const prompt = buildCampaignPrompt(mlsData, planTier, brandKit)
     const message = await anthropic.messages.create({
       model: 'claude-sonnet-4-20250514',
       max_tokens: 8000,
@@ -246,23 +277,15 @@ export async function POST(request: NextRequest) {
 
     const responseText = message.content[0].type === 'text' ? message.content[0].text : ''
 
-    // Parse JSON response
     let campaignContent: any
     try {
-      const cleaned = responseText
-        .replace(/```json\n?/g, '')
-        .replace(/```\n?/g, '')
-        .trim()
+      const cleaned = responseText.replace(/```json\n?/g, '').replace(/```\n?/g, '').trim()
       campaignContent = JSON.parse(cleaned)
     } catch {
-      // If JSON parse fails, try to extract JSON from the response
       const jsonMatch = responseText.match(/\{[\s\S]*\}/)
       if (jsonMatch) {
-        try {
-          campaignContent = JSON.parse(jsonMatch[0])
-        } catch {
-          throw new Error('AI response could not be parsed. Please try again.')
-        }
+        try { campaignContent = JSON.parse(jsonMatch[0]) }
+        catch { throw new Error('AI response could not be parsed. Please try again.') }
       } else {
         throw new Error('AI response could not be parsed. Please try again.')
       }
@@ -270,7 +293,7 @@ export async function POST(request: NextRequest) {
 
     const generationMs = Date.now() - startMs
 
-    // Save completed campaign
+    // Save only what the plan includes
     if (campaignRecord) {
       try {
         await db.update(campaigns)
@@ -281,6 +304,10 @@ export async function POST(request: NextRequest) {
             instagramPosts: campaignContent.instagram,
             emailJustListed: campaignContent.emailJustListed,
             emailStillAvailable: campaignContent.emailStillAvailable,
+            // Only save video scripts for pro+
+            videoScript: canAccessFeature(planTier, 'video_script') && campaignContent.reelScripts
+              ? JSON.stringify(campaignContent.reelScripts)
+              : null,
             promptTokens: message.usage.input_tokens,
             completionTokens: message.usage.output_tokens,
             updatedAt: new Date(),
@@ -296,6 +323,7 @@ export async function POST(request: NextRequest) {
     return NextResponse.json({
       campaignId: campaignRecord?.id,
       isDemo,
+      planTier,
       listing: {
         address,
         price: mlsData.listPrice ? `$${mlsData.listPrice.toLocaleString()}` : 'Price on request',
@@ -309,6 +337,10 @@ export async function POST(request: NextRequest) {
       instagram: campaignContent.instagram,
       emailJustListed: campaignContent.emailJustListed,
       emailStillAvailable: campaignContent.emailStillAvailable,
+      // Only returned for pro+
+      reelScripts: canAccessFeature(planTier, 'video_script')
+        ? (campaignContent.reelScripts ?? [])
+        : null,
       generationMs,
     })
 
