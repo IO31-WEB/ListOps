@@ -18,8 +18,8 @@ const BrandKitSchema = z.object({
   facebookUrl: z.string().url().optional().or(z.literal('')),
   instagramHandle: z.string().max(50).optional(),
   linkedinUrl: z.string().url().optional().or(z.literal('')),
-  logoUrl: z.string().url().optional().or(z.literal('')),
-  agentPhotoUrl: z.string().url().optional().or(z.literal('')),
+  logoUrl: z.string().optional().or(z.literal('')),
+  agentPhotoUrl: z.string().optional().or(z.literal('')),
   brokerageLogo: z.string().url().optional().or(z.literal('')),
 })
 
