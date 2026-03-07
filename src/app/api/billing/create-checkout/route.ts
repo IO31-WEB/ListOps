@@ -87,7 +87,6 @@ export async function POST(request: NextRequest) {
       },
       allow_promotion_codes: true,
       billing_address_collection: 'auto',
-      tax_id_collection: { enabled: true },
     })
 
     return NextResponse.json({ url: session.url })
