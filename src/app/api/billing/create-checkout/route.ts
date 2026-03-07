@@ -82,7 +82,7 @@ export async function POST(request: NextRequest) {
       cancel_url: absoluteUrl('/dashboard/billing?canceled=true'),
       metadata: { orgId: org.id, clerkUserId: userId, planId, billing },
       subscription_data: {
-        trial_period_days: planId === 'brokerage' ? 14 : 0,
+        ...(planId === 'brokerage' ? { trial_period_days: 14 } : {}),
         metadata: { orgId: org.id, clerkUserId: userId, planId },
       },
       allow_promotion_codes: true,
