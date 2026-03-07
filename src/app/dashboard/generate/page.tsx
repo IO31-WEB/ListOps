@@ -450,7 +450,7 @@ export default function GeneratePage() {
               </div>
               {result.campaignId ? (
                 <a
-                  href={`/dashboard/campaigns/${result.campaignId}/flyer`}
+                  href={`/flyer/${result.campaignId}`}
                   target="_blank"
                   rel="noopener noreferrer"
                   className="inline-flex items-center gap-2 bg-slate-900 text-white text-sm font-semibold px-4 py-2 rounded-xl hover:bg-slate-800 transition-colors flex-shrink-0"
