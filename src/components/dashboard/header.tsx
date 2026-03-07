@@ -32,14 +32,24 @@ interface Notification {
   type: 'success' | 'info' | 'warning'
   title: string
   body: string
-  time: string
+  createdAt: number  // unix ms timestamp
   read: boolean
+  href?: string      // click destination
 }
 
+function timeAgo(ms: number): string {
+  const diff = Date.now() - ms
+  if (diff < 60_000) return 'just now'
+  if (diff < 3_600_000) return `${Math.floor(diff / 60_000)}m ago`
+  if (diff < 86_400_000) return `${Math.floor(diff / 3_600_000)}h ago`
+  return `${Math.floor(diff / 86_400_000)}d ago`
+}
+
+const now = Date.now()
 const DEMO_NOTIFICATIONS: Notification[] = [
-  { id: '1', type: 'success', title: 'Campaign generated', body: '2847 Oakwood Circle — 6-week campaign is ready.', time: '2m ago', read: false },
-  { id: '2', type: 'info', title: 'Pro plan active', body: 'Your plan was synced. Video scripts and microsites unlocked.', time: '1h ago', read: false },
-  { id: '3', type: 'info', title: 'Welcome to CampaignAI', body: 'Generate your first campaign to get started.', time: '2d ago', read: true },
+  { id: '1', type: 'success', title: 'Campaign generated', body: '2847 Oakwood Circle — 6-week campaign is ready.', createdAt: now - 2 * 60_000, read: false, href: '/dashboard/campaigns' },
+  { id: '2', type: 'info', title: 'Pro plan active', body: 'Your plan was synced. Video scripts and microsites unlocked.', createdAt: now - 62 * 60_000, read: false, href: '/dashboard/billing' },
+  { id: '3', type: 'info', title: 'Welcome to CampaignAI', body: 'Generate your first campaign to get started.', createdAt: now - 2 * 86_400_000, read: true, href: '/dashboard/generate' },
 ]
 
 export function DashboardHeader() {
@@ -183,21 +193,32 @@ export function DashboardHeader() {
                 <button onClick={markAllRead} className="text-xs text-slate-400 hover:text-slate-600 transition-colors">Mark all read</button>
               </div>
               <div className="divide-y divide-slate-100 max-h-80 overflow-y-auto">
-                {notifications.map(n => (
-                  <div key={n.id} className={`px-4 py-3 flex gap-3 ${!n.read ? 'bg-amber-50/40' : ''}`}>
-                    <div className="flex-shrink-0 mt-0.5">
-                      {n.type === 'success' ? <CheckCircle className="w-4 h-4 text-green-500" /> :
-                       n.type === 'warning' ? <AlertCircle className="w-4 h-4 text-amber-500" /> :
-                       <Zap className="w-4 h-4 text-blue-500" />}
-                    </div>
-                    <div className="flex-1 min-w-0">
-                      <p className="text-sm font-medium text-slate-900">{n.title}</p>
-                      <p className="text-xs text-slate-500 mt-0.5">{n.body}</p>
-                      <p className="text-xs text-slate-400 mt-1">{n.time}</p>
-                    </div>
-                    {!n.read && <span className="w-2 h-2 bg-amber-400 rounded-full flex-shrink-0 mt-1.5" />}
-                  </div>
-                ))}
+                {notifications.map(n => {
+                  const inner = (
+                    <>
+                      <div className="flex-shrink-0 mt-0.5">
+                        {n.type === 'success' ? <CheckCircle className="w-4 h-4 text-green-500" /> :
+                         n.type === 'warning' ? <AlertCircle className="w-4 h-4 text-amber-500" /> :
+                         <Zap className="w-4 h-4 text-blue-500" />}
+                      </div>
+                      <div className="flex-1 min-w-0">
+                        <p className="text-sm font-medium text-slate-900">{n.title}</p>
+                        <p className="text-xs text-slate-500 mt-0.5">{n.body}</p>
+                        <p className="text-xs text-slate-400 mt-1">{timeAgo(n.createdAt)}</p>
+                      </div>
+                      {!n.read && <span className="w-2 h-2 bg-amber-400 rounded-full flex-shrink-0 mt-1.5" />}
+                    </>
+                  )
+                  const baseClass = `px-4 py-3 flex gap-3 transition-colors ${!n.read ? 'bg-amber-50/40' : ''}`
+                  return n.href ? (
+                    <Link key={n.id} href={n.href} onClick={() => { setNotifications(prev => prev.map(x => x.id === n.id ? { ...x, read: true } : x)); setNotifOpen(false) }}
+                      className={`${baseClass} hover:bg-slate-50 cursor-pointer`}>
+                      {inner}
+                    </Link>
+                  ) : (
+                    <div key={n.id} className={baseClass}>{inner}</div>
+                  )
+                })}
               </div>
             </div>
           )}
