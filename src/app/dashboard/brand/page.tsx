@@ -44,13 +44,20 @@ function ImageUploadZone({ label, hint, currentUrl, onUpload }: {
     const file = files[0]
     if (!file) return
     setUploading(true)
-    // In production, upload to R2 and return URL
-    // For now, create a local object URL
-    const objectUrl = URL.createObjectURL(file)
-    setPreview(objectUrl)
-    onUpload(objectUrl)
-    setUploading(false)
-    toast.success('Image uploaded!')
+    // Convert to base64 data URL so it persists in the DB across sessions
+    const reader = new FileReader()
+    reader.onload = (e) => {
+      const dataUrl = e.target?.result as string
+      setPreview(dataUrl)
+      onUpload(dataUrl)
+      setUploading(false)
+      toast.success('Image uploaded!')
+    }
+    reader.onerror = () => {
+      setUploading(false)
+      toast.error('Failed to read image')
+    }
+    reader.readAsDataURL(file)
   }, [onUpload])
 
   const { getRootProps, getInputProps, isDragActive } = useDropzone({
