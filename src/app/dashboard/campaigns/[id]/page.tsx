@@ -398,7 +398,7 @@ export default function CampaignDetailPage() {
             <p className="text-xs text-slate-500">Opens a print-ready page — use your browser&apos;s Print → Save as PDF to download.</p>
           </div>
           <a
-            href={`/dashboard/campaigns/${campaign.id}/flyer`}
+            href={`/flyer/${campaign.id}`}
             target="_blank"
             rel="noopener noreferrer"
             className="inline-flex items-center gap-2 bg-slate-900 text-white text-sm font-semibold px-4 py-2 rounded-xl hover:bg-slate-800 transition-colors flex-shrink-0"
