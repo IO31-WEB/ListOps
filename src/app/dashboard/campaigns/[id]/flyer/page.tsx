@@ -79,10 +79,10 @@ export default async function FlyerPage({
       {/* Right: logos */}
       <div style={{ display: 'flex', alignItems: 'center', gap: 12, flexShrink: 0 }}>
         {logoUrl && (
-          <img src={logoUrl} alt="Agent Logo" style={{ height: 40, maxWidth: 100, objectFit: 'contain', filter: dark ? 'brightness(0) invert(1)' : 'none', opacity: dark ? 0.85 : 1 }} />
+          <img src={logoUrl} alt="Agent Logo" style={{ height: 40, maxWidth: 110, objectFit: 'contain', opacity: dark ? 0.9 : 1 }} />
         )}
         {brokerageLogo && (
-          <img src={brokerageLogo} alt="Brokerage Logo" style={{ height: 36, maxWidth: 90, objectFit: 'contain', filter: dark ? 'brightness(0) invert(1)' : 'none', opacity: dark ? 0.7 : 0.85, borderLeft: logoUrl ? `1px solid ${dark ? 'rgba(255,255,255,0.2)' : '#e2e8f0'}` : 'none', paddingLeft: logoUrl ? 12 : 0 }} />
+          <img src={brokerageLogo} alt="Brokerage Logo" style={{ height: 36, maxWidth: 100, objectFit: 'contain', opacity: dark ? 0.8 : 0.9, borderLeft: logoUrl ? `1px solid ${dark ? 'rgba(255,255,255,0.25)' : '#e2e8f0'}` : 'none', paddingLeft: logoUrl ? 12 : 0 }} />
         )}
       </div>
     </div>
@@ -94,8 +94,9 @@ export default async function FlyerPage({
         @page { size: letter; margin: 0; }
         @media print {
           .no-print { display: none !important; }
-          body { -webkit-print-color-adjust: exact; print-color-adjust: exact; }
-          .flyer-wrap { margin-top: 0 !important; padding-top: 0 !important; }
+          html, body { -webkit-print-color-adjust: exact; print-color-adjust: exact; height: 11in; overflow: hidden; }
+          .flyer-wrap { margin: 0 !important; padding: 0 !important; }
+          .flyer-wrap > div { width: 8.5in !important; min-height: unset !important; height: 11in !important; box-shadow: none !important; overflow: hidden; }
         }
         * { box-sizing: border-box; margin: 0; padding: 0; }
         body { background: #c8cdd4; }
