@@ -134,17 +134,18 @@ export function DashboardSidebar() {
               </Link>
             </div>
           )}
-          {/* PAID: show compact plan badge */}
+          {/* PAID: show compact plan badge — clickable → billing */}
           {isPaid && (
-            <div className="mx-3 mb-3 px-4 py-3 bg-amber-50 border border-amber-200 rounded-xl flex items-center gap-2">
+            <Link href="/dashboard/billing" className="mx-3 mb-3 px-4 py-3 bg-amber-50 border border-amber-200 rounded-xl flex items-center gap-2 hover:bg-amber-100 transition-colors group">
               <Zap className="w-3.5 h-3.5 text-amber-600 flex-shrink-0" />
-              <div>
+              <div className="flex-1 min-w-0">
                 <p className="text-xs font-bold text-amber-800 capitalize">{billing.planTier} Plan</p>
                 <p className="text-xs text-amber-600">
                   {billing.campaignLimit === 'unlimited' ? 'Unlimited campaigns' : `${billing.campaignsUsed}/${billing.campaignLimit} this month`}
                 </p>
               </div>
-            </div>
+              <ChevronRight className="w-3 h-3 text-amber-400 opacity-0 group-hover:opacity-100 transition-opacity flex-shrink-0" />
+            </Link>
           )}
         </>
       )}
