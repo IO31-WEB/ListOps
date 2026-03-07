@@ -6,9 +6,19 @@ import Link from 'next/link'
 import {
   ArrowLeft, Copy, Check, Download, Share2, ExternalLink,
   Facebook, Instagram, Mail, Printer, ChevronDown, ChevronUp,
-  Zap, Eye, Globe, Lock, Loader2
+  Zap, Eye, Globe, Lock, Loader2, Video, Music
 } from 'lucide-react'
 import toast from 'react-hot-toast'
+
+interface ReelScript {
+  week: number
+  title: string
+  duration: string
+  hook: string
+  script: string
+  captions: string[]
+  music: string
+}
 
 interface Campaign {
   id: string
@@ -308,20 +318,72 @@ export default function CampaignDetailPage() {
         </div>
       </Section>
 
-      {/* Video Script */}
-      {campaign.videoScript && (
-        <Section title="Video / Reel Script" badge="Pro" icon={Zap}>
-          <div className="p-5">
-            <div className="flex items-center justify-between mb-3">
-              <span className="text-xs text-slate-500">Optimized for Instagram Reels & TikTok</span>
-              <CopyButton text={campaign.videoScript} />
+      {/* Video & Reel Scripts */}
+      {campaign.videoScript && (() => {
+        let reels: ReelScript[] = []
+        try { reels = JSON.parse(campaign.videoScript!) } catch { return null }
+        if (!reels.length) return null
+        return (
+          <Section title="Video & Reel Scripts" badge={`${reels.length} scripts`} icon={Video}>
+            <div className="divide-y divide-slate-100">
+              {reels.map((reel, i) => (
+                <div key={i} className="p-5 space-y-4">
+                  <div className="flex items-center justify-between">
+                    <div className="flex items-center gap-2 flex-wrap">
+                      <span className="text-xs font-bold text-slate-500 uppercase tracking-wider">Week {reel.week}</span>
+                      <span className="text-xs text-purple-700 bg-purple-50 px-2 py-0.5 rounded font-medium">{reel.title}</span>
+                      <span className="text-xs text-slate-400 bg-slate-100 px-2 py-0.5 rounded">{reel.duration}</span>
+                    </div>
+                    <CopyButton text={`HOOK:\n${reel.hook}\n\nSCRIPT:\n${reel.script}\n\nON-SCREEN TEXT:\n${reel.captions?.join('\n')}\n\nMUSIC: ${reel.music}`} label="Copy" />
+                  </div>
+
+                  <div className="bg-purple-50 border border-purple-100 rounded-xl p-4">
+                    <p className="text-xs font-bold text-purple-600 uppercase tracking-wider mb-1.5">🎬 Opening Hook</p>
+                    <p className="text-sm text-slate-800 font-semibold leading-relaxed">&ldquo;{reel.hook}&rdquo;</p>
+                  </div>
+
+                  <div>
+                    <p className="text-xs font-bold text-slate-500 uppercase tracking-wider mb-2">Full Script</p>
+                    <p className="text-sm text-slate-700 leading-relaxed whitespace-pre-wrap bg-slate-50 rounded-xl p-4 border border-slate-100">{reel.script}</p>
+                  </div>
+
+                  <div className="grid sm:grid-cols-2 gap-3">
+                    {reel.captions && reel.captions.length > 0 && (
+                      <div className="bg-slate-50 rounded-xl p-3 border border-slate-100">
+                        <p className="text-xs font-bold text-slate-500 uppercase tracking-wider mb-2">On-Screen Text</p>
+                        <div className="space-y-1">
+                          {reel.captions.map((cap, j) => (
+                            <div key={j} className="flex items-center gap-2">
+                              <span className="w-4 h-4 bg-slate-200 rounded text-xs flex items-center justify-center text-slate-600 flex-shrink-0">{j + 1}</span>
+                              <span className="text-xs text-slate-700">{cap}</span>
+                            </div>
+                          ))}
+                        </div>
+                      </div>
+                    )}
+                    {reel.music && (
+                      <div className="bg-slate-50 rounded-xl p-3 border border-slate-100">
+                        <p className="text-xs font-bold text-slate-500 uppercase tracking-wider mb-2 flex items-center gap-1.5">
+                          <Music className="w-3 h-3" /> Music Vibe
+                        </p>
+                        <p className="text-sm text-slate-700">{reel.music}</p>
+                      </div>
+                    )}
+                  </div>
+                </div>
+              ))}
             </div>
-            <div className="bg-slate-50 rounded-xl p-4 text-sm text-slate-700 leading-relaxed whitespace-pre-wrap border border-slate-100">
-              {campaign.videoScript}
+            <div className="p-4 bg-slate-50 border-t border-slate-100">
+              <CopyButton
+                text={reels.map(r =>
+                  `WEEK ${r.week} — ${r.title} (${r.duration})\n\nHOOK: "${r.hook}"\n\nSCRIPT:\n${r.script}\n\nON-SCREEN TEXT:\n${r.captions?.join('\n')}\n\nMUSIC: ${r.music}`
+                ).join('\n\n' + '─'.repeat(40) + '\n\n')}
+                label="Copy All 6 Scripts"
+              />
             </div>
-          </div>
-        </Section>
-      )}
+          </Section>
+        )
+      })()}
     </div>
   )
 }
