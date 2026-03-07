@@ -1,20 +1,32 @@
 'use client'
 
 import { useState } from 'react'
-import { Zap, ArrowRight, Copy, Check, ChevronDown, ChevronUp, AlertTriangle, Loader2, Facebook, Instagram, Mail, Printer } from 'lucide-react'
+import { Zap, ArrowRight, Copy, Check, ChevronDown, ChevronUp, AlertTriangle, Loader2, Facebook, Instagram, Mail, Printer, Video, Music } from 'lucide-react'
 import toast from 'react-hot-toast'
 import Link from 'next/link'
 
 type GenStatus = 'idle' | 'generating' | 'complete' | 'error'
 interface GenStep { id: string; label: string; status: 'pending' | 'active' | 'done' }
+interface ReelScript {
+  week: number
+  title: string
+  duration: string
+  hook: string
+  script: string
+  captions: string[]
+  music: string
+}
+
 interface CampaignResult {
   campaignId?: string
   isDemo?: boolean
+  planTier?: string
   listing: { address: string; price: string; beds: number; baths: number; sqft: number }
   facebook: Array<{ week: number; theme: string; copy: string; hashtags?: string[] }>
   instagram: Array<{ week: number; caption: string; hashtags: string[] }>
   emailJustListed: string
   emailStillAvailable: string
+  reelScripts?: ReelScript[] | null
   generationMs?: number
 }
 
@@ -326,6 +338,90 @@ export default function GeneratePage() {
               </div>
             </div>
           </Section>
+
+          {/* Reel Scripts — Pro+ only */}
+          {result.reelScripts && result.reelScripts.length > 0 ? (
+            <Section title="Video & Reel Scripts" icon={Video} badge={`${result.reelScripts.length} scripts`}>
+              <div className="divide-y divide-slate-100">
+                {result.reelScripts.map((reel, i) => (
+                  <div key={i} className="p-5 space-y-4">
+                    {/* Week header */}
+                    <div className="flex items-center justify-between">
+                      <div className="flex items-center gap-2">
+                        <span className="text-xs font-bold text-slate-500 uppercase tracking-wider">Week {reel.week}</span>
+                        <span className="text-xs text-purple-700 bg-purple-50 px-2 py-0.5 rounded font-medium">{reel.title}</span>
+                        <span className="text-xs text-slate-400 bg-slate-100 px-2 py-0.5 rounded">{reel.duration}</span>
+                      </div>
+                      <CopyButton text={`HOOK:\n${reel.hook}\n\nSCRIPT:\n${reel.script}\n\nON-SCREEN TEXT:\n${reel.captions?.join('\n')}\n\nMUSIC: ${reel.music}`} label="Copy Script" />
+                    </div>
+
+                    {/* Hook */}
+                    <div className="bg-purple-50 border border-purple-100 rounded-xl p-4">
+                      <p className="text-xs font-bold text-purple-600 uppercase tracking-wider mb-1.5">🎬 Opening Hook</p>
+                      <p className="text-sm text-slate-800 font-semibold leading-relaxed">&ldquo;{reel.hook}&rdquo;</p>
+                    </div>
+
+                    {/* Script */}
+                    <div>
+                      <p className="text-xs font-bold text-slate-500 uppercase tracking-wider mb-2">Full Script</p>
+                      <p className="text-sm text-slate-700 leading-relaxed whitespace-pre-wrap bg-slate-50 rounded-xl p-4 border border-slate-100">{reel.script}</p>
+                    </div>
+
+                    {/* Captions + Music row */}
+                    <div className="grid sm:grid-cols-2 gap-3">
+                      {reel.captions && reel.captions.length > 0 && (
+                        <div className="bg-slate-50 rounded-xl p-3 border border-slate-100">
+                          <p className="text-xs font-bold text-slate-500 uppercase tracking-wider mb-2">On-Screen Text</p>
+                          <div className="space-y-1">
+                            {reel.captions.map((cap, j) => (
+                              <div key={j} className="flex items-center gap-2">
+                                <span className="w-4 h-4 bg-slate-200 rounded text-xs flex items-center justify-center text-slate-600 flex-shrink-0">{j + 1}</span>
+                                <span className="text-xs text-slate-700">{cap}</span>
+                              </div>
+                            ))}
+                          </div>
+                        </div>
+                      )}
+                      {reel.music && (
+                        <div className="bg-slate-50 rounded-xl p-3 border border-slate-100">
+                          <p className="text-xs font-bold text-slate-500 uppercase tracking-wider mb-2 flex items-center gap-1.5">
+                            <Music className="w-3 h-3" /> Music Vibe
+                          </p>
+                          <p className="text-sm text-slate-700">{reel.music}</p>
+                        </div>
+                      )}
+                    </div>
+                  </div>
+                ))}
+              </div>
+              <div className="p-4 bg-slate-50 border-t border-slate-100">
+                <CopyButton
+                  text={result.reelScripts.map(r =>
+                    `WEEK ${r.week} — ${r.title} (${r.duration})\n\nHOOK: "${r.hook}"\n\nSCRIPT:\n${r.script}\n\nON-SCREEN TEXT:\n${r.captions?.join('\n')}\n\nMUSIC: ${r.music}`
+                  ).join('\n\n' + '─'.repeat(40) + '\n\n')}
+                  label="Copy All 6 Scripts"
+                />
+              </div>
+            </Section>
+          ) : result.reelScripts === null && (
+            <div className="bg-white rounded-2xl border border-slate-200 overflow-hidden opacity-75">
+              <div className="p-5 flex items-center gap-4">
+                <div className="w-9 h-9 bg-slate-100 rounded-xl flex items-center justify-center flex-shrink-0">
+                  <Video className="w-4 h-4 text-slate-400" />
+                </div>
+                <div className="flex-1">
+                  <div className="flex items-center gap-2 mb-0.5">
+                    <span className="font-semibold text-slate-400">Video &amp; Reel Scripts</span>
+                    <span className="text-xs font-semibold text-amber-700 bg-amber-100 px-2 py-0.5 rounded-full">Pro+</span>
+                  </div>
+                  <p className="text-xs text-slate-400">6 word-for-word Reel &amp; TikTok scripts, one per week. Regenerate after upgrading.</p>
+                </div>
+                <Link href="/dashboard/billing" className="flex-shrink-0 text-xs font-semibold bg-slate-900 text-amber-400 px-4 py-2 rounded-xl hover:bg-slate-800 transition-colors whitespace-nowrap">
+                  Upgrade to Pro →
+                </Link>
+              </div>
+            </div>
+          )}
 
           {/* Flyer */}
           <Section title="Print-Ready Flyer" icon={Printer} badge="Coming Soon">
