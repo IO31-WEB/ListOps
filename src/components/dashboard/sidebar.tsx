@@ -6,7 +6,7 @@ import { usePathname } from 'next/navigation'
 import { UserButton } from '@clerk/nextjs'
 import {
   Zap, LayoutDashboard, FolderOpen, Plus, Palette,
-  CreditCard, Users, BarChart2, Settings, ChevronLeft,
+  CreditCard, Users, BarChart2, Settings, ChevronLeft, Gift,
   ChevronRight, Menu, X, HelpCircle
 } from 'lucide-react'
 import { cn } from '@/lib/utils'
@@ -21,6 +21,7 @@ const NAV_ITEMS = [
 
 const BOTTOM_ITEMS = [
   { label: 'Team', href: '/dashboard/team', icon: Users },
+  { label: 'Refer & Earn', href: '/dashboard/referral', icon: Gift },
   { label: 'Billing', href: '/dashboard/billing', icon: CreditCard },
   { label: 'Settings', href: '/dashboard/settings', icon: Settings },
   { label: 'Help', href: '/help', icon: HelpCircle },
