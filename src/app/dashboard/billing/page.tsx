@@ -103,7 +103,27 @@ export default function BillingPage() {
   }
 
   const handleUpgrade = async (planId: string) => {
-    if (planId === 'free' || planId === billingInfo?.planTier) return
+    if (planId === billingInfo?.planTier) return
+
+    const tiers = ['free', 'starter', 'pro', 'brokerage']
+    const currentIdx = tiers.indexOf(billingInfo?.planTier ?? 'free')
+    const targetIdx = tiers.indexOf(planId)
+    const isDowngrade = targetIdx < currentIdx
+
+    if (planId === 'free') {
+      if (!billingInfo?.planTier || billingInfo.planTier === 'free') {
+        toast('You are already on the free plan.', { icon: 'ℹ️' })
+        return
+      }
+      await handleManageBilling()
+      return
+    }
+
+    if (isDowngrade) {
+      await handleManageBilling()
+      return
+    }
+
     setLoading(planId)
     try {
       const res = await fetch('/api/billing/create-checkout', {
@@ -252,7 +272,7 @@ export default function BillingPage() {
               key={plan.id}
               className={`rounded-2xl p-6 flex flex-col border-2 transition-all ${
                 isCurrent
-                  ? 'border-amber-400 bg-amber-50/50'
+                  ? 'border-amber-400 bg-white ring-2 ring-amber-200'
                   : plan.highlighted
                   ? 'border-slate-900 bg-slate-900 text-white'
                   : 'border-slate-200 bg-white hover:border-slate-300'
