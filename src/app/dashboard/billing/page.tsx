@@ -115,7 +115,8 @@ export default function BillingPage() {
         toast('You are already on the free plan.', { icon: 'ℹ️' })
         return
       }
-      await handleManageBilling()
+      // Go directly to Stripe cancel flow
+      await handleCancelSubscription()
       return
     }
 
@@ -139,6 +140,24 @@ export default function BillingPage() {
       }
     } catch (err: any) {
       toast.error(err.message || 'Failed to start checkout. Please try again.')
+    } finally {
+      setLoading(null)
+    }
+  }
+
+  const handleCancelSubscription = async () => {
+    setLoading('cancel')
+    try {
+      const res = await fetch('/api/billing/portal', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ flow: 'cancel' }),
+      })
+      const data = await res.json()
+      if (data.url) window.location.href = data.url
+      else throw new Error(data.error)
+    } catch (err: any) {
+      toast.error(err.message || 'Could not open cancellation page.')
     } finally {
       setLoading(null)
     }
@@ -272,7 +291,7 @@ export default function BillingPage() {
               key={plan.id}
               className={`rounded-2xl p-6 flex flex-col border-2 transition-all ${
                 isCurrent
-                  ? 'border-amber-400 bg-white ring-2 ring-amber-200'
+                  ? 'border-slate-900 bg-white shadow-lg'
                   : plan.highlighted
                   ? 'border-slate-900 bg-slate-900 text-white'
                   : 'border-slate-200 bg-white hover:border-slate-300'
