@@ -309,12 +309,12 @@ export default function BillingPage() {
               {/* CTA */}
               <button
                 onClick={() => handleUpgrade(plan.id)}
-                disabled={isCurrent || isLoading || cta === 'Downgrade'}
+                disabled={isCurrent || isLoading}
                 className={`w-full text-center text-sm font-semibold py-3 rounded-xl transition-all flex items-center justify-center gap-2 ${
                   isCurrent
                     ? 'bg-amber-100 text-amber-800 cursor-default'
                     : cta === 'Downgrade'
-                    ? 'bg-slate-100 text-slate-400 cursor-not-allowed'
+                    ? 'bg-slate-100 text-slate-600 hover:bg-slate-200 cursor-pointer'
                     : plan.highlighted
                     ? 'bg-amber-400 text-slate-900 hover:bg-amber-300'
                     : 'bg-slate-900 text-white hover:bg-slate-800'
