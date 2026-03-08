@@ -13,6 +13,7 @@ const BREADCRUMBS: Record<string, string> = {
   '/dashboard/analytics': 'Analytics',
   '/dashboard/billing': 'Billing',
   '/dashboard/team': 'Team',
+  '/dashboard/referral': 'Refer & Earn',
   '/dashboard/settings': 'Settings',
 }
 
