@@ -392,22 +392,58 @@ export default function CampaignDetailPage() {
 
       {/* Flyer */}
       <Section title="Print-Ready Flyer" badge="PDF" icon={Printer}>
-        <div className="p-5 flex items-center justify-between gap-4">
+        <div className="p-5 flex items-center justify-between gap-4 flex-wrap">
           <div>
             <p className="text-sm font-semibold text-slate-900 mb-1">Listing Flyer</p>
-            <p className="text-xs text-slate-500">Opens a print-ready page — use your browser&apos;s Print → Save as PDF to download.</p>
+            <p className="text-xs text-slate-500">View and print from browser, or download as a PDF file.</p>
           </div>
-          <a
-            href={`/flyer/${campaign.id}`}
-            target="_blank"
-            rel="noopener noreferrer"
-            className="inline-flex items-center gap-2 bg-slate-900 text-white text-sm font-semibold px-4 py-2 rounded-xl hover:bg-slate-800 transition-colors flex-shrink-0"
-          >
-            <Download className="w-4 h-4" />
-            Generate Flyer
-          </a>
+          <div className="flex items-center gap-2 flex-shrink-0">
+            <a
+              href={`/flyer/${campaign.id}`}
+              target="_blank"
+              rel="noopener noreferrer"
+              className="inline-flex items-center gap-2 bg-white border border-slate-200 text-slate-700 text-sm font-semibold px-4 py-2 rounded-xl hover:bg-slate-50 transition-colors"
+            >
+              <ExternalLink className="w-4 h-4" />
+              View Flyer
+            </a>
+            <DownloadPdfButton campaignId={campaign.id} />
+          </div>
         </div>
       </Section>
     </div>
+  )
+}
+
+
+// ── Download PDF Button ───────────────────────────────────────
+function DownloadPdfButton({ campaignId }: { campaignId: string }) {
+  const [loading, setLoading] = useState(false)
+
+  const handleDownload = async () => {
+    setLoading(true)
+    try {
+      const res = await fetch(`/api/campaigns/${campaignId}/pdf`, { method: 'POST' })
+      const data = await res.json()
+      if (data.url) window.open(data.url, '_blank')
+    } catch {
+      alert('Failed to generate PDF. Please try again.')
+    } finally {
+      setLoading(false)
+    }
+  }
+
+  return (
+    <button
+      onClick={handleDownload}
+      disabled={loading}
+      className="inline-flex items-center gap-2 bg-slate-900 text-white text-sm font-semibold px-4 py-2 rounded-xl hover:bg-slate-800 transition-colors disabled:opacity-60"
+    >
+      {loading ? (
+        <><span className="w-4 h-4 border-2 border-white/30 border-t-white rounded-full animate-spin inline-block" />Generating...</>
+      ) : (
+        <><Download className="w-4 h-4" />Download PDF</>
+      )}
+    </button>
   )
 }
