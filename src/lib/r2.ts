@@ -35,7 +35,9 @@ export async function uploadToR2(opts: {
 
   try {
     // Use AWS Signature V4 via native fetch (no SDK needed)
-    const { AwsClient } = await import('aws4fetch')
+    // eslint-disable-next-line @typescript-eslint/no-var-requires
+    const { AwsClient } = (() => { try { return require('aws4fetch') } catch { return { AwsClient: null } } })()
+    if (!AwsClient) { console.warn('[r2] aws4fetch not installed'); return null }
     const client = new AwsClient({
       accessKeyId: process.env.R2_ACCESS_KEY_ID!,
       secretAccessKey: process.env.R2_SECRET_ACCESS_KEY!,
