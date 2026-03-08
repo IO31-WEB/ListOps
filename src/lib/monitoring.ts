@@ -13,10 +13,12 @@
  *   3. Add SENTRY_DSN to Vercel env vars
  */
 
-let Sentry: typeof import('@sentry/nextjs') | null = null
+// Sentry loaded lazily via require() — no type import needed at build time
+// eslint-disable-next-line @typescript-eslint/no-explicit-any
+let Sentry: any = null
 
 try {
-  // Dynamic require so missing package doesn't crash the app
+  // eslint-disable-next-line @typescript-eslint/no-var-requires
   Sentry = require('@sentry/nextjs')
 } catch {
   // Sentry not installed yet — all calls are no-ops
@@ -24,10 +26,10 @@ try {
 
 export function captureError(err: unknown, context?: Record<string, unknown>) {
   if (!Sentry) {
-    console.error('[monitoring] Error captured (Sentry not installed):', err, context)
+    console.error('[monitoring] captureError (Sentry not installed):', err, context)
     return
   }
-  Sentry.withScope(scope => {
+  Sentry.withScope((scope: any) => {
     if (context) scope.setExtras(context)
     Sentry.captureException(err)
   })
