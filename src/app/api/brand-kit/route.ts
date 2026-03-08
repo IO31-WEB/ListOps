@@ -21,6 +21,7 @@ const BrandKitSchema = z.object({
   logoUrl: z.string().optional().or(z.literal('')),
   agentPhotoUrl: z.string().optional().or(z.literal('')),
   brokerageLogo: z.string().url().optional().or(z.literal('')),
+  tone: z.enum(['professional', 'friendly', 'luxury', 'energetic']).optional(),
 })
 
 export async function GET(request: NextRequest) {
@@ -51,7 +52,13 @@ export async function POST(request: NextRequest) {
       )
     }
 
-    const brandKit = await upsertBrandKit(user.id, user.orgId!, data)
+    // Extract tone and pass as aiPersona
+    const { tone, ...rest } = data as any
+    const upsertData = {
+      ...rest,
+      ...(tone ? { aiPersona: { tone } } : {}),
+    }
+    const brandKit = await upsertBrandKit(user.id, user.orgId!, upsertData)
 
     await writeAuditLog({
       orgId: user.orgId ?? undefined,
