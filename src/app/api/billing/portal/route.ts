@@ -19,10 +19,27 @@ export async function POST(request: NextRequest) {
       )
     }
 
-    const session = await stripe.billingPortal.sessions.create({
+    const body = await request.json().catch(() => ({}))
+    const isCancelFlow = body.flow === 'cancel'
+
+    const sessionParams: any = {
       customer: customerId,
       return_url: absoluteUrl('/dashboard/billing'),
-    })
+    }
+
+    if (isCancelFlow) {
+      // Get the active subscription to target it directly
+      const subs = await stripe.subscriptions.list({ customer: customerId, status: 'active', limit: 1 })
+      const subId = subs.data[0]?.id
+      if (subId) {
+        sessionParams.flow_data = {
+          type: 'subscription_cancel',
+          subscription_cancel: { subscription: subId },
+        }
+      }
+    }
+
+    const session = await stripe.billingPortal.sessions.create(sessionParams)
 
     return NextResponse.json({ url: session.url })
   } catch (err) {
