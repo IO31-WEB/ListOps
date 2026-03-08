@@ -74,10 +74,10 @@ export default function HomePage() {
         {/* Stats bar */}
         <div className="max-w-4xl mx-auto mt-20 grid grid-cols-2 sm:grid-cols-4 gap-px bg-slate-200 rounded-2xl overflow-hidden shadow-sm animate-fade-in animate-stagger-5">
           {[
-            { value: '~90s', label: 'Avg. Generation' },
-            { value: '6', label: 'Channels Generated' },
-            { value: '1,500+', label: 'Agents Using It' },
-            { value: '4.9★', label: 'Average Rating' },
+            { value: '~90s', label: 'Avg. Generation Time' },
+            { value: '6', label: 'Content Types Generated' },
+            { value: '6-Week', label: 'Campaign Per Listing' },
+            { value: '100%', label: 'MLS Connected' },
           ].map((stat) => (
             <div key={stat.label} className="bg-white px-6 py-6 text-center">
               <div className="font-display text-2xl sm:text-3xl font-semibold text-slate-900">{stat.value}</div>
@@ -276,7 +276,7 @@ export default function HomePage() {
           <h2 className="font-display text-4xl sm:text-5xl font-semibold text-slate-900 mb-4">
             Your Listings Deserve <em>Better Marketing.</em>
           </h2>
-          <p className="text-slate-600 mb-8 text-lg">Join 1,500+ agents generating complete 6-week campaigns in the time it takes to write a single post.</p>
+          <p className="text-slate-600 mb-8 text-lg">Generate a complete 6-week marketing campaign for any listing in about 90 seconds — fully branded, ready to publish.</p>
           <Link href="/sign-up" className="inline-flex items-center gap-2 bg-slate-900 text-amber-50 font-semibold px-10 py-4 rounded-xl hover:bg-slate-800 transition-all hover:shadow-xl hover:shadow-slate-900/20 text-base">
             Start Free — 3 Campaigns Included
             <ArrowRight className="w-4 h-4" />
