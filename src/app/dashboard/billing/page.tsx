@@ -2,7 +2,8 @@
 
 import { useState, useEffect } from 'react'
 import { Check, X, Zap, CreditCard, AlertCircle, Star, Shield, ArrowRight, Loader2, ChevronDown, ChevronUp, Building2, Users, Lock } from 'lucide-react'
-import { PLANS, ENTERPRISE_PLAN } from '@/lib/stripe'
+import { PLANS } from '@/lib/stripe'
+import type { Plan } from '@/lib/plans'
 import { formatCurrency } from '@/lib/utils'
 import toast from 'react-hot-toast'
 import Link from 'next/link'
