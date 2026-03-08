@@ -2,6 +2,8 @@ import { notFound } from 'next/navigation'
 import { db } from '@/lib/db'
 import { campaigns } from '@/lib/db/schema'
 import { eq } from 'drizzle-orm'
+import { trackMicrositeViewed } from '@/lib/posthog'
+import { headers } from 'next/headers'
 
 export default async function MicrositePage({ params }: { params: Promise<{ slug: string }> }) {
   const { slug } = await params
@@ -18,6 +20,14 @@ export default async function MicrositePage({ params }: { params: Promise<{ slug
     .set({ micrositeViews: (campaign.micrositeViews ?? 0) + 1 })
     .where(eq(campaigns.id, campaign.id))
     .catch(() => {})
+
+  // PostHog analytics
+  const hdrs = await headers()
+  trackMicrositeViewed({
+    campaignId: campaign.id,
+    slug,
+    referrer: hdrs.get('referer') ?? undefined,
+  })
 
   const listing = campaign.listing
   const bk = campaign.brandKit as any
@@ -183,9 +193,11 @@ export default async function MicrositePage({ params }: { params: Promise<{ slug
           )}
         </div>
 
-        <div style={{ textAlign: 'center', marginTop: 40, fontFamily: 'Arial, sans-serif', fontSize: 11, color: '#cbd5e1', letterSpacing: 1 }}>
-          POWERED BY CAMPAIGNAI
-        </div>
+        {!bk?.brokerageName && (
+          <div style={{ textAlign: 'center', marginTop: 40, fontFamily: 'Arial, sans-serif', fontSize: 10, color: '#e2e8f0', letterSpacing: 1 }}>
+            POWERED BY CAMPAIGNAI
+          </div>
+        )}
       </div>
     </div>
   )
