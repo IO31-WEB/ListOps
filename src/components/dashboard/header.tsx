@@ -72,13 +72,14 @@ export function DashboardHeader() {
   // Notifications
   const [notifOpen, setNotifOpen] = useState(false)
   const [notifications, setNotifications] = useState<Notification[]>(() => {
-    // On client, load from sessionStorage so times persist across nav (but reset on new tab)
+    // Load from localStorage so read state AND timestamps persist across full refreshes
     if (typeof window !== 'undefined') {
       try {
-        const saved = sessionStorage.getItem('campaignai_notifications')
+        const saved = localStorage.getItem('campaignai_notifications')
         if (saved) return JSON.parse(saved) as Notification[]
       } catch {}
     }
+    // First visit: seed with demo notifications anchored to real current time
     return getDemoNotifications()
   })
   const [, setTick] = useState(0)
@@ -91,12 +92,21 @@ export function DashboardHeader() {
 
   // Persist notification read state to sessionStorage
   useEffect(() => {
-    try { sessionStorage.setItem('campaignai_notifications', JSON.stringify(notifications)) } catch {}
+    try { localStorage.setItem('campaignai_notifications', JSON.stringify(notifications)) } catch {}
   }, [notifications])
   const unreadCount = notifications.filter(n => !n.read).length
   const notifRef = useRef<HTMLDivElement>(null)
 
   const markAllRead = () => setNotifications(prev => prev.map(n => ({ ...n, read: true })))
+
+  // Auto-mark all read when dropdown opens
+  useEffect(() => {
+    if (notifOpen) {
+      // Small delay so badge visually clears after dropdown is visible
+      const t = setTimeout(() => markAllRead(), 800)
+      return () => clearTimeout(t)
+    }
+  }, [notifOpen])
 
   // Close dropdowns on outside click
   useEffect(() => {
