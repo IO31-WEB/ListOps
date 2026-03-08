@@ -56,15 +56,16 @@ export async function POST(
     let pdfBuffer: Buffer | null = null
 
     try {
-      // Dynamic import — won't crash if not installed
-      const chromium = await import('@sparticuz/chromium').catch(() => null)
-      const puppeteer = await import('puppeteer-core').catch(() => null)
+      // eslint-disable-next-line @typescript-eslint/no-var-requires
+      const chromium = (() => { try { return require('@sparticuz/chromium') } catch { return null } })()
+      // eslint-disable-next-line @typescript-eslint/no-var-requires
+      const puppeteer = (() => { try { return require('puppeteer-core') } catch { return null } })()
 
       if (chromium && puppeteer) {
-        const browser = await puppeteer.default.launch({
-          args: chromium.default.args,
-          defaultViewport: chromium.default.defaultViewport,
-          executablePath: await chromium.default.executablePath(),
+        const browser = await puppeteer.launch({
+          args: chromium.args,
+          defaultViewport: chromium.defaultViewport,
+          executablePath: await chromium.executablePath(),
           headless: true,
         })
 
