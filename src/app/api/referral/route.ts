@@ -11,7 +11,10 @@ import { users, referrals } from '@/lib/db/schema'
 import { eq } from 'drizzle-orm'
 import { getUserWithDetails } from '@/lib/user-service'
 import { trackReferralSignup } from '@/lib/posthog'
-import { nanoid } from 'nanoid'
+// Simple random code generator — no dependency needed
+function generateCode(len = 8) {
+  return Math.random().toString(36).toUpperCase().slice(2, 2 + len).padEnd(len, '0')
+}
 
 // GET: return referral code + stats for logged-in user
 export async function GET() {
@@ -24,7 +27,7 @@ export async function GET() {
   // Generate code if not already set
   let code = user.referralCode
   if (!code) {
-    code = nanoid(8).toUpperCase()
+    code = generateCode(8)
     await db.update(users).set({ referralCode: code }).where(eq(users.id, user.id))
   }
 
