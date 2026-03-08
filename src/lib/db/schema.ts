@@ -48,6 +48,9 @@ export const organizations = pgTable('organizations', {
   maxAgents: integer('max_agents').notNull().default(1),
   campaignsPerAgentPerMonth: integer('campaigns_per_agent_per_month').notNull().default(3),
 
+  // Feature flags (per-org overrides)
+  featureFlags: jsonb('feature_flags').$type<Record<string, boolean>>().default({}),
+
   // SSO (enterprise)
   samlEnabled: boolean('saml_enabled').notNull().default(false),
   samlConfig: jsonb('saml_config'),
@@ -249,7 +252,8 @@ export const campaigns = pgTable('campaigns', {
   }>>(),
   emailJustListed: text('email_just_listed'),
   emailStillAvailable: text('email_still_available'),
-  flyerUrl: text('flyer_url'),                           // R2 PDF URL
+  flyerUrl: text('flyer_url'),                           // R2 PDF URL (legacy)
+  pdfUrl: text('pdf_url'),                               // Generated PDF stored in R2
   videoScript: text('video_script'),                     // Pro feature
 
   // Microsite
