@@ -71,7 +71,16 @@ export function DashboardHeader() {
 
   // Notifications
   const [notifOpen, setNotifOpen] = useState(false)
-  const [notifications, setNotifications] = useState<Notification[]>(() => getDemoNotifications())
+  const [notifications, setNotifications] = useState<Notification[]>(() => {
+    // On client, load from sessionStorage so times persist across nav (but reset on new tab)
+    if (typeof window !== 'undefined') {
+      try {
+        const saved = sessionStorage.getItem('campaignai_notifications')
+        if (saved) return JSON.parse(saved) as Notification[]
+      } catch {}
+    }
+    return getDemoNotifications()
+  })
   const [, setTick] = useState(0)
 
   // Re-render every 60s so timeAgo() stays current
@@ -79,6 +88,11 @@ export function DashboardHeader() {
     const interval = setInterval(() => setTick(t => t + 1), 60_000)
     return () => clearInterval(interval)
   }, [])
+
+  // Persist notification read state to sessionStorage
+  useEffect(() => {
+    try { sessionStorage.setItem('campaignai_notifications', JSON.stringify(notifications)) } catch {}
+  }, [notifications])
   const unreadCount = notifications.filter(n => !n.read).length
   const notifRef = useRef<HTMLDivElement>(null)
 
