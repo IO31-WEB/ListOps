@@ -51,7 +51,8 @@
     "zustand": "^4.5.4",
     "nanoid": "^5.0.7",
     "aws4fetch": "^1.0.20",
-    "posthog-node": "^4.0.1"
+    "posthog-node": "^4.0.1",
+    "posthog-js": "^1.240.0"
   },
   "devDependencies": {
     "@types/node": "^20",
