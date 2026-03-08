@@ -184,24 +184,28 @@ export function getPlan(tier: PlanTier): Plan | undefined {
 }
 
 export function canAccessFeature(tier: PlanTier, feature: string): boolean {
-  const featureMatrix: Record<string, PlanTier[]> = {
-    brand_kit: ['starter', 'pro', 'brokerage', 'enterprise'],
-    campaign_history: ['starter', 'pro', 'brokerage', 'enterprise'],
+  // Single source of truth lives in lib/plans.ts FEATURE_GATES
+  const FEATURE_GATES: Record<string, PlanTier[]> = {
+    brand_kit:           ['starter', 'pro', 'brokerage', 'enterprise'],
+    campaign_history:    ['starter', 'pro', 'brokerage', 'enterprise'],
+    remove_branding:     ['starter', 'pro', 'brokerage', 'enterprise'],
     unlimited_campaigns: ['pro', 'brokerage', 'enterprise'],
-    social_scheduling: ['pro', 'brokerage', 'enterprise'],
-    microsite: ['pro', 'brokerage', 'enterprise'],
-    video_script: ['pro', 'brokerage', 'enterprise'],
-    team_seats: ['pro', 'brokerage', 'enterprise'],
+    social_scheduling:   ['pro', 'brokerage', 'enterprise'],
+    microsite:           ['pro', 'brokerage', 'enterprise'],
+    listing_microsite:   ['pro', 'brokerage', 'enterprise'],
+    video_script:        ['pro', 'brokerage', 'enterprise'],
+    team_seats:          ['pro', 'brokerage', 'enterprise'],
     priority_generation: ['pro', 'brokerage', 'enterprise'],
-    white_label: ['brokerage', 'enterprise'],
+    white_label:         ['brokerage', 'enterprise'],
+    analytics:           ['brokerage', 'enterprise'],
     analytics_dashboard: ['brokerage', 'enterprise'],
-    admin_dashboard: ['brokerage', 'enterprise'],
-    audit_logs: ['brokerage', 'enterprise'],
-    sso: ['enterprise'],
-    api_access: ['enterprise'],
+    admin_dashboard:     ['brokerage', 'enterprise'],
+    audit_logs:          ['brokerage', 'enterprise'],
+    multi_agent:         ['brokerage', 'enterprise'],
+    sso:                 ['enterprise'],
+    api_access:          ['enterprise'],
   }
-
-  return featureMatrix[feature]?.includes(tier) ?? false
+  return FEATURE_GATES[feature]?.includes(tier) ?? false
 }
 
 // ── Stripe webhook event types we handle ─────────────────────
