@@ -45,12 +45,14 @@ function timeAgo(ms: number): string {
   return `${Math.floor(diff / 86_400_000)}d ago`
 }
 
-const now = Date.now()
-const DEMO_NOTIFICATIONS: Notification[] = [
-  { id: '1', type: 'success', title: 'Campaign generated', body: '2847 Oakwood Circle — 6-week campaign is ready.', createdAt: now - 2 * 60_000, read: false, href: '/dashboard/campaigns' },
-  { id: '2', type: 'info', title: 'Pro plan active', body: 'Your plan was synced. Video scripts and microsites unlocked.', createdAt: now - 62 * 60_000, read: false, href: '/dashboard/billing' },
-  { id: '3', type: 'info', title: 'Welcome to CampaignAI', body: 'Generate your first campaign to get started.', createdAt: now - 2 * 86_400_000, read: true, href: '/dashboard/generate' },
-]
+function getDemoNotifications(): Notification[] {
+  const now = Date.now()
+  return [
+    { id: '1', type: 'success', title: 'Campaign generated', body: '2847 Oakwood Circle — 6-week campaign is ready.', createdAt: now - 2 * 60_000, read: false, href: '/dashboard/campaigns' },
+    { id: '2', type: 'info', title: 'Pro plan active', body: 'Your plan was synced. Video scripts and microsites unlocked.', createdAt: now - 62 * 60_000, read: false, href: '/dashboard/billing' },
+    { id: '3', type: 'info', title: 'Welcome to CampaignAI', body: 'Generate your first campaign to get started.', createdAt: now - 2 * 86_400_000, read: true, href: '/dashboard/generate' },
+  ]
+}
 
 export function DashboardHeader() {
   const pathname = usePathname()
@@ -69,7 +71,14 @@ export function DashboardHeader() {
 
   // Notifications
   const [notifOpen, setNotifOpen] = useState(false)
-  const [notifications, setNotifications] = useState<Notification[]>(DEMO_NOTIFICATIONS)
+  const [notifications, setNotifications] = useState<Notification[]>(() => getDemoNotifications())
+  const [, setTick] = useState(0)
+
+  // Re-render every 60s so timeAgo() stays current
+  useEffect(() => {
+    const interval = setInterval(() => setTick(t => t + 1), 60_000)
+    return () => clearInterval(interval)
+  }, [])
   const unreadCount = notifications.filter(n => !n.read).length
   const notifRef = useRef<HTMLDivElement>(null)
 
