@@ -105,10 +105,14 @@ function buildCampaignPrompt(listing: any, planTier: PlanTier, brandKit?: any) {
   const tagline = hasBrandKit ? (brandKit?.tagline || '') : ''
 
   // White-label: brokerage overrides with their brand
+  // Starter+ removes CampaignAI branding per plan features
   const isWhiteLabel = canAccessFeature(planTier, 'white_label') && brandKit?.brokerageName
+  const isPaidPlan = planTier !== 'free'
   const brandingLine = isWhiteLabel
     ? `Brokerage: ${brandKit.brokerageName} — remove all CampaignAI mentions`
-    : 'Presented by CampaignAI'
+    : isPaidPlan
+    ? `Agent: ${agentName} — do not mention CampaignAI in any outputs`
+    : 'Presented by CampaignAI' 
 
   const listingUrl = `https://campaignai.io/l/listing-${listing.mlsId || listing.listingId}`
 
