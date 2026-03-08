@@ -160,6 +160,7 @@ export default function BrandPage() {
             logoUrl: brandKit.logoUrl ?? '',
             agentPhotoUrl: brandKit.agentPhotoUrl ?? '',
             brokerageLogo: brandKit.brokerageLogo ?? '',
+            tone: brandKit.aiPersona?.tone ?? brandKit.tone ?? 'professional',
           }))
         }
       } catch (err) {
