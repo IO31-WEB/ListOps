@@ -19,6 +19,9 @@ import { canAccessFeature } from '@/lib/stripe'
 import type { PlanTier } from '@/lib/stripe'
 import { z } from 'zod'
 import { slugify } from '@/lib/utils'
+import { rateLimitGenerate } from '@/lib/ratelimit'
+import { captureError, trackGenerationCost } from '@/lib/monitoring'
+import { trackCampaignGenerated } from '@/lib/posthog'
 
 const anthropic = new Anthropic({ apiKey: process.env.ANTHROPIC_API_KEY! })
 
@@ -193,6 +196,24 @@ export async function POST(request: NextRequest) {
     const body = await request.json()
     const { mlsId } = RequestSchema.parse(body)
 
+    // ── Rate limit: 5 generations per 10 min per user ─────────────
+    const rl = await rateLimitGenerate(userId)
+    if (!rl.success) {
+      const resetIn = Math.ceil((rl.reset - Date.now()) / 1000 / 60)
+      return NextResponse.json(
+        { error: `Too many requests. You can generate again in ${resetIn} minute${resetIn === 1 ? '' : 's'}.` },
+        {
+          status: 429,
+          headers: {
+            'X-RateLimit-Limit': String(rl.limit),
+            'X-RateLimit-Remaining': '0',
+            'X-RateLimit-Reset': String(rl.reset),
+            'Retry-After': String(Math.ceil((rl.reset - Date.now()) / 1000)),
+          },
+        }
+      )
+    }
+
     // checkCampaignQuota syncs Clerk metadata → DB before checking
     const quota = await checkCampaignQuota(userId)
     if (!quota.allowed) {
@@ -323,6 +344,26 @@ export async function POST(request: NextRequest) {
     }
 
     await incrementCampaignUsage(userId)
+
+    // Track cost + performance for monitoring
+    trackGenerationCost({
+      userId,
+      planTier,
+      mlsId,
+      durationMs: generationMs,
+    })
+
+    // PostHog event for retention analytics
+    const contentTypes = ['facebook', 'instagram', 'email_just_listed', 'email_still_available', 'flyer']
+    if (campaignContent.reelScripts) contentTypes.push('video_script')
+    trackCampaignGenerated({
+      userId,
+      planTier,
+      mlsId,
+      durationMs: generationMs,
+      isDemo: !!isDemo,
+      contentTypes,
+    })
 
     return NextResponse.json({
       campaignId: campaignRecord?.id,
