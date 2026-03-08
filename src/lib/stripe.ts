@@ -113,9 +113,9 @@ export const PLANS: Plan[] = [
     features: [
       { text: 'Unlimited campaigns', included: true, highlight: true },
       { text: 'All 6 content types (FB, IG, Email, Flyer)', included: true },
-      { text: 'Full brand kit + custom fonts', included: true },
+      { text: 'Full brand kit (logo, colors, photo)', included: true },
       { text: 'Campaign history (unlimited)', included: true },
-      { text: '15 flyer templates + custom', included: true },
+      { text: '3 flyer templates (Classic, Luxury, Modern)', included: true },
       { text: 'Remove CampaignAI branding', included: true },
       { text: 'Direct social scheduling (Meta, Buffer)', included: true, highlight: true },
       { text: 'Auto-generated listing microsite', included: true, highlight: true },
