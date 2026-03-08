@@ -75,9 +75,9 @@ export default function HomePage() {
         <div className="max-w-4xl mx-auto mt-20 grid grid-cols-2 sm:grid-cols-4 gap-px bg-slate-200 rounded-2xl overflow-hidden shadow-sm animate-fade-in animate-stagger-5">
           {[
             { value: '~90s', label: 'Avg. Generation Time' },
-            { value: '6', label: 'Content Types Generated' },
-            { value: '6-Week', label: 'Campaign Per Listing' },
-            { value: '100%', label: 'MLS Connected' },
+            { value: '6 Types', label: 'Content Per Campaign' },
+            { value: '6 Weeks', label: 'Of Posts & Emails' },
+            { value: 'MLS Live', label: 'Real Listing Data' },
           ].map((stat) => (
             <div key={stat.label} className="bg-white px-6 py-6 text-center">
               <div className="font-display text-2xl sm:text-3xl font-semibold text-slate-900">{stat.value}</div>
