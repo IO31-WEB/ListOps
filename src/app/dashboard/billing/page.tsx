@@ -103,20 +103,7 @@ export default function BillingPage() {
   }
 
   const handleUpgrade = async (planId: string) => {
-    if (planId === billingInfo?.planTier) return
-
-    // Downgrades and free plan changes go through the Stripe billing portal
-    const currentPlanTiers = ['free', 'starter', 'pro', 'brokerage']
-    const currentIdx = currentPlanTiers.indexOf(billingInfo?.planTier ?? 'free')
-    const targetIdx = currentPlanTiers.indexOf(planId)
-    const isDowngrade = targetIdx < currentIdx || planId === 'free'
-
-    if (isDowngrade) {
-      // Route to Stripe portal for downgrades/cancellations
-      await handleManageBilling()
-      return
-    }
-
+    if (planId === 'free' || planId === billingInfo?.planTier) return
     setLoading(planId)
     try {
       const res = await fetch('/api/billing/create-checkout', {
