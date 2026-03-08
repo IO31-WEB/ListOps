@@ -5,6 +5,7 @@ import { db } from '@/lib/db'
 import { organizations, subscriptions } from '@/lib/db/schema'
 import { eq } from 'drizzle-orm'
 import { syncSubscription, downgradeToFree } from '@/lib/user-service'
+import { trackPlanUpgraded } from '@/lib/posthog'
 import type Stripe from 'stripe'
 
 export const runtime = 'nodejs'
@@ -132,6 +133,17 @@ export async function POST(request: NextRequest) {
           .where(eq(organizations.id, org.id))
 
         console.log(`✅ Plan updated to ${plan} for org ${org.id}`)
+
+        // PostHog: track plan change for retention analytics
+        if (org.id) {
+          const interval = sub.items.data[0]?.price.recurring?.interval === 'year' ? 'annual' : 'monthly'
+          trackPlanUpgraded({
+            userId: org.id,
+            fromPlan: org.plan ?? 'free',
+            toPlan: plan,
+            billingInterval: interval,
+          })
+        }
         break
       }
 
