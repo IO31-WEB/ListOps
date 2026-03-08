@@ -2,7 +2,7 @@
   "name": "campaignai",
   "version": "1.0.0",
   "private": true,
-"scripts": {
+  "scripts": {
     "dev": "next dev",
     "build": "next build",
     "start": "next start",
@@ -11,7 +11,10 @@
     "db:migrate": "drizzle-kit migrate",
     "db:push": "drizzle-kit push",
     "db:studio": "drizzle-kit studio",
-    "postbuild": "npx tsx scripts/migrate.ts"
+    "postbuild": "npx tsx scripts/migrate.ts",
+    "test": "vitest run",
+    "test:watch": "vitest",
+    "test:ui": "vitest --ui"
   },
   "dependencies": {
     "@anthropic-ai/sdk": "^0.27.0",
@@ -45,7 +48,10 @@
     "tailwind-merge": "^2.3.0",
     "tailwindcss-animate": "^1.0.7",
     "zod": "^3.23.8",
-    "zustand": "^4.5.4"
+    "zustand": "^4.5.4",
+    "nanoid": "^5.0.7",
+    "aws4fetch": "^1.0.20",
+    "posthog-node": "^4.0.1"
   },
   "devDependencies": {
     "@types/node": "^20",
@@ -57,6 +63,7 @@
     "autoprefixer": "^10.4.19",
     "postcss": "^8",
     "tailwindcss": "^3.4.1",
-    "typescript": "^5"
+    "typescript": "^5",
+    "vitest": "^1.6.0"
   }
 }
