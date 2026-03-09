@@ -282,6 +282,7 @@ export default function BillingPage() {
       <div className="grid sm:grid-cols-2 lg:grid-cols-4 gap-4">
         {PLANS.map((plan) => {
           const isCurrent = plan.id === currentPlan
+          const isDark = plan.highlighted || isCurrent   // dark bg card = white text
           const price = annual ? (plan.yearlyPrice ?? 0) : (plan.monthlyPrice ?? 0)
           const cta = getPlanCTA(plan.id)
           const isLoading = loading === plan.id
@@ -309,21 +310,21 @@ export default function BillingPage() {
                 {isCurrent && <span className="text-xs font-semibold text-amber-300 bg-amber-400/20 border border-amber-400/40 px-2.5 py-1 rounded-full ml-auto">✓ Current Plan</span>}
               </div>
 
-              <div className="font-display text-xl font-semibold mb-1 text-white">
+              <div className={`font-display text-xl font-semibold mb-1 ${isDark ? 'text-white' : 'text-slate-900'}`}>
                 {plan.name}
               </div>
-              <div className="text-xs mb-4 text-slate-400">{plan.tagline}</div>
+              <div className={`text-xs mb-4 ${isDark ? 'text-slate-400' : 'text-slate-500'}`}>{plan.tagline}</div>
 
               {/* Price */}
               <div className="mb-5">
                 {plan.monthlyPrice === 0 ? (
-                  <span className={`font-display text-3xl font-bold ${plan.highlighted || isCurrent ? 'text-white' : 'text-slate-900'}`}>Free</span>
+                  <span className={`font-display text-3xl font-bold ${isDark ? 'text-white' : 'text-slate-900'}`}>Free</span>
                 ) : (
                   <div>
-                    <span className={`font-display text-3xl font-bold ${plan.highlighted || isCurrent ? 'text-white' : 'text-slate-900'}`}>
+                    <span className={`font-display text-3xl font-bold ${isDark ? 'text-white' : 'text-slate-900'}`}>
                       {formatCurrency(annual ? Math.round((plan.yearlyPrice ?? 0) / 12) : (plan.monthlyPrice ?? 0))}
                     </span>
-                    <span className={`text-sm ml-1 ${plan.highlighted ? 'text-slate-400' : 'text-slate-400'}`}>/mo</span>
+                    <span className={`text-sm ml-1 ${isDark ? 'text-slate-400' : 'text-slate-500'}`}>/mo</span>
                     {annual && (plan.yearlyPrice ?? 0) > 0 && (
                       <div className="text-xs text-green-600 mt-0.5">{formatCurrency(plan.yearlyPrice ?? 0)}/year billed annually</div>
                     )}
@@ -334,13 +335,13 @@ export default function BillingPage() {
               {/* Features */}
               <ul className="space-y-2.5 mb-6 flex-1">
                 {plan.features.filter(f => f.included).map((f) => (
-                  <li key={f.text} className={`flex items-start gap-2 text-xs ${plan.highlighted || isCurrent ? 'text-slate-200' : 'text-slate-600'}`}>
+                  <li key={f.text} className={`flex items-start gap-2 text-xs ${isDark ? 'text-slate-200' : 'text-slate-600'}`}>
                     <Check className={`w-3.5 h-3.5 mt-0.5 flex-shrink-0 ${f.highlight ? 'text-amber-500' : plan.highlighted ? 'text-amber-400' : 'text-green-500'}`} />
                     <span className={f.highlight ? 'font-semibold' : ''}>{f.text}</span>
                   </li>
                 ))}
                 {plan.features.filter(f => !f.included).slice(0, 2).map((f) => (
-                  <li key={f.text} className={`flex items-start gap-2 text-xs ${plan.highlighted || isCurrent ? 'text-slate-500' : 'text-slate-400'}`}>
+                  <li key={f.text} className={`flex items-start gap-2 text-xs ${isDark ? 'text-slate-500' : 'text-slate-400'}`}>
                     <X className="w-3.5 h-3.5 mt-0.5 flex-shrink-0 opacity-50" />
                     {f.text}
                   </li>
