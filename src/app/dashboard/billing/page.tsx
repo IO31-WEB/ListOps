@@ -29,7 +29,7 @@ const FEATURE_COMPARISON = [
     { name: 'Email copy (Just Listed + Still Available)', free: true, starter: true, pro: true, brokerage: true },
     { name: 'Print-ready flyer (PDF)', free: true, starter: true, pro: true, brokerage: true },
     { name: 'Video & Reel scripts', free: false, starter: false, pro: true, brokerage: true },
-    { name: 'Flyer templates', free: '1', starter: '3', pro: '15+', brokerage: '15+ Custom' },
+    { name: 'Flyer templates', free: '1', starter: '3', pro: '3 + 5 color schemes', brokerage: '3 + Custom' },
   ]},
   { category: 'Brand & Customization', features: [
     { name: 'Brand kit (logo, colors, photo)', free: false, starter: true, pro: true, brokerage: true },
@@ -40,9 +40,9 @@ const FEATURE_COMPARISON = [
   ]},
   { category: 'Publishing & Distribution', features: [
     { name: 'Copy to clipboard', free: true, starter: true, pro: true, brokerage: true },
-    { name: 'Direct social scheduling (Meta)', free: false, starter: false, pro: true, brokerage: true },
-    { name: 'Auto-generated listing microsite', free: false, starter: false, pro: true, brokerage: true },
-    { name: 'Email platform integrations', free: false, starter: false, pro: true, brokerage: true },
+    { name: 'Auto-generated listing microsite', free: false, starter: true, pro: true, brokerage: true },
+    { name: 'Direct social scheduling (coming soon)', free: false, starter: false, pro: true, brokerage: true },
+    { name: 'Email platform integrations (coming soon)', free: false, starter: false, pro: true, brokerage: true },
   ]},
   { category: 'Team & Admin', features: [
     { name: 'Agent seats', free: '1', starter: '1', pro: '3', brokerage: '25' },
@@ -290,10 +290,12 @@ export default function BillingPage() {
             <div
               key={plan.id}
               className={`rounded-2xl p-6 flex flex-col border-2 transition-all ${
-                isCurrent
-                  ? 'border-slate-900 bg-white shadow-lg'
+                isCurrent && plan.highlighted
+                  ? 'border-amber-400 bg-slate-900 shadow-xl ring-2 ring-amber-400 ring-offset-2'
+                  : isCurrent
+                  ? 'border-slate-900 bg-slate-900 shadow-lg'
                   : plan.highlighted
-                  ? 'border-slate-900 bg-slate-900 text-white'
+                  ? 'border-slate-900 bg-slate-900'
                   : 'border-slate-200 bg-white hover:border-slate-300'
               }`}
             >
@@ -304,21 +306,21 @@ export default function BillingPage() {
                     {plan.badge}
                   </span>
                 )}
-                {isCurrent && <span className="text-xs font-semibold text-amber-700 bg-amber-100 px-2.5 py-1 rounded-full ml-auto">✓ Current</span>}
+                {isCurrent && <span className="text-xs font-semibold text-amber-300 bg-amber-400/20 border border-amber-400/40 px-2.5 py-1 rounded-full ml-auto">✓ Current Plan</span>}
               </div>
 
-              <div className={`font-display text-xl font-semibold mb-1 ${plan.highlighted ? 'text-white' : 'text-slate-900'}`}>
+              <div className="font-display text-xl font-semibold mb-1 text-white">
                 {plan.name}
               </div>
-              <div className={`text-xs mb-4 ${plan.highlighted ? 'text-slate-400' : 'text-slate-500'}`}>{plan.tagline}</div>
+              <div className="text-xs mb-4 text-slate-400">{plan.tagline}</div>
 
               {/* Price */}
               <div className="mb-5">
                 {plan.monthlyPrice === 0 ? (
-                  <span className={`font-display text-3xl font-bold ${plan.highlighted ? 'text-white' : 'text-slate-900'}`}>Free</span>
+                  <span className={`font-display text-3xl font-bold ${plan.highlighted || isCurrent ? 'text-white' : 'text-slate-900'}`}>Free</span>
                 ) : (
                   <div>
-                    <span className={`font-display text-3xl font-bold ${plan.highlighted ? 'text-white' : 'text-slate-900'}`}>
+                    <span className={`font-display text-3xl font-bold ${plan.highlighted || isCurrent ? 'text-white' : 'text-slate-900'}`}>
                       {formatCurrency(annual ? Math.round(plan.yearlyPrice / 12) : plan.monthlyPrice)}
                     </span>
                     <span className={`text-sm ml-1 ${plan.highlighted ? 'text-slate-400' : 'text-slate-400'}`}>/mo</span>
@@ -332,13 +334,13 @@ export default function BillingPage() {
               {/* Features */}
               <ul className="space-y-2.5 mb-6 flex-1">
                 {plan.features.filter(f => f.included).map((f) => (
-                  <li key={f.text} className={`flex items-start gap-2 text-xs ${plan.highlighted ? 'text-slate-200' : 'text-slate-600'}`}>
+                  <li key={f.text} className={`flex items-start gap-2 text-xs ${plan.highlighted || isCurrent ? 'text-slate-200' : 'text-slate-600'}`}>
                     <Check className={`w-3.5 h-3.5 mt-0.5 flex-shrink-0 ${f.highlight ? 'text-amber-500' : plan.highlighted ? 'text-amber-400' : 'text-green-500'}`} />
                     <span className={f.highlight ? 'font-semibold' : ''}>{f.text}</span>
                   </li>
                 ))}
                 {plan.features.filter(f => !f.included).slice(0, 2).map((f) => (
-                  <li key={f.text} className={`flex items-start gap-2 text-xs ${plan.highlighted ? 'text-slate-500' : 'text-slate-400'}`}>
+                  <li key={f.text} className={`flex items-start gap-2 text-xs ${plan.highlighted || isCurrent ? 'text-slate-500' : 'text-slate-400'}`}>
                     <X className="w-3.5 h-3.5 mt-0.5 flex-shrink-0 opacity-50" />
                     {f.text}
                   </li>
