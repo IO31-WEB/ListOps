@@ -22,6 +22,7 @@ export default function SettingsPage() {
   const [saving, setSaving] = useState(false)
   const [saved, setSaved] = useState(false)
   const [loading, setLoading] = useState(true)
+  const [referralUrl, setReferralUrl] = useState<string>('')
 
   const set = (key: keyof ProfileForm) => (e: React.ChangeEvent<HTMLInputElement | HTMLSelectElement>) =>
     setProfile(prev => ({ ...prev, [key]: e.target.value }))
@@ -29,9 +30,12 @@ export default function SettingsPage() {
   useEffect(() => {
     const fetchProfile = async () => {
       try {
-        const res = await fetch('/api/user/profile')
-        if (res.ok) {
-          const data = await res.json()
+        const [profileRes, referralRes] = await Promise.all([
+          fetch('/api/user/profile'),
+          fetch('/api/referral'),
+        ])
+        if (profileRes.ok) {
+          const data = await profileRes.json()
           setProfile(prev => ({
             ...prev,
             firstName: data.user?.firstName ?? '',
@@ -41,6 +45,10 @@ export default function SettingsPage() {
             mlsAgentId: data.user?.mlsAgentId ?? '',
             timezone: data.user?.timezone ?? 'America/New_York',
           }))
+        }
+        if (referralRes.ok) {
+          const data = await referralRes.json()
+          setReferralUrl(data.referralUrl ?? '')
         }
       } catch { } finally {
         setLoading(false)
@@ -158,12 +166,17 @@ export default function SettingsPage() {
         <div className="bg-amber-50 border border-amber-200 rounded-xl p-4">
           <p className="text-xs font-semibold text-amber-800 mb-2">Your Referral Link</p>
           <div className="flex items-center gap-2">
-            <code className="flex-1 text-xs bg-white border border-amber-200 rounded-lg px-3 py-2 font-mono text-slate-700">
-              https://campaignai.io/sign-up?ref=YOUR_CODE
+            <code className="flex-1 text-xs bg-white border border-amber-200 rounded-lg px-3 py-2 font-mono text-slate-700 truncate">
+              {referralUrl || 'Loading…'}
             </code>
             <button
-              onClick={() => { navigator.clipboard.writeText('https://campaignai.io/sign-up?ref=YOUR_CODE'); toast.success('Copied!') }}
-              className="text-xs font-medium text-amber-700 bg-amber-100 hover:bg-amber-200 px-3 py-2 rounded-lg transition-colors whitespace-nowrap"
+              onClick={() => {
+                if (!referralUrl) return
+                navigator.clipboard.writeText(referralUrl)
+                toast.success('Copied!')
+              }}
+              disabled={!referralUrl}
+              className="text-xs font-medium text-amber-700 bg-amber-100 hover:bg-amber-200 disabled:opacity-50 px-3 py-2 rounded-lg transition-colors whitespace-nowrap"
             >
               Copy
             </button>
