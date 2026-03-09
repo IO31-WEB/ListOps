@@ -14,11 +14,12 @@ import {
   PLAN_MAP,
   CAMPAIGN_LIMITS,
   FEATURE_GATES,
+  ENTERPRISE_PLAN,
 } from './plans'
 
 // Re-export everything so existing imports continue to work
 export type { PlanTier, BillingInterval, Plan, PlanFeature, Feature } from './plans'
-export { canAccess, PLANS, PLAN_MAP, CAMPAIGN_LIMITS, FEATURE_GATES }
+export { canAccess, PLANS, PLAN_MAP, CAMPAIGN_LIMITS, FEATURE_GATES, ENTERPRISE_PLAN }
 
 // canAccessFeature is an alias for canAccess — both names are supported
 export const canAccessFeature = canAccess
@@ -51,23 +52,3 @@ export const STRIPE_EVENTS = [
 
 export type StripeEvent = typeof STRIPE_EVENTS[number]
 
-// ── Enterprise plan (contact sales — no Stripe price ID) ───────
-export const ENTERPRISE_PLAN = {
-  id: 'enterprise' as import('./plans').PlanTier,
-  name: 'Enterprise',
-  tagline: 'MLS board-level deployment',
-  price: 'Custom',
-  features: [
-    'All Brokerage features',
-    'Unlimited agents',
-    'MLS board-level licensing',
-    'Custom domain (marketing.yourbrokerage.com)',
-    'SSO/SAML + SCIM provisioning',
-    'Dedicated Customer Success Manager',
-    'SLA guarantee (99.9% uptime)',
-    'Custom AI fine-tuning for your market',
-    'Zapier / Make / API marketplace access',
-    'Custom integrations & professional services',
-    'Annual invoicing (no credit card required)',
-  ],
-}
