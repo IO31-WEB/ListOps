@@ -201,7 +201,7 @@ export function canAccessFeature(tier: PlanTier, feature: string): boolean {
     analytics_dashboard: ['brokerage', 'enterprise'],
     admin_dashboard:     ['brokerage', 'enterprise'],
     audit_logs:          ['brokerage', 'enterprise'],
-    multi_agent:         ['brokerage', 'enterprise'],
+    multi_agent:         ['pro', 'brokerage', 'enterprise'],
     sso:                 ['enterprise'],
     api_access:          ['enterprise'],
   }
