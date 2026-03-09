@@ -8,7 +8,7 @@ export default async function FlyerPage({
   searchParams,
 }: {
   params: Promise<{ id: string }>
-  searchParams: Promise<{ template?: string }>
+  searchParams: Promise<{ template?: string; scheme?: string }>
 }) {
   const { userId } = await auth()
   if (!userId) redirect('/sign-in')
