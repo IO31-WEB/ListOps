@@ -10,7 +10,24 @@ const nextConfig = {
       { protocol: 'https', hostname: 'placehold.co' },
     ],
   },
-  serverExternalPackages: ['@neondatabase/serverless'],
+  // Packages that should only be bundled for server-side, not browser
+  serverExternalPackages: [
+    '@neondatabase/serverless',
+    '@sentry/nextjs',
+    'posthog-node',
+    'aws4fetch',
+  ],
+  webpack: (config, { isServer }) => {
+    if (isServer) {
+      // Tell webpack to ignore these optional packages if not installed
+      config.externals = config.externals || []
+      config.externals.push(
+        '@sparticuz/chromium',
+        'puppeteer-core',
+      )
+    }
+    return config
+  },
 }
 
 module.exports = nextConfig
