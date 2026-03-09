@@ -27,7 +27,7 @@ export async function POST(req: NextRequest) {
     if (!user) return NextResponse.json({ error: 'User not found' }, { status: 404 })
 
     // Check plan allows team members
-    const sub = await getOrgSubscription(user.orgId)
+    const sub = user.orgId ? await getOrgSubscription(user.orgId) : null
     const planTier = (sub?.plan ?? 'free') as import('@/lib/stripe').PlanTier
     const canInvite = canAccessFeature(planTier, 'multi_agent')
     if (!canInvite) {
