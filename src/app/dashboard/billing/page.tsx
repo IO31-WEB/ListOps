@@ -282,7 +282,7 @@ export default function BillingPage() {
       <div className="grid sm:grid-cols-2 lg:grid-cols-4 gap-4">
         {PLANS.map((plan) => {
           const isCurrent = plan.id === currentPlan
-          const price = annual ? plan.yearlyPrice : plan.monthlyPrice
+          const price = annual ? (plan.yearlyPrice ?? 0) : (plan.monthlyPrice ?? 0)
           const cta = getPlanCTA(plan.id)
           const isLoading = loading === plan.id
 
@@ -321,11 +321,11 @@ export default function BillingPage() {
                 ) : (
                   <div>
                     <span className={`font-display text-3xl font-bold ${plan.highlighted || isCurrent ? 'text-white' : 'text-slate-900'}`}>
-                      {formatCurrency(annual ? Math.round(plan.yearlyPrice / 12) : plan.monthlyPrice)}
+                      {formatCurrency(annual ? Math.round((plan.yearlyPrice ?? 0) / 12) : (plan.monthlyPrice ?? 0))}
                     </span>
                     <span className={`text-sm ml-1 ${plan.highlighted ? 'text-slate-400' : 'text-slate-400'}`}>/mo</span>
-                    {annual && plan.yearlyPrice > 0 && (
-                      <div className="text-xs text-green-600 mt-0.5">{formatCurrency(plan.yearlyPrice)}/year billed annually</div>
+                    {annual && (plan.yearlyPrice ?? 0) > 0 && (
+                      <div className="text-xs text-green-600 mt-0.5">{formatCurrency(plan.yearlyPrice ?? 0)}/year billed annually</div>
                     )}
                   </div>
                 )}
