@@ -125,8 +125,8 @@ export default function PricingPage() {
           {/* Plan Cards */}
           <div className="grid sm:grid-cols-2 lg:grid-cols-4 gap-6 mb-20">
             {PLANS.map((plan) => {
-              const price = annual ? Math.round(plan.yearlyPrice / 12) : plan.monthlyPrice
-              const billedAs = annual && plan.yearlyPrice > 0 ? `${formatCurrency(plan.yearlyPrice)}/yr` : null
+              const price = annual ? Math.round((plan.yearlyPrice ?? 0) / 12) : (plan.monthlyPrice ?? 0)
+              const billedAs = annual && (plan.yearlyPrice ?? 0) > 0 ? `${formatCurrency(plan.yearlyPrice ?? 0)}/yr` : null
 
               return (
                 <div key={plan.id} className={`rounded-2xl flex flex-col relative overflow-hidden ${plan.highlighted ? 'bg-slate-900 text-white ring-2 ring-amber-400' : 'bg-white border border-slate-200'}`}>
