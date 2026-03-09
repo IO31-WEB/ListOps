@@ -16,13 +16,14 @@ const COLOR_SCHEMES = [
   { id: 'burgundy', label: 'Burgundy', desc: 'Burgundy & champagne' },
 ]
 
-export function PrintButton({ backUrl, planTier, initialTemplate }: {
+export function PrintButton({ backUrl, planTier, initialTemplate, initialScheme }: {
   backUrl: string
   planTier: string
   initialTemplate: string
+  initialScheme: string
 }) {
   const [template, setTemplate] = useState(initialTemplate || 'classic')
-  const [scheme, setScheme] = useState('brand')
+  const [scheme, setScheme] = useState(initialScheme || 'brand')
 
   const isStarter = ['starter', 'pro', 'brokerage', 'enterprise'].includes(planTier)
   const isPro = ['pro', 'brokerage', 'enterprise'].includes(planTier)
