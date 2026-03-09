@@ -197,7 +197,7 @@ export default function HomePage() {
                     <span className="font-display text-3xl font-bold">Free</span>
                   ) : (
                     <>
-                      <span className="font-display text-3xl font-bold">{formatCurrency(plan.monthlyPrice)}</span>
+                      <span className="font-display text-3xl font-bold">{formatCurrency(plan.monthlyPrice ?? 0)}</span>
                       <span className={`text-sm ${plan.highlighted ? 'text-slate-700' : 'text-slate-400'}`}>/mo</span>
                     </>
                   )}
