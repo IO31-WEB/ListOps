@@ -2,7 +2,7 @@
 
 import { Check, Zap } from 'lucide-react'
 import { useState } from 'react'
-import { Plan } from '@/lib/stripe'
+import { Plan } from '@/lib/plans'
 import { cn } from '@/lib/utils'
 import toast from 'react-hot-toast'
 
