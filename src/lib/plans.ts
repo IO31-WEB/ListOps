@@ -192,3 +192,25 @@ export const PLANS: Plan[] = [
 ]
 
 export const PLAN_MAP = Object.fromEntries(PLANS.map(p => [p.id, p])) as Record<PlanId, Plan>
+
+// ENTERPRISE_PLAN is UI-only data (no Stripe price IDs) — safe to import in client components.
+// stripe.ts re-exports this for backwards-compat server-side imports.
+export const ENTERPRISE_PLAN = {
+  id: 'enterprise' as PlanTier,
+  name: 'Enterprise',
+  tagline: 'MLS board-level deployment',
+  price: 'Custom',
+  features: [
+    'All Brokerage features',
+    'Unlimited agents',
+    'MLS board-level licensing',
+    'Custom domain (marketing.yourbrokerage.com)',
+    'SSO/SAML + SCIM provisioning',
+    'Dedicated Customer Success Manager',
+    'SLA guarantee (99.9% uptime)',
+    'Custom AI fine-tuning for your market',
+    'Zapier / Make / API marketplace access',
+    'Custom integrations & professional services',
+    'Annual invoicing (no credit card required)',
+  ],
+}
