@@ -52,8 +52,8 @@ export async function POST(
     let pdfBuffer: Buffer | null = null
 
     try {
-      const chromium = (() => { try { return require('@sparticuz/chromium') } catch { return null } })()
-      const puppeteer = (() => { try { return require('puppeteer-core') } catch { return null } })()
+      const chromium = (() => { try { return eval("require")('@sparticuz/chromium') } catch { return null } })()
+      const puppeteer = (() => { try { return eval("require")('puppeteer-core') } catch { return null } })()
 
       if (chromium && puppeteer) {
         console.log('[pdf] Puppeteer available — generating PDF')
