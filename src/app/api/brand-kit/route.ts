@@ -1,6 +1,9 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { auth } from '@clerk/nextjs/server'
 import { getUserWithDetails, upsertBrandKit, writeAuditLog } from '@/lib/user-service'
+import { db } from '@/lib/db'
+import { users } from '@/lib/db/schema'
+import { eq } from 'drizzle-orm'
 import { z } from 'zod'
 
 const BrandKitSchema = z.object({
@@ -29,7 +32,12 @@ export async function GET(request: NextRequest) {
   if (!userId) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
 
   const user = await getUserWithDetails(userId)
-  return NextResponse.json({ brandKit: user?.brandKit ?? null })
+  // aiPersona lives on the users table, not brandKits — merge it in so the
+  // frontend can read brandKit.aiPersona.tone reliably
+  const brandKit = user?.brandKit
+    ? { ...user.brandKit, aiPersona: (user as any).aiPersona ?? null }
+    : null
+  return NextResponse.json({ brandKit })
 }
 
 export async function POST(request: NextRequest) {
@@ -52,21 +60,16 @@ export async function POST(request: NextRequest) {
       )
     }
 
-    // Extract tone and pass as aiPersona (full object to avoid partial JSONB issues)
+    // tone lives on users.aiPersona — strip it from brandKit upsert, save separately
     const { tone, ...rest } = data as any
-    const upsertData = {
-      ...rest,
-      ...(tone ? {
-        aiPersona: {
-          tone,
-          writingStyle: '',
-          tagline: rest.tagline ?? '',
-          specialties: [],
-          marketArea: rest.brokerageName ?? '',
-        }
-      } : {}),
+    const brandKit = await upsertBrandKit(user.id, user.orgId!, rest)
+
+    // Save tone to users.aiPersona (the column that actually exists for this field)
+    if (tone) {
+      await db.update(users)
+        .set({ aiPersona: { tone, writingStyle: '', tagline: rest.tagline ?? '', specialties: [], marketArea: rest.brokerageName ?? '' } })
+        .where(eq(users.clerkId, userId))
     }
-    const brandKit = await upsertBrandKit(user.id, user.orgId!, upsertData)
 
     await writeAuditLog({
       orgId: user.orgId ?? undefined,
@@ -77,7 +80,11 @@ export async function POST(request: NextRequest) {
       metadata: { fields: Object.keys(data) },
     })
 
-    return NextResponse.json({ brandKit, success: true })
+    // Merge aiPersona back into response so frontend state stays in sync
+    const returnedBrandKit = brandKit
+      ? { ...brandKit, aiPersona: tone ? { tone, writingStyle: '', tagline: rest.tagline ?? '', specialties: [], marketArea: rest.brokerageName ?? '' } : null }
+      : null
+    return NextResponse.json({ brandKit: returnedBrandKit, success: true })
   } catch (err) {
     if (err instanceof z.ZodError) {
       return NextResponse.json({ error: 'Invalid data', details: err.errors }, { status: 400 })
