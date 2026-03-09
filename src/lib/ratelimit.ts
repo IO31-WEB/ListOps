@@ -1,8 +1,14 @@
 /**
  * Rate Limiting — Upstash Redis
  *
- * If UPSTASH_REDIS_REST_URL is not set (local dev), rate limiting is bypassed.
- * Add to Vercel env vars to enable in production.
+ * FIX: The previous implementation had a race condition between INCR and PEXPIRE.
+ * If the process crashed between those two calls, a key could exist forever with
+ * no TTL, permanently blocking a user.
+ *
+ * Fix: Use SET NX (set-if-not-exists) to initialize the counter with an expiry
+ * atomically, then INCR. This is the standard Redis rate limiting pattern.
+ *
+ * If UPSTASH_REDIS_REST_URL is not set (local dev), falls back to in-memory.
  *
  * Limits:
  *   /api/generate  — 5 req / 10 min per user  (Claude cost protection)
@@ -16,7 +22,7 @@ export interface RateLimitResult {
   limit: number
 }
 
-// ── Simple in-memory fallback (used when Upstash not configured) ──
+// ── In-memory fallback (local dev only) ──────────────────────
 const memStore = new Map<string, { count: number; resetAt: number }>()
 
 function memRateLimit(key: string, limit: number, windowMs: number): RateLimitResult {
@@ -38,7 +44,9 @@ function memRateLimit(key: string, limit: number, windowMs: number): RateLimitRe
   }
 }
 
-// ── Upstash Redis rate limiter (production) ───────────────────────
+// ── Upstash Redis rate limiter (production) ───────────────────
+// FIX: Uses SET NX EX (atomic init with TTL) + INCR pattern.
+// No window between key creation and expiry set — race condition eliminated.
 async function upstashRateLimit(
   key: string,
   limit: number,
@@ -46,41 +54,43 @@ async function upstashRateLimit(
 ): Promise<RateLimitResult> {
   const url = process.env.UPSTASH_REDIS_REST_URL!
   const token = process.env.UPSTASH_REDIS_REST_TOKEN!
-
   const now = Date.now()
   const windowMs = windowSeconds * 1000
 
-  // MULTI: INCR + EXPIRE in one pipeline
+  // Pipeline:
+  // 1. SET key 0 NX EX windowSeconds  — initialize to 0 with TTL if key doesn't exist
+  // 2. INCR key                        — atomically increment
+  // 3. PTTL key                        — get remaining TTL in ms
   const pipeline = [
+    ['SET', key, '0', 'NX', 'EX', String(windowSeconds)],
     ['INCR', key],
     ['PTTL', key],
   ]
 
-  const res = await fetch(`${url}/pipeline`, {
-    method: 'POST',
-    headers: {
-      Authorization: `Bearer ${token}`,
-      'Content-Type': 'application/json',
-    },
-    body: JSON.stringify(pipeline),
-  })
+  let res: Response
+  try {
+    res = await fetch(`${url}/pipeline`, {
+      method: 'POST',
+      headers: {
+        Authorization: `Bearer ${token}`,
+        'Content-Type': 'application/json',
+      },
+      body: JSON.stringify(pipeline),
+    })
+  } catch (err) {
+    // Network error — fail open so users aren't blocked by Redis downtime
+    console.error('[ratelimit] Upstash network error (failing open):', err)
+    return { success: true, remaining: limit, reset: now + windowMs, limit }
+  }
 
   if (!res.ok) {
-    // Redis error — fail open (don't block users if Redis is down)
-    console.error('Upstash rate limit error:', await res.text())
+    console.error('[ratelimit] Upstash error response (failing open):', res.status)
     return { success: true, remaining: limit, reset: now + windowMs, limit }
   }
 
   const data = await res.json()
-  const count: number = data[0]?.result ?? 1
-  const pttl: number = data[1]?.result ?? -1
-
-  // Set expiry on first request
-  if (count === 1 || pttl < 0) {
-    await fetch(`${url}/pexpire/${encodeURIComponent(key)}/${windowMs}`, {
-      headers: { Authorization: `Bearer ${token}` },
-    })
-  }
+  const count: number = data[1]?.result ?? 1
+  const pttl: number  = data[2]?.result ?? windowMs
 
   const resetAt = pttl > 0 ? now + pttl : now + windowMs
   const remaining = Math.max(0, limit - count)
@@ -88,7 +98,7 @@ async function upstashRateLimit(
   return { success: count <= limit, remaining, reset: resetAt, limit }
 }
 
-// ── Public API ────────────────────────────────────────────────────
+// ── Public API ─────────────────────────────────────────────────
 const hasUpstash = !!(
   process.env.UPSTASH_REDIS_REST_URL && process.env.UPSTASH_REDIS_REST_TOKEN
 )
