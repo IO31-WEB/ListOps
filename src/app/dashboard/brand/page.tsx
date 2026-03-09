@@ -182,6 +182,11 @@ export default function BrandPage() {
       })
       const data = await res.json()
       if (!res.ok) throw new Error(data.error || 'Failed to save')
+      // Sync form tone from the saved record so the highlight always reflects DB state
+      if (data.brandKit) {
+        const savedTone = data.brandKit.aiPersona?.tone ?? data.brandKit.tone ?? form.tone
+        setForm(prev => ({ ...prev, tone: savedTone }))
+      }
       setSaved(true)
       toast.success('Brand kit saved! It will be applied to all future campaigns.')
       setTimeout(() => setSaved(false), 3000)
