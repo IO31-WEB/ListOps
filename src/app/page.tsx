@@ -150,7 +150,7 @@ export default function HomePage() {
               { icon: '🖨️', tag: 'FL', title: 'Print-Ready Flyer', desc: 'Professional listing flyer with photos, specs, and your agent branding. Export as PDF instantly.', plan: 'All plans' },
               { icon: '📧', tag: 'EM', title: 'Email Newsletter Copy', desc: 'Just Listed and Still Available emails ready to paste into any email platform.', plan: 'All plans' },
               { icon: '🎯', tag: 'BK', title: 'Brand Kit', desc: 'Upload your logo, headshot, colors, and contact info once. Applied to every campaign automatically.', plan: 'Starter+' },
-              { icon: '🌐', tag: 'MS', title: 'Listing Microsite', desc: 'Auto-generated beautiful property page hosted at campaignai.io/l/[slug] — shareable instantly.', plan: 'Pro+' },
+              { icon: '🌐', tag: 'MS', title: 'Listing Microsite', desc: 'Auto-generated beautiful property page hosted at campaignai.io/l/[slug] — shareable instantly.', plan: 'Starter+' },
               { icon: '⏰', tag: 'SC', title: 'Social Scheduling', desc: 'Publish directly to Facebook and Instagram — no copy-pasting. Schedule weeks in advance.', plan: 'Pro+' },
               { icon: '🎬', tag: 'VS', title: 'Video & Reel Scripts', desc: 'AI-written scripts optimized for short-form video. Perfect for Reels and TikTok.', plan: 'Pro+' },
               { icon: '🏢', tag: 'WL', title: 'White-Label', desc: 'Your brokerage brand on all outputs. Remove all CampaignAI branding from flyers and emails.', plan: 'Brokerage+' },
