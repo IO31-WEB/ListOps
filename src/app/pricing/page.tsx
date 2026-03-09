@@ -3,7 +3,7 @@
 import { useState } from 'react'
 import Link from 'next/link'
 import { ArrowRight, Check, X, Zap, HelpCircle } from 'lucide-react'
-import { PLANS, ENTERPRISE_PLAN } from '@/lib/stripe'
+import { PLANS, ENTERPRISE_PLAN } from '@/lib/plans'
 import { formatCurrency } from '@/lib/utils'
 
 const FEATURE_CATEGORIES = [
