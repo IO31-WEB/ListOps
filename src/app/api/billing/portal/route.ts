@@ -24,7 +24,7 @@ export async function POST(request: NextRequest) {
 
     const sessionParams: any = {
       customer: customerId,
-      return_url: absoluteUrl('/dashboard/billing'),
+      return_url: absoluteUrl('/dashboard/billing?portal_return=1'),
     }
 
     if (isCancelFlow) {
