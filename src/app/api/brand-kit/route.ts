@@ -52,11 +52,19 @@ export async function POST(request: NextRequest) {
       )
     }
 
-    // Extract tone and pass as aiPersona
+    // Extract tone and pass as aiPersona (full object to avoid partial JSONB issues)
     const { tone, ...rest } = data as any
     const upsertData = {
       ...rest,
-      ...(tone ? { aiPersona: { tone } } : {}),
+      ...(tone ? {
+        aiPersona: {
+          tone,
+          writingStyle: '',
+          tagline: rest.tagline ?? '',
+          specialties: [],
+          marketArea: rest.brokerageName ?? '',
+        }
+      } : {}),
     }
     const brandKit = await upsertBrandKit(user.id, user.orgId!, upsertData)
 
