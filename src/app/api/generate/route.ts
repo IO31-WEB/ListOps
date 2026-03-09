@@ -114,6 +114,9 @@ function buildCampaignPrompt(listing: any, planTier: PlanTier, brandKit?: any) {
     ? (brandKit?.agentName || `${listing.agent?.firstName ?? ''} ${listing.agent?.lastName ?? ''}`.trim() || 'Your Agent')
     : `${listing.agent?.firstName ?? ''} ${listing.agent?.lastName ?? ''}`.trim() || 'Your Agent'
   const agentPhone = hasBrandKit ? (brandKit?.agentPhone || listing.agent?.contact?.office || '') : ''
+  const agentEmail = hasBrandKit ? (brandKit?.agentEmail || '') : ''
+  const agentTitle = hasBrandKit ? (brandKit?.agentTitle || 'REALTOR®') : 'REALTOR®'
+  const brokerageName = hasBrandKit ? (brandKit?.brokerageName || '') : ''
   const tone = hasBrandKit ? (brandKit?.aiPersona?.tone || 'professional') : 'professional'
   const tagline = hasBrandKit ? (brandKit?.tagline || '') : ''
 
@@ -137,12 +140,16 @@ function buildCampaignPrompt(listing: any, planTier: PlanTier, brandKit?: any) {
 
   const includeReelScripts = canAccessFeature(planTier, 'video_script')
 
+  // Agent signature block required at the bottom of every Facebook/Instagram post
+  const agentSignatureParts = [agentName, agentTitle, brokerageName, agentPhone, agentEmail].filter(Boolean)
+  const agentSignature = agentSignatureParts.join(' | ')
+
   const jsonSchema = `{
   "facebook": [
-    {"week": 1, "theme": "Just Listed", "copy": "150-250 word post including ${listingUrl}", "hashtags": ["realtor","justlisted","${city.toLowerCase().replace(/\s/g, '')}realestate"]}
+    {"week": 1, "theme": "Just Listed", "copy": "2-3 focused paragraphs (130-180 words). Open with a vivid scene-setting hook — make the reader feel the home. Naturally weave in 2-3 standout features. Close with a direct CTA and ${listingUrl}. Final line break then agent signature exactly: ${agentSignature}", "hashtags": ["realtor","justlisted","${city.toLowerCase().replace(/\s/g, '')}realestate","${city.toLowerCase().replace(/\s/g, '')}homes","newhome"]}
   ],
   "instagram": [
-    {"week": 1, "caption": "100-150 word caption including ${listingUrl}", "hashtags": ["justlisted","realestate","homeforsale","${city.toLowerCase().replace(/\s/g, '')}homes"]}
+    {"week": 1, "caption": "80-120 words. Bold 1-line hook (no emoji opener). 2-3 sentences on the lifestyle. CTA + ${listingUrl}. Final line then agent signature: ${agentSignature}", "hashtags": ["justlisted","realestate","homeforsale","${city.toLowerCase().replace(/\s/g, '')}homes","realtor","listingagent"]}
   ],
   "emailJustListed": "200-300 word just listed email body with full property details and CTA",
   "emailStillAvailable": "150-200 word still available follow-up with urgency"${includeReelScripts ? `,
@@ -159,7 +166,7 @@ function buildCampaignPrompt(listing: any, planTier: PlanTier, brandKit?: any) {
   ]` : ''}
 }`
 
-  return `You are an expert real estate marketing copywriter. Generate a 6-week campaign for this listing.
+  return `You are a senior real estate marketing strategist and copywriter. Your copy is published directly to MLS clients — it must be polished, persuasive, legally compliant, and indistinguishable from expert human writing.
 
 LISTING:
 - Address: ${address}
@@ -171,25 +178,38 @@ LISTING:
 - City: ${city}
 - URL: ${listingUrl}
 
-AGENT: ${agentName}${agentPhone ? ` | ${agentPhone}` : ''}${tagline ? ` | "${tagline}"` : ''}
+AGENT: ${agentName}${agentPhone ? ` | ${agentPhone}` : ''}${agentEmail ? ` | ${agentEmail}` : ''}${brokerageName ? ` | ${brokerageName}` : ''}${tagline ? ` | "${tagline}"` : ''}
 TONE: ${toneGuide}
 BRANDING: ${brandingLine}
 
 WEEK THEMES:
 1: Just Listed — excitement, first impressions
-2: Property Features — best rooms and details
-3: Neighborhood & Lifestyle — area, schools, walkability
-4: Open House — invite and social proof
-5: Investment Value — ROI, market position
-6: Final Call — urgency, still available
+2: Property Features — showcase the best rooms and details
+3: Neighborhood & Lifestyle — area, schools, walkability, community
+4: Open House — invitation, social proof, FOMO
+5: Investment Value — ROI, market position, appreciation potential
+6: Final Call — urgency, last chance, still available
+
+WRITING STANDARDS — follow these exactly:
+- Write like a trusted local expert, not a hype machine. No exclamation points unless truly warranted.
+- Vary sentence length. Mix short punchy sentences with longer, flowing ones.
+- Use specific sensory details (gleaming, sun-drenched, airy) — never vague adjectives (nice, great, amazing).
+- Every post must end with the agent signature on its own line: ${agentSignature}
+- No ALL CAPS except the agent signature block. No overuse of emojis.
+- Facebook posts: conversational, story-first, 130-180 words of body copy + agent signature
+- Instagram captions: tighter, lifestyle-led, 80-120 words of body copy + agent signature
+- Each week's post must feel genuinely different — different angle, different reader, different emotional hook
+- Real estate advertising compliance: no mention of race, religion, national origin, sex, disability, or familial status
+- Never use the phrase "This won't last" or "Dream home" — they're clichéd and signal AI
 
 Return ONLY valid JSON (no markdown, no code fences):
 
 ${jsonSchema}
 
 Rules:
-- Generate all 6 weeks for facebook and instagram
-${includeReelScripts ? '- Generate all 6 weeks for reelScripts — each unique to its theme\n- Reel scripts must feel authentic, like real agent videos not ads' : ''}
+- Generate all 6 weeks for facebook and instagram — each week must be distinct in angle and tone
+${includeReelScripts ? '- Generate all 6 weeks for reelScripts — each unique to its weekly theme\n- Reel scripts must sound like the agent speaking naturally to camera, not an ad voiceover' : ''}
+- Agent signature must appear at the bottom of every facebook and instagram post
 - Return ONLY the JSON object`
 }
 
