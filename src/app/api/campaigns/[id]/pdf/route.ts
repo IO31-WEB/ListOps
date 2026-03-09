@@ -2,21 +2,20 @@
  * PDF Generation API
  * POST /api/campaigns/[id]/pdf
  *
+ * FIX: Removed `as any` type cast that was hiding a Drizzle schema/DB mismatch.
+ * pdfUrl is now properly typed in the schema update call.
+ *
  * Strategy:
  * 1. Return cached R2 URL if already generated
  * 2. Try Puppeteer (if @sparticuz/chromium + puppeteer-core installed) → upload to R2
  * 3. Fall back to flyer page URL (browser print)
- *
- * To enable real PDF generation on Vercel:
- *   npm install @sparticuz/chromium puppeteer-core
- *   Set all R2_* env vars
  */
 
 import { NextRequest, NextResponse } from 'next/server'
 import { auth } from '@clerk/nextjs/server'
 import { db } from '@/lib/db'
 import { campaigns } from '@/lib/db/schema'
-import { eq } from 'drizzle-orm'
+import { eq, and } from 'drizzle-orm'
 import { getCampaign, checkCampaignQuota } from '@/lib/user-service'
 import { uploadToR2 } from '@/lib/r2'
 import { trackFlyerDownloaded } from '@/lib/posthog'
@@ -43,19 +42,17 @@ export async function POST(
     const flyerUrl = `${appUrl}/flyer/${id}?template=classic`
 
     // Return cached PDF if already generated
-    const cachedUrl = (campaign as any).pdfUrl ?? (campaign as any).flyerUrl
+    const cachedUrl = campaign.pdfUrl ?? campaign.flyerUrl
     if (cachedUrl?.startsWith('http') && cachedUrl?.includes('r2')) {
       trackFlyerDownloaded({ userId, campaignId: id, template: 'cached', planTier })
       return NextResponse.json({ url: cachedUrl, cached: true, isPdf: true })
     }
 
-    // ── Attempt Puppeteer PDF generation ─────────────────────
+    // ── Attempt Puppeteer PDF generation ──────────────────────
     let pdfBuffer: Buffer | null = null
 
     try {
-      // eslint-disable-next-line @typescript-eslint/no-var-requires
       const chromium = (() => { try { return require('@sparticuz/chromium') } catch { return null } })()
-      // eslint-disable-next-line @typescript-eslint/no-var-requires
       const puppeteer = (() => { try { return require('puppeteer-core') } catch { return null } })()
 
       if (chromium && puppeteer) {
@@ -76,15 +73,11 @@ export async function POST(
 
         try {
           const page = await browser.newPage()
-
-          // Set auth cookie so the flyer page can load without redirect
-          const cookieUrl = new URL(appUrl)
           await page.goto(`${appUrl}/flyer/${id}?template=classic&print=1`, {
             waitUntil: 'networkidle0',
             timeout: 30000,
           })
 
-          // Wait for images to load
           await page.evaluate(() =>
             Promise.all(
               Array.from(document.images)
@@ -112,7 +105,7 @@ export async function POST(
       console.warn('[pdf] Puppeteer error:', puppeteerErr)
     }
 
-    // ── Upload to R2 ──────────────────────────────────────────
+    // ── Upload to R2 ───────────────────────────────────────────
     let pdfUrl: string | null = null
 
     if (pdfBuffer) {
@@ -124,10 +117,10 @@ export async function POST(
       })
 
       if (pdfUrl) {
-        // Cache on campaign record
+        // FIX: pdfUrl is a proper column in the schema — no `as any` cast needed
         await db
           .update(campaigns)
-          .set({ pdfUrl, updatedAt: new Date() } as any)
+          .set({ pdfUrl, updatedAt: new Date() })
           .where(eq(campaigns.id, id))
 
         console.log(`[pdf] Uploaded to R2: ${pdfUrl}`)
