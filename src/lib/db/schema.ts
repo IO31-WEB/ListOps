@@ -1,7 +1,9 @@
 /**
  * CampaignAI — Drizzle ORM Schema
- * Production-grade multi-tenant PostgreSQL schema
- * Designed for 1M+ users and $10M ARR scale
+ *
+ * FIX: referrals.status changed from plain text to a proper pgEnum.
+ * This enforces valid values at the DB level and prevents silent data corruption
+ * from typos like 'Signed_Up' or 'UPGRADED'.
  */
 
 import {
@@ -10,7 +12,7 @@ import {
 } from 'drizzle-orm/pg-core'
 import { relations } from 'drizzle-orm'
 
-// ── Enums ─────────────────────────────────────────────────────
+// ── Enums ──────────────────────────────────────────────────────
 
 export const tierEnum = pgEnum('tier', ['free', 'starter', 'pro', 'brokerage', 'enterprise'])
 export const roleEnum = pgEnum('role', ['owner', 'admin', 'agent', 'viewer'])
@@ -18,19 +20,21 @@ export const subStatusEnum = pgEnum('sub_status', ['trialing', 'active', 'past_d
 export const campaignStatusEnum = pgEnum('campaign_status', ['generating', 'complete', 'failed', 'draft'])
 export const listingStatusEnum = pgEnum('listing_status', ['active', 'pending', 'sold', 'withdrawn'])
 export const billingIntervalEnum = pgEnum('billing_interval', ['month', 'year'])
+// FIX: referral_status is now a proper enum instead of free-form text
+export const referralStatusEnum = pgEnum('referral_status', ['pending', 'signed_up', 'upgraded'])
 
-// ── Organizations (Multi-tenant root) ─────────────────────────
+// ── Organizations (Multi-tenant root) ──────────────────────────
 
 export const organizations = pgTable('organizations', {
   id: uuid('id').primaryKey().defaultRandom(),
   name: text('name').notNull(),
-  slug: text('slug').notNull(),                          // subdomain for white-label
+  slug: text('slug').notNull(),
   plan: tierEnum('plan').notNull().default('free'),
 
   // White-label config (brokerage/enterprise)
   whiteLabel: boolean('white_label').notNull().default(false),
-  customDomain: text('custom_domain'),                   // e.g. marketing.reedrealty.com
-  customAppName: text('custom_app_name'),                // e.g. "Reed Marketing Suite"
+  customDomain: text('custom_domain'),
+  customAppName: text('custom_app_name'),
   customLogoUrl: text('custom_logo_url'),
   customFaviconUrl: text('custom_favicon_url'),
   customPrimaryColor: text('custom_primary_color'),
@@ -63,11 +67,11 @@ export const organizations = pgTable('organizations', {
   customDomainIdx: uniqueIndex('org_custom_domain_idx').on(t.customDomain),
 }))
 
-// ── Users ─────────────────────────────────────────────────────
+// ── Users ──────────────────────────────────────────────────────
 
 export const users = pgTable('users', {
   id: uuid('id').primaryKey().defaultRandom(),
-  clerkId: text('clerk_id').notNull(),                   // Clerk user_id
+  clerkId: text('clerk_id').notNull(),
   orgId: uuid('org_id').references(() => organizations.id, { onDelete: 'cascade' }),
   role: roleEnum('role').notNull().default('agent'),
 
@@ -81,7 +85,7 @@ export const users = pgTable('users', {
   avatarUrl: text('avatar_url'),
   timezone: text('timezone').notNull().default('America/New_York'),
 
-  // AI Persona (custom writing style per agent)
+  // AI Persona
   aiPersona: jsonb('ai_persona').$type<{
     tone: 'professional' | 'friendly' | 'luxury' | 'energetic'
     writingStyle: string
@@ -112,21 +116,19 @@ export const users = pgTable('users', {
   referralCodeIdx: uniqueIndex('user_referral_code_idx').on(t.referralCode),
 }))
 
-// ── Brand Kits ────────────────────────────────────────────────
+// ── Brand Kits ─────────────────────────────────────────────────
 
 export const brandKits = pgTable('brand_kits', {
   id: uuid('id').primaryKey().defaultRandom(),
   userId: uuid('user_id').notNull().references(() => users.id, { onDelete: 'cascade' }),
   orgId: uuid('org_id').references(() => organizations.id, { onDelete: 'cascade' }),
 
-  // Visual identity
   logoUrl: text('logo_url'),
   agentPhotoUrl: text('agent_photo_url'),
   primaryColor: text('primary_color').notNull().default('#1e293b'),
   accentColor: text('accent_color').notNull().default('#f59e0b'),
   fontFamily: text('font_family').notNull().default('Georgia'),
 
-  // Agent identity
   agentName: text('agent_name'),
   agentTitle: text('agent_title').notNull().default('REALTOR®'),
   agentPhone: text('agent_phone'),
@@ -135,9 +137,8 @@ export const brandKits = pgTable('brand_kits', {
   brokerageName: text('brokerage_name'),
   brokerageLogo: text('brokerage_logo'),
   tagline: text('tagline'),
-  disclaimer: text('disclaimer'),   // legal disclaimer for print
+  disclaimer: text('disclaimer'),
 
-  // Social handles
   facebookUrl: text('facebook_url'),
   instagramHandle: text('instagram_handle'),
   linkedinUrl: text('linkedin_url'),
@@ -149,12 +150,12 @@ export const brandKits = pgTable('brand_kits', {
   userIdIdx: index('brand_kit_user_id_idx').on(t.userId),
 }))
 
-// ── Subscriptions ─────────────────────────────────────────────
+// ── Subscriptions ──────────────────────────────────────────────
 
 export const subscriptions = pgTable('subscriptions', {
   id: uuid('id').primaryKey().defaultRandom(),
   orgId: uuid('org_id').notNull().references(() => organizations.id, { onDelete: 'cascade' }),
-  userId: uuid('user_id').references(() => users.id),   // null = org-level sub
+  userId: uuid('user_id').references(() => users.id),
 
   stripeSubscriptionId: text('stripe_subscription_id'),
   stripePriceId: text('stripe_price_id'),
@@ -164,11 +165,9 @@ export const subscriptions = pgTable('subscriptions', {
   status: subStatusEnum('status').notNull().default('trialing'),
   billingInterval: billingIntervalEnum('billing_interval').notNull().default('month'),
 
-  // Trial
   trialEndsAt: timestamp('trial_ends_at'),
   trialCampaignsUsed: integer('trial_campaigns_used').notNull().default(0),
 
-  // Cancel flow
   cancelAtPeriodEnd: boolean('cancel_at_period_end').notNull().default(false),
   canceledAt: timestamp('canceled_at'),
   cancellationReason: text('cancellation_reason'),
@@ -180,7 +179,7 @@ export const subscriptions = pgTable('subscriptions', {
   stripeSubIdx: uniqueIndex('sub_stripe_id_idx').on(t.stripeSubscriptionId),
 }))
 
-// ── Listings (MLS cache) ──────────────────────────────────────
+// ── Listings ───────────────────────────────────────────────────
 
 export const listings = pgTable('listings', {
   id: uuid('id').primaryKey().defaultRandom(),
@@ -189,7 +188,6 @@ export const listings = pgTable('listings', {
   agentId: uuid('agent_id').notNull().references(() => users.id),
   orgId: uuid('org_id').references(() => organizations.id),
 
-  // Property data
   address: text('address'),
   city: text('city'),
   state: text('state'),
@@ -204,13 +202,11 @@ export const listings = pgTable('listings', {
   features: text('features').array().default([]),
   photos: text('photos').array().default([]),
 
-  // Agent/Office from MLS
   listingAgentName: text('listing_agent_name'),
   listingAgentEmail: text('listing_agent_email'),
   listingAgentPhone: text('listing_agent_phone'),
   officeName: text('office_name'),
 
-  // Cache management
   rawData: jsonb('raw_data'),
   status: listingStatusEnum('status').notNull().default('active'),
   fetchedAt: timestamp('fetched_at').notNull().defaultNow(),
@@ -222,7 +218,7 @@ export const listings = pgTable('listings', {
   agentIdIdx: index('listing_agent_id_idx').on(t.agentId),
 }))
 
-// ── Campaigns ─────────────────────────────────────────────────
+// ── Campaigns ──────────────────────────────────────────────────
 
 export const campaigns = pgTable('campaigns', {
   id: uuid('id').primaryKey().defaultRandom(),
@@ -234,7 +230,6 @@ export const campaigns = pgTable('campaigns', {
   status: campaignStatusEnum('status').notNull().default('generating'),
   generationMs: integer('generation_ms'),
 
-  // Generated content
   facebookPosts: jsonb('facebook_posts').$type<Array<{
     week: number
     theme: string
@@ -252,20 +247,17 @@ export const campaigns = pgTable('campaigns', {
   }>>(),
   emailJustListed: text('email_just_listed'),
   emailStillAvailable: text('email_still_available'),
-  flyerUrl: text('flyer_url'),                           // R2 PDF URL (legacy)
-  pdfUrl: text('pdf_url'),                               // Generated PDF stored in R2
-  videoScript: text('video_script'),                     // Pro feature
+  flyerUrl: text('flyer_url'),
+  pdfUrl: text('pdf_url'),
+  videoScript: text('video_script'),
 
-  // Microsite
   micrositeSlug: text('microsite_slug'),
   micrositePublished: boolean('microsite_published').notNull().default(false),
   micrositeViews: integer('microsite_views').notNull().default(0),
 
-  // Scheduling / publishing
   publishedChannels: text('published_channels').array().default([]),
   scheduledPublishAt: timestamp('scheduled_publish_at'),
 
-  // Analytics
   analytics: jsonb('analytics').$type<{
     facebookClicks?: number
     instagramReach?: number
@@ -273,7 +265,6 @@ export const campaigns = pgTable('campaigns', {
     flyerDownloads?: number
   }>().default({}),
 
-  // AI metadata
   promptTokens: integer('prompt_tokens'),
   completionTokens: integer('completion_tokens'),
 
@@ -285,7 +276,7 @@ export const campaigns = pgTable('campaigns', {
   micrositeSlugIdx: uniqueIndex('campaign_microsite_slug_idx').on(t.micrositeSlug),
 }))
 
-// ── Audit Logs (Enterprise compliance) ───────────────────────
+// ── Audit Logs ─────────────────────────────────────────────────
 
 export const auditLogs = pgTable('audit_logs', {
   id: uuid('id').primaryKey().defaultRandom(),
@@ -303,19 +294,20 @@ export const auditLogs = pgTable('audit_logs', {
   createdAtIdx: index('audit_created_at_idx').on(t.createdAt),
 }))
 
-// ── Referrals ─────────────────────────────────────────────────
+// ── Referrals ──────────────────────────────────────────────────
 
 export const referrals = pgTable('referrals', {
   id: uuid('id').primaryKey().defaultRandom(),
   referrerId: uuid('referrer_id').notNull().references(() => users.id),
   referredUserId: uuid('referred_user_id').references(() => users.id),
   referredEmail: text('referred_email').notNull(),
-  status: text('status').notNull().default('pending'),   // pending | signed_up | upgraded
+  // FIX: was plain text — now a proper enum enforced at DB level
+  status: referralStatusEnum('status').notNull().default('pending'),
   rewardGranted: boolean('reward_granted').notNull().default(false),
   createdAt: timestamp('created_at').notNull().defaultNow(),
 })
 
-// ── Relations ─────────────────────────────────────────────────
+// ── Relations ──────────────────────────────────────────────────
 
 export const organizationRelations = relations(organizations, ({ many }) => ({
   users: many(users),
@@ -336,6 +328,7 @@ export const campaignRelations = relations(campaigns, ({ one }) => ({
   agent: one(users, { fields: [campaigns.agentId], references: [users.id] }),
   brandKit: one(brandKits, { fields: [campaigns.brandKitId], references: [brandKits.id] }),
 }))
+
 export const subscriptionRelations = relations(subscriptions, ({ one }) => ({
   organization: one(organizations, { fields: [subscriptions.orgId], references: [organizations.id] }),
   user: one(users, { fields: [subscriptions.userId], references: [users.id] }),
