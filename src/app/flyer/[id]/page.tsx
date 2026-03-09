@@ -99,14 +99,16 @@ export default async function FlyerPage({
           .flyer-wrap > div { width: 8.5in !important; min-height: unset !important; max-height: 11in !important; height: 11in !important; box-shadow: none !important; overflow: hidden; page-break-after: avoid; }
         }
         * { box-sizing: border-box; margin: 0; padding: 0; }
-        html, body { margin: 0; padding: 0; }
+        html, body { margin: 0; padding: 0; height: auto; }
+        .flyer-wrap > div:last-child { margin-bottom: 0 !important; padding-bottom: 0 !important; }
+        @media print { html, body { height: auto; } }
         body { background: #c8cdd4; }
         img { display: block; }
       `}</style>
 
       <PrintButton backUrl={`/dashboard/campaigns/${id}`} planTier={planTier} initialTemplate={template} />
 
-      <div className="flyer-wrap" style={{ paddingTop: 64 }}>
+      <div className="flyer-wrap" style={{ paddingTop: 64, paddingBottom: 0, marginBottom: 0 }}>
 
         {/* ══ CLASSIC ═══════════════════════════════════════════ */}
         {template === 'classic' && (
