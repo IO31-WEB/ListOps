@@ -19,7 +19,7 @@ let Sentry: any = null
 
 try {
   // eslint-disable-next-line @typescript-eslint/no-var-requires
-  Sentry = require('@sentry/nextjs')
+  Sentry = eval("require")('@sentry/nextjs')
 } catch {
   // Sentry not installed yet — all calls are no-ops
 }
