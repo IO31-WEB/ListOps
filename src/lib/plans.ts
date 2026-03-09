@@ -147,7 +147,7 @@ export const FEATURE_GATES: Record<string, PlanId[]> = {
   white_label:        ['brokerage', 'enterprise'],
   analytics:          ['brokerage', 'enterprise'],
   unlimited_campaigns:['pro', 'brokerage', 'enterprise'],
-  multi_agent:        ['brokerage', 'enterprise'],
+  multi_agent:        ['pro', 'brokerage', 'enterprise'],
   remove_branding:    ['starter', 'pro', 'brokerage', 'enterprise'],
 }
 
