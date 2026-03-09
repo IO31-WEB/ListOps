@@ -1,16 +1,6 @@
 'use client'
 
-/**
- * PostHog Browser Provider
- * Wraps the app for client-side pageview tracking and feature flags.
- * Only initializes if NEXT_PUBLIC_POSTHOG_KEY is set.
- *
- * Add to Vercel env vars:
- *   NEXT_PUBLIC_POSTHOG_KEY=phc_xxx
- *   NEXT_PUBLIC_POSTHOG_HOST=https://app.posthog.com
- */
-
-import { useEffect } from 'react'
+import { Suspense, useEffect } from 'react'
 import { usePathname, useSearchParams } from 'next/navigation'
 import { useAuth } from '@clerk/nextjs'
 
@@ -24,8 +14,8 @@ function initPostHog() {
     // eslint-disable-next-line @typescript-eslint/no-var-requires
     const ph = require('posthog-js')
     ph.init(key, {
-      api_host: process.env.NEXT_PUBLIC_POSTHOG_HOST ?? 'https://app.posthog.com',
-      capture_pageview: false, // We manually track below
+      api_host: process.env.NEXT_PUBLIC_POSTHOG_HOST ?? 'https://us.posthog.com',
+      capture_pageview: false,
       persistence: 'localStorage',
     })
     posthog = ph
@@ -35,21 +25,18 @@ function initPostHog() {
   }
 }
 
-export function PostHogProvider({ children }: { children: React.ReactNode }) {
+// Inner component that uses useSearchParams — must be inside Suspense
+function PostHogPageview() {
   const pathname = usePathname()
   const searchParams = useSearchParams()
   const { userId } = useAuth()
 
-  // Identify user when logged in
   useEffect(() => {
     const ph = initPostHog()
     if (!ph) return
-    if (userId) {
-      ph.identify(userId)
-    }
+    if (userId) ph.identify(userId)
   }, [userId])
 
-  // Track pageviews on route change
   useEffect(() => {
     const ph = initPostHog()
     if (!ph) return
@@ -57,5 +44,17 @@ export function PostHogProvider({ children }: { children: React.ReactNode }) {
     ph.capture('$pageview', { $current_url: url })
   }, [pathname, searchParams])
 
-  return <>{children}</>
+  return null
+}
+
+// Exported wrapper — Suspense boundary here so it never blocks page rendering
+export function PostHogProvider({ children }: { children: React.ReactNode }) {
+  return (
+    <>
+      <Suspense fallback={null}>
+        <PostHogPageview />
+      </Suspense>
+      {children}
+    </>
+  )
 }
