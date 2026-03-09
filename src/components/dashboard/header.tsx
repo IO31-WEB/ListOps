@@ -46,13 +46,32 @@ function timeAgo(ms: number): string {
   return `${Math.floor(diff / 86_400_000)}d ago`
 }
 
-function getDemoNotifications(): Notification[] {
+const NOTIF_STORAGE_KEY = 'campaignai_notifications_v3'
+
+function getWelcomeNotifications(): Notification[] {
+  // Only the welcome notification — seeded once, marked read immediately
+  // Real campaign notifications come from the API
   const now = Date.now()
   return [
-    { id: '1', type: 'success', title: 'Campaign generated', body: '2847 Oakwood Circle — 6-week campaign is ready.', createdAt: now - 2 * 60_000, read: false, href: '/dashboard/campaigns' },
-    { id: '2', type: 'info', title: 'Pro plan active', body: 'Your plan was synced. Video scripts and microsites unlocked.', createdAt: now - 62 * 60_000, read: false, href: '/dashboard/billing' },
-    { id: '3', type: 'info', title: 'Welcome to CampaignAI', body: 'Generate your first campaign to get started.', createdAt: now - 2 * 86_400_000, read: true, href: '/dashboard/generate' },
+    { id: 'welcome', type: 'info', title: 'Welcome to CampaignAI', body: 'Generate your first campaign to get started.', createdAt: now, read: false, href: '/dashboard/generate' },
   ]
+}
+
+function loadNotifications(): Notification[] {
+  if (typeof window === 'undefined') return []
+  try {
+    const saved = localStorage.getItem(NOTIF_STORAGE_KEY)
+    if (saved) {
+      const parsed = JSON.parse(saved) as Notification[]
+      // Validate it's an array with the right shape
+      if (Array.isArray(parsed) && parsed.length > 0 && parsed[0].id) return parsed
+    }
+  } catch {}
+  return getWelcomeNotifications()
+}
+
+function saveNotifications(notifs: Notification[]) {
+  try { localStorage.setItem(NOTIF_STORAGE_KEY, JSON.stringify(notifs)) } catch {}
 }
 
 export function DashboardHeader() {
@@ -72,17 +91,7 @@ export function DashboardHeader() {
 
   // Notifications
   const [notifOpen, setNotifOpen] = useState(false)
-  const [notifications, setNotifications] = useState<Notification[]>(() => {
-    // Load from localStorage so read state AND timestamps persist across full refreshes
-    if (typeof window !== 'undefined') {
-      try {
-        const saved = localStorage.getItem('campaignai_notifications')
-        if (saved) return JSON.parse(saved) as Notification[]
-      } catch {}
-    }
-    // First visit: seed with demo notifications anchored to real current time
-    return getDemoNotifications()
-  })
+  const [notifications, setNotifications] = useState<Notification[]>(loadNotifications)
   const [, setTick] = useState(0)
 
   // Re-render every 60s so timeAgo() stays current
@@ -91,10 +100,32 @@ export function DashboardHeader() {
     return () => clearInterval(interval)
   }, [])
 
-  // Persist notification read state to sessionStorage
+  // Persist to localStorage whenever notifications change
   useEffect(() => {
-    try { localStorage.setItem('campaignai_notifications', JSON.stringify(notifications)) } catch {}
+    saveNotifications(notifications)
   }, [notifications])
+
+  // Poll for real notifications from server every 30s
+  useEffect(() => {
+    const fetchNotifs = async () => {
+      try {
+        const res = await fetch('/api/notifications')
+        if (!res.ok) return
+        const data = await res.json()
+        if (data.notifications?.length) {
+          setNotifications(prev => {
+            const existingIds = new Set(prev.map((n: Notification) => n.id))
+            const newOnes = data.notifications.filter((n: Notification) => !existingIds.has(n.id))
+            if (!newOnes.length) return prev
+            return [...newOnes, ...prev]
+          })
+        }
+      } catch {}
+    }
+    fetchNotifs()
+    const interval = setInterval(fetchNotifs, 30_000)
+    return () => clearInterval(interval)
+  }, [])
   const unreadCount = notifications.filter(n => !n.read).length
   const notifRef = useRef<HTMLDivElement>(null)
 
