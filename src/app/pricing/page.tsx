@@ -37,7 +37,7 @@ const FEATURE_CATEGORIES = [
       { name: 'Direct Facebook publishing', free: false, starter: false, pro: true, brokerage: true },
       { name: 'Direct Instagram publishing', free: false, starter: false, pro: true, brokerage: true },
       { name: 'Email integration (Mailchimp / Klaviyo)', free: false, starter: false, pro: true, brokerage: true },
-      { name: 'Auto listing microsite', free: false, starter: false, pro: true, brokerage: true },
+      { name: 'Auto listing microsite', free: false, starter: true, pro: true, brokerage: true },
       { name: 'QR code for print materials', free: false, starter: false, pro: true, brokerage: true },
     ],
   },
