@@ -10,7 +10,8 @@ const nextConfig = {
       { protocol: 'https', hostname: 'placehold.co' },
     ],
   },
-  // Packages only bundled server-side, not in the browser
+  // Packages only bundled server-side, not in the browser.
+  // These are optional — the app degrades gracefully if not installed.
   serverExternalPackages: [
     '@neondatabase/serverless',
     '@sentry/nextjs',
@@ -20,8 +21,16 @@ const nextConfig = {
     'puppeteer-core',
     'resend',
   ],
-  // Empty turbopack config silences the webpack/turbopack conflict warning
-  turbopack: {},
+  turbopack: {
+    // Tell Turbopack to treat optional server-only packages as external.
+    // Prevents "Module not found" warnings for packages that are intentionally
+    // not installed and are guarded by try/catch at runtime.
+    resolveAlias: {
+      '@sentry/nextjs': { external: '@sentry/nextjs' },
+      '@sparticuz/chromium': { external: '@sparticuz/chromium' },
+      'puppeteer-core': { external: 'puppeteer-core' },
+    },
+  },
 }
 
 module.exports = nextConfig
