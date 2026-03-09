@@ -15,7 +15,7 @@ interface BillingPlanCardProps {
 
 export function BillingPlanCard({ plan, annual, isCurrent }: BillingPlanCardProps) {
   const [loading, setLoading] = useState(false)
-  const price = annual ? plan.yearlyPrice : plan.monthlyPrice
+  const price = annual ? (plan.yearlyPrice ?? 0) : (plan.monthlyPrice ?? 0)
   const priceId = annual ? plan.yearlyPriceId : plan.monthlyPriceId
 
   const handleUpgrade = async () => {
