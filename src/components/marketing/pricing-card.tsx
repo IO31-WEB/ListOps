@@ -12,7 +12,7 @@ interface PricingCardProps {
 }
 
 export function PricingCard({ plan, annual, highlighted }: PricingCardProps) {
-  const price = annual ? plan.yearlyPrice : plan.monthlyPrice
+  const price = annual ? (plan.yearlyPrice ?? 0) : (plan.monthlyPrice ?? 0)
 
   return (
     <div className={cn(
