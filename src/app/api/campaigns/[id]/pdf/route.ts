@@ -2,15 +2,14 @@
  * PDF Generation API
  * POST /api/campaigns/[id]/pdf
  *
- * Generates a print-ready PDF of the campaign flyer using Puppeteer
- * (via the existing /flyer/[id] route rendered to HTML, then printed).
+ * Strategy:
+ * 1. Return cached R2 URL if already generated
+ * 2. Try Puppeteer (if @sparticuz/chromium + puppeteer-core installed) → upload to R2
+ * 3. Fall back to flyer page URL (browser print)
  *
- * Falls back to returning the flyer page URL if Puppeteer isn't available.
- * Uploads to R2 and caches the URL on the campaign record.
- *
- * For production Puppeteer PDF generation, use:
+ * To enable real PDF generation on Vercel:
  *   npm install @sparticuz/chromium puppeteer-core
- * And deploy on a platform that supports it (Vercel Pro, AWS Lambda, etc).
+ *   Set all R2_* env vars
  */
 
 import { NextRequest, NextResponse } from 'next/server'
@@ -20,7 +19,6 @@ import { campaigns } from '@/lib/db/schema'
 import { eq } from 'drizzle-orm'
 import { getCampaign, checkCampaignQuota } from '@/lib/user-service'
 import { uploadToR2 } from '@/lib/r2'
-import { canAccessFeature } from '@/lib/stripe'
 import { trackFlyerDownloaded } from '@/lib/posthog'
 
 export async function POST(
@@ -41,18 +39,17 @@ export async function POST(
     if (!campaign) return NextResponse.json({ error: 'Campaign not found' }, { status: 404 })
 
     const planTier = quota.planTier
+    const appUrl = process.env.NEXT_PUBLIC_APP_URL ?? 'https://campaign-ai-psi.vercel.app'
+    const flyerUrl = `${appUrl}/flyer/${id}?template=classic`
 
-    // All plans can download flyers — free plan gets basic template
-    // Return cached URL if already generated
-    if ((campaign as any).pdfUrl) {
+    // Return cached PDF if already generated
+    const cachedUrl = (campaign as any).pdfUrl ?? (campaign as any).flyerUrl
+    if (cachedUrl?.startsWith('http') && cachedUrl?.includes('r2')) {
       trackFlyerDownloaded({ userId, campaignId: id, template: 'cached', planTier })
-      return NextResponse.json({ url: (campaign as any).pdfUrl, cached: true })
+      return NextResponse.json({ url: cachedUrl, cached: true, isPdf: true })
     }
 
-    // ── Try Puppeteer PDF generation ──────────────────────────
-    const appUrl = process.env.NEXT_PUBLIC_APP_URL ?? 'http://localhost:3000'
-    const flyerUrl = `${appUrl}/flyer/${id}?template=classic&print=1`
-
+    // ── Attempt Puppeteer PDF generation ─────────────────────
     let pdfBuffer: Buffer | null = null
 
     try {
@@ -62,66 +59,89 @@ export async function POST(
       const puppeteer = (() => { try { return require('puppeteer-core') } catch { return null } })()
 
       if (chromium && puppeteer) {
+        console.log('[pdf] Puppeteer available — generating PDF')
+
+        const executablePath = await chromium.executablePath()
         const browser = await puppeteer.launch({
-          args: chromium.args,
-          defaultViewport: chromium.defaultViewport,
-          executablePath: await chromium.executablePath(),
+          args: [
+            ...chromium.args,
+            '--no-sandbox',
+            '--disable-setuid-sandbox',
+            '--disable-dev-shm-usage',
+          ],
+          defaultViewport: { width: 1200, height: 900 },
+          executablePath,
           headless: true,
         })
 
-        const page = await browser.newPage()
-        await page.goto(flyerUrl, { waitUntil: 'networkidle0', timeout: 30000 })
-        await page.emulateMediaType('print')
+        try {
+          const page = await browser.newPage()
 
-        pdfBuffer = Buffer.from(await page.pdf({
-          format: 'Letter',
-          printBackground: true,
-          margin: { top: 0, right: 0, bottom: 0, left: 0 },
-        }))
+          // Set auth cookie so the flyer page can load without redirect
+          const cookieUrl = new URL(appUrl)
+          await page.goto(`${appUrl}/flyer/${id}?template=classic&print=1`, {
+            waitUntil: 'networkidle0',
+            timeout: 30000,
+          })
 
-        await browser.close()
+          // Wait for images to load
+          await page.evaluate(() =>
+            Promise.all(
+              Array.from(document.images)
+                .filter(img => !img.complete)
+                .map(img => new Promise(resolve => { img.onload = img.onerror = resolve }))
+            )
+          )
+
+          await page.emulateMediaType('print')
+
+          const pdfBytes = await page.pdf({
+            format: 'Letter',
+            printBackground: true,
+            margin: { top: '0', right: '0', bottom: '0', left: '0' },
+          })
+
+          pdfBuffer = Buffer.from(pdfBytes)
+        } finally {
+          await browser.close()
+        }
+      } else {
+        console.log('[pdf] Puppeteer not installed — using flyer URL fallback')
       }
     } catch (puppeteerErr) {
-      console.warn('[pdf] Puppeteer not available, returning flyer page URL:', puppeteerErr)
+      console.warn('[pdf] Puppeteer error:', puppeteerErr)
     }
 
-    // ── Upload to R2 if we have a PDF ─────────────────────────
+    // ── Upload to R2 ──────────────────────────────────────────
     let pdfUrl: string | null = null
 
     if (pdfBuffer) {
-      const key = `flyers/${id}/campaign-flyer.pdf`
+      const key = `flyers/${id}/listing-flyer.pdf`
       pdfUrl = await uploadToR2({
         key,
         body: pdfBuffer,
         contentType: 'application/pdf',
       })
+
+      if (pdfUrl) {
+        // Cache on campaign record
+        await db
+          .update(campaigns)
+          .set({ pdfUrl, updatedAt: new Date() } as any)
+          .where(eq(campaigns.id, id))
+
+        console.log(`[pdf] Uploaded to R2: ${pdfUrl}`)
+      }
     }
 
-    // Fall back to flyer page URL if no R2/Puppeteer
     const finalUrl = pdfUrl ?? flyerUrl
+    const isPdf = !!pdfBuffer && !!pdfUrl
 
-    // Cache on campaign record if we got a real PDF URL
-    if (pdfUrl) {
-      await db
-        .update(campaigns)
-        .set({ flyerUrl: pdfUrl, updatedAt: new Date() } as any)
-        .where(eq(campaigns.id, id))
-    }
+    trackFlyerDownloaded({ userId, campaignId: id, template: 'classic', planTier })
 
-    trackFlyerDownloaded({
-      userId,
-      campaignId: id,
-      template: 'classic',
-      planTier,
-    })
-
-    return NextResponse.json({
-      url: finalUrl,
-      isPdf: !!pdfBuffer,
-      cached: false,
-    })
+    return NextResponse.json({ url: finalUrl, isPdf, cached: false })
   } catch (err) {
-    console.error('[pdf] Generation error:', err)
+    console.error('[pdf] Error:', err)
     return NextResponse.json({ error: 'Failed to generate PDF' }, { status: 500 })
   }
 }
