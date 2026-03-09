@@ -28,25 +28,34 @@ export default function OnboardingClient() {
     if (step < 4) { setStep(s => s + 1); return }
     setSaving(true)
     try {
-    await fetch('/api/brand-kit', {
-    method: 'POST',
-    headers: { 'Content-Type': 'application/json' },
-    body: JSON.stringify({
-    agentName: `${form.firstName} ${form.lastName}`.trim(),
-    brokerageName: form.brokerageName,
-    tone: form.tone,
-    }),
-  })
-    await fetch('/api/user/profile', {
-    method: 'PATCH',
-    headers: { 'Content-Type': 'application/json' },
-    body: JSON.stringify({
-    firstName: form.firstName,
-    lastName: form.lastName,
-    onboardingComplete: true,
-  }),
-})
-router.push('/dashboard')
+      // Save profile first — always works regardless of plan
+      await fetch('/api/user/profile', {
+        method: 'PATCH',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          firstName: form.firstName,
+          lastName: form.lastName,
+          onboardingComplete: true,
+        }),
+      })
+
+      // Save brand kit — silently skipped for free users (API returns 403)
+      // Data is preserved in form state; user can fill it in after upgrading
+      const bkRes = await fetch('/api/brand-kit', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          agentName: `${form.firstName} ${form.lastName}`.trim(),
+          brokerageName: form.brokerageName,
+          tone: form.tone,
+        }),
+      })
+      // 403 = free plan, not an error worth surfacing — brand kit unlocks on upgrade
+      if (!bkRes.ok && bkRes.status !== 403) {
+        console.warn('[onboarding] brand kit save failed:', bkRes.status)
+      }
+
+      router.push('/dashboard')
     } catch {
       toast.error('Something went wrong, please try again.')
     } finally {
