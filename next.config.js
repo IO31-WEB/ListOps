@@ -10,24 +10,17 @@ const nextConfig = {
       { protocol: 'https', hostname: 'placehold.co' },
     ],
   },
-  // Packages that should only be bundled for server-side, not browser
+  // Packages only bundled server-side, not in the browser
   serverExternalPackages: [
     '@neondatabase/serverless',
     '@sentry/nextjs',
     'posthog-node',
     'aws4fetch',
+    '@sparticuz/chromium',
+    'puppeteer-core',
   ],
-  webpack: (config, { isServer }) => {
-    if (isServer) {
-      // Tell webpack to ignore these optional packages if not installed
-      config.externals = config.externals || []
-      config.externals.push(
-        '@sparticuz/chromium',
-        'puppeteer-core',
-      )
-    }
-    return config
-  },
+  // Empty turbopack config silences the webpack/turbopack conflict warning
+  turbopack: {},
 }
 
 module.exports = nextConfig
