@@ -1,16 +1,23 @@
 /**
  * CampaignAI — User & Organization Service
- * Complete database operations layer
+ *
+ * FIXES APPLIED:
+ * 1. consumeCampaignQuota() — atomic check-and-increment eliminates TOCTOU race condition
+ * 2. Quota reset now based on Stripe billing period, not calendar month
+ * 3. syncPlanFromClerkMetadata is still called per-request but errors are fully isolated
+ * 4. checkCampaignQuota kept as read-only (no side effects) — used by PDF route etc.
+ *    consumeCampaignQuota() is the gate used by the generate route.
  */
 
 import { db } from './db'
 import { users, organizations, brandKits, subscriptions, campaigns, auditLogs } from './db/schema'
 import { eq, and, desc, count, sql } from 'drizzle-orm'
 import { generateReferralCode, slugify } from './utils'
-import type { PlanTier } from './stripe'
+import type { PlanTier } from './plans'
+import { CAMPAIGN_LIMITS } from './plans'
 import { clerkClient } from '@clerk/nextjs/server'
 
-// ── Get or create user from Clerk ────────────────────────────
+// ── Get or create user from Clerk ─────────────────────────────
 
 export async function getOrCreateUser(clerkId: string, data: {
   email: string
@@ -107,16 +114,15 @@ export async function downgradeToFree(orgId: string) {
     .where(eq(subscriptions.orgId, orgId))
 }
 
-// ── Sync plan from Clerk privateMetadata → DB ────────────────
-// This lets you override the plan in Clerk dashboard without needing Stripe.
-// Accepts either privateMetadata.planTier OR privateMetadata.plan (both work)
+// ── Sync plan from Clerk privateMetadata → DB ─────────────────
+// Escape hatch: set privateMetadata.planTier or .plan in Clerk dashboard
+// to override the DB plan without touching Stripe.
 export async function syncPlanFromClerkMetadata(clerkId: string): Promise<PlanTier | null> {
   try {
     const client = await clerkClient()
     const clerkUser = await client.users.getUser(clerkId)
     const meta = clerkUser.privateMetadata as Record<string, any>
 
-    // Accept both 'planTier' and 'plan' as the metadata key
     const rawTier = (meta?.planTier ?? meta?.plan) as string | undefined
     const validTiers: PlanTier[] = ['free', 'starter', 'pro', 'brokerage', 'enterprise']
     const clerkTier = (rawTier && validTiers.includes(rawTier as PlanTier))
@@ -125,13 +131,11 @@ export async function syncPlanFromClerkMetadata(clerkId: string): Promise<PlanTi
 
     if (!clerkTier) return null
 
-    // Find the user's org and update the DB subscription to match
     let user = await db.query.users.findFirst({
       where: eq(users.clerkId, clerkId),
       with: { organization: true },
     })
 
-    // If user has no org yet, create one so the plan can be stored
     if (user && !user.orgId) {
       const email = clerkUser.emailAddresses?.[0]?.emailAddress ?? ''
       const name = [clerkUser.firstName, clerkUser.lastName].filter(Boolean).join(' ') || email
@@ -197,10 +201,12 @@ export async function upsertBrandKit(userId: string, orgId: string, data: Partia
   return created
 }
 
+// ── Quota check (READ-ONLY — no side effects) ──────────────────
+// Use this for informational checks (PDF route, dashboard, billing page).
+// Use consumeCampaignQuota() in the generate route to atomically gate + increment.
 export async function checkCampaignQuota(clerkId: string): Promise<{
   allowed: boolean; used: number; limit: number | 'unlimited'; planTier: PlanTier; resetsAt?: Date
 }> {
-  // Sync from Clerk metadata first (allows manual plan overrides via Clerk dashboard)
   await syncPlanFromClerkMetadata(clerkId)
 
   const user = await db.query.users.findFirst({
@@ -211,31 +217,114 @@ export async function checkCampaignQuota(clerkId: string): Promise<{
 
   const sub = user.organization?.subscriptions?.[0]
   const plan = (sub?.plan ?? 'free') as PlanTier
-  const limits: Record<PlanTier, number | 'unlimited'> = {
-    free: 3, starter: 5, pro: 'unlimited', brokerage: 'unlimited', enterprise: 'unlimited',
-  }
-  const limit = limits[plan]
+  const limit = CAMPAIGN_LIMITS[plan]
 
   const now = new Date()
-  const lastReset = new Date(user.lastResetAt)
-  const needsReset = now.getMonth() !== lastReset.getMonth() || now.getFullYear() !== lastReset.getFullYear()
+
+  // FIX: Use billing period end for reset calculation when available
+  const periodEnd = sub?.stripeCurrentPeriodEnd
+  const needsReset = periodEnd
+    ? user.lastResetAt < new Date(periodEnd.getTime() - 30 * 24 * 60 * 60 * 1000)
+    : (now.getMonth() !== new Date(user.lastResetAt).getMonth() ||
+       now.getFullYear() !== new Date(user.lastResetAt).getFullYear())
+
   if (needsReset) {
     await db.update(users).set({ campaignsUsedThisMonth: 0, lastResetAt: now }).where(eq(users.id, user.id))
-    const nextReset = new Date(now.getFullYear(), now.getMonth() + 1, 1)
+    const nextReset = periodEnd ?? new Date(now.getFullYear(), now.getMonth() + 1, 1)
     return { allowed: true, used: 0, limit, planTier: plan, resetsAt: nextReset }
   }
 
+  const nextReset = periodEnd ?? new Date(now.getFullYear(), now.getMonth() + 1, 1)
   const used = user.campaignsUsedThisMonth
-  const nextReset = new Date(now.getFullYear(), now.getMonth() + 1, 1)
   return { allowed: limit === 'unlimited' || used < limit, used, limit, planTier: plan, resetsAt: nextReset }
 }
 
+// ── Atomic quota gate + increment ─────────────────────────────
+// FIX: Replaces the separate checkCampaignQuota + incrementCampaignUsage pattern
+// that had a TOCTOU race condition allowing quota bypass.
+// Uses a single UPDATE ... WHERE campaigns_used_this_month < limit
+// If 0 rows affected → quota exceeded. No race possible.
+export async function consumeCampaignQuota(clerkId: string): Promise<{
+  allowed: boolean
+  used: number
+  limit: number | 'unlimited'
+  planTier: PlanTier
+  resetsAt: Date
+}> {
+  await syncPlanFromClerkMetadata(clerkId)
+
+  const user = await db.query.users.findFirst({
+    where: eq(users.clerkId, clerkId),
+    with: { organization: { with: { subscriptions: true } } },
+  })
+  if (!user) return { allowed: false, used: 0, limit: 0, planTier: 'free', resetsAt: new Date() }
+
+  const sub = user.organization?.subscriptions?.[0]
+  const plan = (sub?.plan ?? 'free') as PlanTier
+  const limit = CAMPAIGN_LIMITS[plan]
+
+  const now = new Date()
+
+  // FIX: Reset based on Stripe billing period, not calendar month
+  const periodEnd = sub?.stripeCurrentPeriodEnd
+  const needsReset = periodEnd
+    ? user.lastResetAt < new Date(periodEnd.getTime() - 30 * 24 * 60 * 60 * 1000)
+    : (now.getMonth() !== new Date(user.lastResetAt).getMonth() ||
+       now.getFullYear() !== new Date(user.lastResetAt).getFullYear())
+
+  if (needsReset) {
+    await db.update(users)
+      .set({ campaignsUsedThisMonth: 0, lastResetAt: now })
+      .where(eq(users.id, user.id))
+    // After reset, counter is 0 — proceed as normal from 0
+  }
+
+  const nextReset = periodEnd ?? new Date(now.getFullYear(), now.getMonth() + 1, 1)
+
+  // Unlimited plans: increment totals but don't gate
+  if (limit === 'unlimited') {
+    await db.update(users).set({
+      campaignsUsedThisMonth: sql`campaigns_used_this_month + 1`,
+      campaignsUsedTotal: sql`campaigns_used_total + 1`,
+    }).where(eq(users.id, user.id))
+    return {
+      allowed: true,
+      used: (needsReset ? 0 : user.campaignsUsedThisMonth) + 1,
+      limit,
+      planTier: plan,
+      resetsAt: nextReset,
+    }
+  }
+
+  // FIX: Single atomic update. 0 rows returned = quota exceeded. No race possible.
+  const currentUsed = needsReset ? 0 : user.campaignsUsedThisMonth
+  const result = await db.update(users)
+    .set({
+      campaignsUsedThisMonth: sql`campaigns_used_this_month + 1`,
+      campaignsUsedTotal: sql`campaigns_used_total + 1`,
+    })
+    .where(
+      and(
+        eq(users.id, user.id),
+        sql`campaigns_used_this_month < ${limit}`
+      )
+    )
+    .returning({ newUsed: users.campaignsUsedThisMonth })
+
+  if (result.length === 0) {
+    return { allowed: false, used: currentUsed, limit, planTier: plan, resetsAt: nextReset }
+  }
+
+  return { allowed: true, used: result[0].newUsed, limit, planTier: plan, resetsAt: nextReset }
+}
+
+// ── Legacy — kept for callers that only need to increment (non-generate paths) ──
 export async function incrementCampaignUsage(clerkId: string) {
   const user = await db.query.users.findFirst({ where: eq(users.clerkId, clerkId) })
   if (!user) return
   await db.update(users).set({
-    campaignsUsedThisMonth: user.campaignsUsedThisMonth + 1,
-    campaignsUsedTotal: user.campaignsUsedTotal + 1,
+    campaignsUsedThisMonth: sql`campaigns_used_this_month + 1`,
+    campaignsUsedTotal: sql`campaigns_used_total + 1`,
   }).where(eq(users.id, user.id))
 }
 
@@ -266,18 +355,16 @@ export async function getDashboardStats(clerkId: string) {
       .where(eq(campaigns.agentId, user.id)),
   ])
 
-  const limits: Record<PlanTier, number | 'unlimited'> = {
-    free: 3, starter: 5, pro: 'unlimited', brokerage: 'unlimited', enterprise: 'unlimited',
-  }
   const now = new Date()
-  const nextReset = new Date(now.getFullYear(), now.getMonth() + 1, 1)
+  const periodEnd = sub?.stripeCurrentPeriodEnd
+  const nextReset = periodEnd ?? new Date(now.getFullYear(), now.getMonth() + 1, 1)
   const daysUntilReset = Math.ceil((nextReset.getTime() - now.getTime()) / (1000 * 60 * 60 * 24))
 
   return {
     user, planTier,
     totalCampaigns: totalResult[0]?.count ?? 0,
     campaignsThisMonth: user.campaignsUsedThisMonth,
-    campaignLimit: limits[planTier],
+    campaignLimit: CAMPAIGN_LIMITS[planTier],
     recentCampaigns,
     avgGenTimeMs: Math.round(genTimeResult[0]?.avg ?? 0),
     micrositeViews: viewsResult[0]?.total ?? 0,
@@ -290,15 +377,18 @@ export async function getDashboardStats(clerkId: string) {
 }
 
 export async function getUserCampaigns(clerkId: string, page = 1, pageLimit = 20) {
+  // FIX: Enforce hard cap on limit to prevent full-table response attacks
+  const safeLimit = Math.min(Math.max(1, pageLimit), 100)
+
   const user = await db.query.users.findFirst({ where: eq(users.clerkId, clerkId) })
   if (!user) return { campaigns: [], total: 0, pages: 0 }
 
-  const offset = (page - 1) * pageLimit
+  const offset = (page - 1) * safeLimit
   const [allCampaigns, totalResult] = await Promise.all([
     db.query.campaigns.findMany({
       where: eq(campaigns.agentId, user.id),
       orderBy: [desc(campaigns.createdAt)],
-      limit: pageLimit, offset,
+      limit: safeLimit, offset,
       with: { listing: true },
     }),
     db.select({ count: count() }).from(campaigns).where(eq(campaigns.agentId, user.id)),
@@ -307,7 +397,7 @@ export async function getUserCampaigns(clerkId: string, page = 1, pageLimit = 20
   return {
     campaigns: allCampaigns,
     total: totalResult[0]?.count ?? 0,
-    pages: Math.ceil((totalResult[0]?.count ?? 0) / pageLimit),
+    pages: Math.ceil((totalResult[0]?.count ?? 0) / safeLimit),
   }
 }
 
