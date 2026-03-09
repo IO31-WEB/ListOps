@@ -1,5 +1,6 @@
 import type { Metadata, Viewport } from 'next'
 import { ClerkProvider } from '@clerk/nextjs'
+import { PostHogProvider } from '@/components/posthog-provider'
 import { Toaster } from 'react-hot-toast'
 import '@/styles/globals.css'
 
