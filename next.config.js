@@ -21,16 +21,8 @@ const nextConfig = {
     'puppeteer-core',
     'resend',
   ],
-  turbopack: {
-    // Tell Turbopack to treat optional server-only packages as external.
-    // Prevents "Module not found" warnings for packages that are intentionally
-    // not installed and are guarded by try/catch at runtime.
-    resolveAlias: {
-      '@sentry/nextjs': { external: '@sentry/nextjs' },
-      '@sparticuz/chromium': { external: '@sparticuz/chromium' },
-      'puppeteer-core': { external: 'puppeteer-core' },
-    },
-  },
+  // Empty turbopack config — optional packages silenced via eval("require") in source files
+  turbopack: {},
 }
 
 module.exports = nextConfig
