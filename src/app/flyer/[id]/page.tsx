@@ -59,6 +59,10 @@ export default async function FlyerPage({
   const brandAccent = (campaign.brandKit as any)?.accentColor ?? '#c9a84c'
   const primaryColor = schemeColors.primary || brandPrimary
   const accentColor = schemeColors.accent || brandAccent
+  // On light/white backgrounds, accent colors can be too pale (e.g. forest cream on white).
+  // Use primaryColor for text labels on white sections, accentColor only on dark backgrounds.
+  const labelOnLight = primaryColor   // text labels on white/light-bg sections
+  const labelOnDark  = accentColor    // text labels on dark/colored-bg sections
   const mainPhoto = photos[0] ?? null
 
   // Shared helpers
@@ -69,32 +73,32 @@ export default async function FlyerPage({
     </div>
   )
 
-  const agentFooter = (dark = true) => (
-    <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', width: '100%' }}>
+  const agentFooter = (dark = true, compact = false) => (
+    <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', width: '100%', gap: 8 }}>
       {/* Left: headshot + agent info */}
-      <div style={{ display: 'flex', alignItems: 'center', gap: 14 }}>
+      <div style={{ display: 'flex', alignItems: 'center', gap: compact ? 10 : 14, minWidth: 0, flex: 1 }}>
         {agentPhoto && (
-          <img src={agentPhoto} alt={agentName} style={{ width: 52, height: 52, borderRadius: '50%', objectFit: 'cover', border: `2px solid ${dark ? 'rgba(255,255,255,0.35)' : accentColor}`, flexShrink: 0 }} />
+          <img src={agentPhoto} alt={agentName} style={{ width: compact ? 40 : 52, height: compact ? 40 : 52, borderRadius: '50%', objectFit: 'cover', border: `2px solid ${dark ? 'rgba(255,255,255,0.35)' : accentColor}`, flexShrink: 0 }} />
         )}
-        <div>
-          {agentName && <div style={{ fontFamily: 'Arial,sans-serif', fontWeight: 700, fontSize: 15, color: dark ? 'white' : primaryColor, letterSpacing: 0.3 }}>{agentName}</div>}
+        <div style={{ minWidth: 0 }}>
+          {agentName && <div style={{ fontFamily: 'Arial,sans-serif', fontWeight: 700, fontSize: compact ? 13 : 15, color: dark ? 'white' : primaryColor, letterSpacing: 0.3, whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>{agentName}</div>}
           {(agentTitle || brokerageName) && (
-            <div style={{ fontFamily: 'Arial,sans-serif', fontSize: 11, color: dark ? 'rgba(255,255,255,0.65)' : '#64748b', marginTop: 2 }}>
+            <div style={{ fontFamily: 'Arial,sans-serif', fontSize: 11, color: dark ? 'rgba(255,255,255,0.65)' : '#64748b', marginTop: 2, whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>
               {agentTitle}{brokerageName ? ` · ${brokerageName}` : ''}
             </div>
           )}
-          <div style={{ fontFamily: 'Arial,sans-serif', fontSize: 11, color: dark ? 'rgba(255,255,255,0.75)' : '#475569', marginTop: 3 }}>
+          <div style={{ fontFamily: 'Arial,sans-serif', fontSize: 11, color: dark ? 'rgba(255,255,255,0.75)' : '#475569', marginTop: 3, whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>
             {[agentPhone, agentEmail].filter(Boolean).join(' · ')}
           </div>
         </div>
       </div>
       {/* Right: logos */}
-      <div style={{ display: 'flex', alignItems: 'center', gap: 12, flexShrink: 0 }}>
+      <div style={{ display: 'flex', alignItems: 'center', gap: 8, flexShrink: 0 }}>
         {logoUrl && (
-          <img src={logoUrl} alt="Agent Logo" style={{ height: 40, maxWidth: 110, objectFit: 'contain', opacity: dark ? 0.9 : 1 }} />
+          <img src={logoUrl} alt="Agent Logo" style={{ height: compact ? 32 : 40, maxWidth: compact ? 80 : 110, objectFit: 'contain', opacity: dark ? 0.9 : 1 }} />
         )}
         {brokerageLogo && (
-          <img src={brokerageLogo} alt="Brokerage Logo" style={{ height: 36, maxWidth: 100, objectFit: 'contain', opacity: dark ? 0.8 : 0.9, borderLeft: logoUrl ? `1px solid ${dark ? 'rgba(255,255,255,0.25)' : '#e2e8f0'}` : 'none', paddingLeft: logoUrl ? 12 : 0 }} />
+          <img src={brokerageLogo} alt="Brokerage Logo" style={{ height: compact ? 28 : 36, maxWidth: compact ? 80 : 100, objectFit: 'contain', opacity: dark ? 0.8 : 0.9, borderLeft: logoUrl ? `1px solid ${dark ? 'rgba(255,255,255,0.25)' : '#e2e8f0'}` : 'none', paddingLeft: logoUrl ? 8 : 0 }} />
         )}
       </div>
     </div>
@@ -172,8 +176,8 @@ export default async function FlyerPage({
               <div style={{ flex: 1 }}>
                 {/* Section label */}
                 <div style={{ display: 'flex', alignItems: 'center', gap: 10, marginBottom: 12 }}>
-                  <div style={{ width: 28, height: 2, background: accentColor }} />
-                  <div style={{ fontFamily: 'Arial,sans-serif', fontSize: 9, letterSpacing: 3, color: accentColor, textTransform: 'uppercase' as const }}>About this home</div>
+                  <div style={{ width: 28, height: 2, background: labelOnLight }} />
+                  <div style={{ fontFamily: 'Arial,sans-serif', fontSize: 9, letterSpacing: 3, color: labelOnLight, textTransform: 'uppercase' as const }}>About this home</div>
                 </div>
                 <p style={{ fontFamily: 'Georgia,serif', fontSize: 13, lineHeight: 1.9, color: '#374151' }}>
                   {description || 'Contact us for more information about this exceptional property.'}
@@ -333,7 +337,7 @@ export default async function FlyerPage({
 
               {/* Description */}
               <div style={{ padding: '20px 28px', flex: 1 }}>
-                <div style={{ width: 24, height: 2, background: accentColor, marginBottom: 14 }} />
+                <div style={{ width: 24, height: 2, background: labelOnLight, marginBottom: 14 }} />
                 <p style={{ fontFamily: 'Georgia,serif', fontSize: 12.5, lineHeight: 1.85, color: '#475569' }}>
                   {description || 'Contact us for more information about this exceptional property.'}
                 </p>
@@ -347,8 +351,8 @@ export default async function FlyerPage({
               </div>
 
               {/* Agent footer */}
-              <div style={{ borderTop: '1px solid #e2e8f0', padding: '14px 28px', background: '#f8fafc' }}>
-                {agentFooter(false)}
+              <div style={{ borderTop: '1px solid #e2e8f0', padding: '12px 20px', background: '#f8fafc' }}>
+                {agentFooter(false, true)}
               </div>
             </div>
           </div>
