@@ -3,7 +3,7 @@
 import { Check } from 'lucide-react'
 import Link from 'next/link'
 import { cn } from '@/lib/utils'
-import { Plan } from '@/lib/stripe'
+import { Plan } from '@/lib/plans'
 
 interface PricingCardProps {
   plan: Plan
