@@ -14,7 +14,17 @@ export default async function FlyerPage({
   if (!userId) redirect('/sign-in')
 
   const { id } = await params
-  const { template = 'classic' } = await searchParams
+  const { template = 'classic', scheme = 'brand' } = await searchParams
+
+  // Color scheme overrides for Pro users
+  const COLOR_SCHEME_MAP: Record<string, { primary: string; accent: string }> = {
+    brand:    { primary: '',        accent: '' },          // uses brand kit colors (default)
+    navy:     { primary: '#1a2744', accent: '#c9a84c' },   // Navy & gold
+    charcoal: { primary: '#2d2d2d', accent: '#e8a020' },   // Charcoal & amber
+    forest:   { primary: '#1e4d2b', accent: '#f5f0e8' },   // Forest green & cream
+    burgundy: { primary: '#6b1a2a', accent: '#d4b896' },   // Burgundy & champagne
+  }
+  const schemeColors = COLOR_SCHEME_MAP[scheme] ?? COLOR_SCHEME_MAP.brand
 
   const [campaign, quota] = await Promise.all([
     getCampaign(id, userId),
@@ -45,8 +55,10 @@ export default async function FlyerPage({
   const brokerageLogo = (campaign.brandKit as any)?.brokerageLogo ?? ''
   const brokerageName = (campaign.brandKit as any)?.brokerageName ?? ''
   const tagline = (campaign.brandKit as any)?.tagline ?? ''
-  const primaryColor = campaign.brandKit?.primaryColor ?? '#1e3a5f'
-  const accentColor = (campaign.brandKit as any)?.accentColor ?? '#c9a84c'
+  const brandPrimary = campaign.brandKit?.primaryColor ?? '#1e3a5f'
+  const brandAccent = (campaign.brandKit as any)?.accentColor ?? '#c9a84c'
+  const primaryColor = schemeColors.primary || brandPrimary
+  const accentColor = schemeColors.accent || brandAccent
   const mainPhoto = photos[0] ?? null
 
   // Shared helpers
