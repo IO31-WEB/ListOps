@@ -18,6 +18,7 @@ const nextConfig = {
     'aws4fetch',
     '@sparticuz/chromium',
     'puppeteer-core',
+    'resend',
   ],
   // Empty turbopack config silences the webpack/turbopack conflict warning
   turbopack: {},
