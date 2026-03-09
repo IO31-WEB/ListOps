@@ -122,7 +122,7 @@ export default async function FlyerPage({
         img { display: block; }
       `}</style>
 
-      <PrintButton backUrl={`/dashboard/campaigns/${id}`} planTier={planTier} initialTemplate={template} />
+      <PrintButton backUrl={`/dashboard/campaigns/${id}`} planTier={planTier} initialTemplate={template} initialScheme={scheme} />
 
       <div className="flyer-wrap" style={{ paddingTop: 64, paddingBottom: 0, marginBottom: 0 }}>
 
