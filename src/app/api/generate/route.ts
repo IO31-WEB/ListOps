@@ -92,7 +92,7 @@ async function fetchMLSListing(mlsId: string) {
 }
 
 // ── Build prompt — scoped to what the plan unlocks ─────────────
-function buildCampaignPrompt(listing: any, planTier: PlanTier, brandKit?: any) {
+function buildCampaignPrompt(listing: any, planTier: PlanTier, brandKit?: any, userAiPersona?: any) {
   const address = [
     listing.address?.deliveryLine || listing.address?.line1,
     listing.address?.city,
@@ -117,7 +117,7 @@ function buildCampaignPrompt(listing: any, planTier: PlanTier, brandKit?: any) {
   const agentEmail = hasBrandKit ? (brandKit?.agentEmail || '') : ''
   const agentTitle = hasBrandKit ? (brandKit?.agentTitle || 'REALTOR®') : 'REALTOR®'
   const brokerageName = hasBrandKit ? (brandKit?.brokerageName || '') : ''
-  const tone = hasBrandKit ? (brandKit?.aiPersona?.tone || 'professional') : 'professional'
+  const tone = hasBrandKit ? (userAiPersona?.tone || brandKit?.aiPersona?.tone || 'professional') : 'professional'
   const tagline = hasBrandKit ? (brandKit?.tagline || '') : ''
 
   const isWhiteLabel = canAccessFeature(planTier, 'white_label') && brandKit?.brokerageName
@@ -321,7 +321,7 @@ export async function POST(request: NextRequest) {
     }
 
     // Generate with Claude
-    const prompt = buildCampaignPrompt(mlsData, planTier, brandKit)
+    const prompt = buildCampaignPrompt(mlsData, planTier, brandKit, (user as any).aiPersona)
     const message = await anthropic.messages.create({
       model: 'claude-sonnet-4-20250514',
       max_tokens: 8000,
