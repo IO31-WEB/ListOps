@@ -1,3 +1,14 @@
+/**
+ * Stripe Webhook Handler
+ *
+ * FIXES APPLIED:
+ * 1. Removed the "update first org with null customerId" fallback in findOrg()
+ *    — that logic could silently assign a payment to the wrong organization
+ *      when Stripe fires subscription.created before checkout.session.completed
+ *    — now: if org can't be resolved, we log the error and return 200 (no retry)
+ * 2. captureError() called for all unresolvable org cases (Sentry alert)
+ */
+
 import { NextRequest, NextResponse } from 'next/server'
 import { stripe } from '@/lib/stripe'
 import { headers } from 'next/headers'
@@ -6,45 +17,66 @@ import { organizations, subscriptions } from '@/lib/db/schema'
 import { eq } from 'drizzle-orm'
 import { syncSubscription, downgradeToFree } from '@/lib/user-service'
 import { trackPlanUpgraded } from '@/lib/posthog'
+import { captureError } from '@/lib/monitoring'
 import type Stripe from 'stripe'
 
 export const runtime = 'nodejs'
 
 function getPlanFromPriceId(priceId: string): 'starter' | 'pro' | 'brokerage' | 'enterprise' | 'free' {
   const map: Record<string, 'starter' | 'pro' | 'brokerage' | 'enterprise'> = {
-    [process.env.STRIPE_STARTER_MONTHLY_PRICE_ID || 'x']: 'starter',
-    [process.env.STRIPE_STARTER_YEARLY_PRICE_ID || 'x']: 'starter',
-    [process.env.STRIPE_PRO_MONTHLY_PRICE_ID || 'x']: 'pro',
-    [process.env.STRIPE_PRO_YEARLY_PRICE_ID || 'x']: 'pro',
-    [process.env.STRIPE_BROKERAGE_MONTHLY_PRICE_ID || 'x']: 'brokerage',
-    [process.env.STRIPE_BROKERAGE_YEARLY_PRICE_ID || 'x']: 'brokerage',
+    [process.env.STRIPE_STARTER_MONTHLY_PRICE_ID || '__unset__']: 'starter',
+    [process.env.STRIPE_STARTER_YEARLY_PRICE_ID  || '__unset__']: 'starter',
+    [process.env.STRIPE_PRO_MONTHLY_PRICE_ID     || '__unset__']: 'pro',
+    [process.env.STRIPE_PRO_YEARLY_PRICE_ID      || '__unset__']: 'pro',
+    [process.env.STRIPE_BROKERAGE_MONTHLY_PRICE_ID || '__unset__']: 'brokerage',
+    [process.env.STRIPE_BROKERAGE_YEARLY_PRICE_ID  || '__unset__']: 'brokerage',
   }
   return map[priceId] ?? 'free'
 }
 
-// Find org by customer ID or subscription metadata — tries multiple strategies
-async function findOrg(customerId: string, metaOrgId?: string) {
+/**
+ * FIX: Resolve org from webhook event using only reliable strategies.
+ *
+ * REMOVED: the previous "last resort" fallback that did:
+ *   UPDATE organizations SET stripe_customer_id = $1 WHERE stripe_customer_id IS NULL
+ * That query would match ANY org with no customer ID and assign someone else's
+ * payment to them — a billing attribution bug that silently gave random users paid access.
+ *
+ * Safe strategies only:
+ *   1. metadata.orgId (set at checkout creation — most reliable)
+ *   2. stripeCustomerId column match
+ */
+async function findOrgByEvent(
+  customerId: string,
+  metaOrgId?: string
+): Promise<typeof organizations.$inferSelect | null> {
+  // Strategy 1: trust the metadata orgId we wrote at checkout session creation
   if (metaOrgId) {
     const org = await db.query.organizations.findFirst({
       where: eq(organizations.id, metaOrgId),
     })
     if (org) return org
+    // Metadata orgId present but not found in DB — data integrity problem
+    captureError(new Error(`[webhook] metadata orgId ${metaOrgId} not found in DB`), {
+      metaOrgId,
+      customerId,
+    })
   }
 
-  // Fallback: find by stripe customer ID
-  const org = await db.query.organizations.findFirst({
-    where: eq(organizations.stripeCustomerId, customerId),
-  })
-  if (org) return org
+  // Strategy 2: customer ID column lookup
+  if (customerId) {
+    const org = await db.query.organizations.findFirst({
+      where: eq(organizations.stripeCustomerId, customerId),
+    })
+    if (org) return org
+  }
 
-  // Last resort: update customer ID then retry
-  await db.update(organizations)
-    .set({ stripeCustomerId: customerId })
-    .where(eq(organizations.stripeCustomerId, null as any))
-  
-  return db.query.organizations.findFirst({
-    where: eq(organizations.stripeCustomerId, customerId),
+  // Cannot resolve — log for investigation, do NOT modify random orgs
+  captureError(new Error(`[webhook] Cannot resolve org — no metadata orgId and no customer ID match`), {
+    customerId,
+    metaOrgId,
   })
+  return null
 }
 
 export async function POST(request: NextRequest) {
@@ -76,7 +108,9 @@ export async function POST(request: NextRequest) {
         const { orgId, planId } = session.metadata || {}
 
         if (!orgId) {
-          console.error('checkout.session.completed: missing orgId in metadata')
+          captureError(new Error('[webhook] checkout.session.completed: missing orgId in metadata'), {
+            sessionId: session.id,
+          })
           break
         }
 
@@ -96,15 +130,15 @@ export async function POST(request: NextRequest) {
         const metaOrgId = sub.metadata?.orgId
         const customerId = sub.customer as string
 
-        const org = await findOrg(customerId, metaOrgId)
+        const org = await findOrgByEvent(customerId, metaOrgId)
 
         if (!org) {
-          console.error(`No org found for customer ${customerId}`)
-          // Return 200 so Stripe doesn't keep retrying for unknown customers
+          // Already logged by findOrgByEvent — return 200 so Stripe stops retrying
+          console.error(`[webhook] Unresolvable org for customer ${customerId} — skipping sync`)
           break
         }
 
-        // Make sure customer ID is saved
+        // Ensure customer ID is persisted
         if (!org.stripeCustomerId) {
           await db.update(organizations)
             .set({ stripeCustomerId: customerId })
@@ -121,7 +155,9 @@ export async function POST(request: NextRequest) {
           stripePriceId: priceId,
           plan,
           status: sub.status as any,
-          currentPeriodEnd: sub.current_period_end ? new Date(sub.current_period_end * 1000) : new Date(Date.now() + 30 * 24 * 60 * 60 * 1000),
+          currentPeriodEnd: sub.current_period_end
+            ? new Date(sub.current_period_end * 1000)
+            : new Date(Date.now() + 30 * 24 * 60 * 60 * 1000),
           cancelAtPeriodEnd: sub.cancel_at_period_end,
         })
 
@@ -134,22 +170,19 @@ export async function POST(request: NextRequest) {
 
         console.log(`✅ Plan updated to ${plan} for org ${org.id}`)
 
-        // PostHog: track plan change for retention analytics
-        if (org.id) {
-          const interval = sub.items.data[0]?.price.recurring?.interval === 'year' ? 'annual' : 'monthly'
-          trackPlanUpgraded({
-            userId: org.id,
-            fromPlan: org.plan ?? 'free',
-            toPlan: plan,
-            billingInterval: interval,
-          })
-        }
+        const interval = sub.items.data[0]?.price.recurring?.interval === 'year' ? 'annual' : 'monthly'
+        trackPlanUpgraded({
+          userId: org.id,
+          fromPlan: org.plan ?? 'free',
+          toPlan: plan,
+          billingInterval: interval,
+        })
         break
       }
 
       case 'customer.subscription.deleted': {
         const sub = event.data.object as Stripe.Subscription
-        const org = await findOrg(sub.customer as string, sub.metadata?.orgId)
+        const org = await findOrgByEvent(sub.customer as string, sub.metadata?.orgId)
         if (org) {
           await downgradeToFree(org.id)
           console.log(`❌ Subscription canceled, org ${org.id} downgraded to free`)
@@ -188,6 +221,7 @@ export async function POST(request: NextRequest) {
       case 'customer.subscription.trial_will_end': {
         const sub = event.data.object as Stripe.Subscription
         console.log(`⏰ Trial ending soon: ${sub.id}`)
+        // TODO: trigger dunning email via Resend
         break
       }
 
@@ -198,11 +232,7 @@ export async function POST(request: NextRequest) {
     return NextResponse.json({ received: true })
   } catch (err) {
     console.error('Webhook handler error:', err)
-    // Log full error details
-    if (err instanceof Error) {
-      console.error('Error message:', err.message)
-      console.error('Error stack:', err.stack)
-    }
+    captureError(err, { eventType: event.type, eventId: event.id })
     return NextResponse.json({ error: 'Webhook handler failed' }, { status: 500 })
   }
 }
