@@ -1,9 +1,15 @@
 /**
  * Campaign Generation API
- * Generates only the content types the user's plan includes.
  *
- * FREE:     Facebook (6) + Instagram (6) + Email (2) — no brand kit applied
- * STARTER:  FREE + brand kit applied to content
+ * FIXES APPLIED:
+ * 1. consumeCampaignQuota() replaces checkCampaignQuota + incrementCampaignUsage
+ *    — eliminates TOCTOU race that allowed free users to bypass limits
+ * 2. Quota is consumed BEFORE calling Claude — no free generations on DB failure
+ * 3. Slow generation alert (>30s) sent to Sentry
+ * 4. Explicit ANTHROPIC_API_KEY check at startup
+ *
+ * FREE:     Facebook (6) + Instagram (6) + Email (2) — no brand kit
+ * STARTER:  FREE + brand kit applied + microsite
  * PRO:      STARTER + Video/Reel Scripts (6)
  * BROKERAGE/ENTERPRISE: PRO + white-label brand override
  */
@@ -14,22 +20,27 @@ import Anthropic from '@anthropic-ai/sdk'
 import { db } from '@/lib/db'
 import { campaigns, listings } from '@/lib/db/schema'
 import { eq, and } from 'drizzle-orm'
-import { getUserWithDetails, checkCampaignQuota, incrementCampaignUsage } from '@/lib/user-service'
+import { getUserWithDetails, consumeCampaignQuota } from '@/lib/user-service'
 import { canAccessFeature } from '@/lib/stripe'
-import type { PlanTier } from '@/lib/stripe'
+import type { PlanTier } from '@/lib/plans'
 import { z } from 'zod'
 import { slugify } from '@/lib/utils'
 import { rateLimitGenerate } from '@/lib/ratelimit'
 import { captureError, trackGenerationCost } from '@/lib/monitoring'
 import { trackCampaignGenerated } from '@/lib/posthog'
 
-const anthropic = new Anthropic({ apiKey: process.env.ANTHROPIC_API_KEY! })
+// FIX: Explicit startup check — prevents opaque cold-start crash if key is missing
+if (!process.env.ANTHROPIC_API_KEY) {
+  throw new Error('[generate] ANTHROPIC_API_KEY is not set. Check your environment variables.')
+}
+
+const anthropic = new Anthropic({ apiKey: process.env.ANTHROPIC_API_KEY })
 
 const RequestSchema = z.object({
   mlsId: z.string().min(1).max(50),
 })
 
-// ── Demo listing fallback ─────────────────────────────────────
+// ── Demo listing fallback ──────────────────────────────────────
 function getDemoListing(mlsId: string) {
   return {
     mlsId,
@@ -55,7 +66,7 @@ function getDemoListing(mlsId: string) {
   }
 }
 
-// ── Fetch listing from SimplyRETS ─────────────────────────────
+// ── Fetch listing from SimplyRETS ──────────────────────────────
 async function fetchMLSListing(mlsId: string) {
   const apiKey = process.env.SIMPLYRETS_API_KEY
   const apiSecret = process.env.SIMPLYRETS_API_SECRET
@@ -80,7 +91,7 @@ async function fetchMLSListing(mlsId: string) {
   }
 }
 
-// ── Build prompt — only requests what the plan unlocks ────────
+// ── Build prompt — scoped to what the plan unlocks ─────────────
 function buildCampaignPrompt(listing: any, planTier: PlanTier, brandKit?: any) {
   const address = [
     listing.address?.deliveryLine || listing.address?.line1,
@@ -98,7 +109,6 @@ function buildCampaignPrompt(listing: any, planTier: PlanTier, brandKit?: any) {
   const features = Array.isArray(listing.property?.features) ? listing.property.features.join(', ') : ''
   const city = listing.address?.city ?? ''
 
-  // Brand kit only applied for starter+ plans
   const hasBrandKit = canAccessFeature(planTier, 'brand_kit') && !!brandKit
   const agentName = hasBrandKit
     ? (brandKit?.agentName || `${listing.agent?.firstName ?? ''} ${listing.agent?.lastName ?? ''}`.trim() || 'Your Agent')
@@ -107,15 +117,13 @@ function buildCampaignPrompt(listing: any, planTier: PlanTier, brandKit?: any) {
   const tone = hasBrandKit ? (brandKit?.aiPersona?.tone || 'professional') : 'professional'
   const tagline = hasBrandKit ? (brandKit?.tagline || '') : ''
 
-  // White-label: brokerage overrides with their brand
-  // Starter+ removes CampaignAI branding per plan features
   const isWhiteLabel = canAccessFeature(planTier, 'white_label') && brandKit?.brokerageName
   const isPaidPlan = planTier !== 'free'
   const brandingLine = isWhiteLabel
     ? `Brokerage: ${brandKit.brokerageName} — remove all CampaignAI mentions`
     : isPaidPlan
     ? `Agent: ${agentName} — do not mention CampaignAI in any outputs`
-    : 'Presented by CampaignAI' 
+    : 'Presented by CampaignAI'
 
   const listingUrl = `https://campaignai.io/l/listing-${listing.mlsId || listing.listingId}`
 
@@ -127,10 +135,8 @@ function buildCampaignPrompt(listing: any, planTier: PlanTier, brandKit?: any) {
   }
   const toneGuide = toneGuides[tone] ?? toneGuides['professional']
 
-  // Feature flags
   const includeReelScripts = canAccessFeature(planTier, 'video_script')
 
-  // Build JSON schema based on plan
   const jsonSchema = `{
   "facebook": [
     {"week": 1, "theme": "Just Listed", "copy": "150-250 word post including ${listingUrl}", "hashtags": ["realtor","justlisted","${city.toLowerCase().replace(/\s/g, '')}realestate"]}
@@ -187,7 +193,7 @@ ${includeReelScripts ? '- Generate all 6 weeks for reelScripts — each unique t
 - Return ONLY the JSON object`
 }
 
-// ── POST handler ──────────────────────────────────────────────
+// ── POST handler ───────────────────────────────────────────────
 export async function POST(request: NextRequest) {
   const { userId } = await auth()
   if (!userId) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
@@ -196,7 +202,7 @@ export async function POST(request: NextRequest) {
     const body = await request.json()
     const { mlsId } = RequestSchema.parse(body)
 
-    // ── Rate limit: 5 generations per 10 min per user ─────────────
+    // Rate limit: 5 generations per 10 min per user
     const rl = await rateLimitGenerate(userId)
     if (!rl.success) {
       const resetIn = Math.ceil((rl.reset - Date.now()) / 1000 / 60)
@@ -214,8 +220,11 @@ export async function POST(request: NextRequest) {
       )
     }
 
-    // checkCampaignQuota syncs Clerk metadata → DB before checking
-    const quota = await checkCampaignQuota(userId)
+    // FIX: consumeCampaignQuota atomically checks AND increments in one DB operation.
+    // This replaces the old checkCampaignQuota + incrementCampaignUsage pattern
+    // which had a TOCTOU race allowing concurrent requests to bypass the limit.
+    // Quota is consumed BEFORE calling Claude so a DB failure can't yield a free generation.
+    const quota = await consumeCampaignQuota(userId)
     if (!quota.allowed) {
       return NextResponse.json(
         { error: `You've used all ${quota.limit} campaigns this month. Upgrade to Pro for unlimited campaigns.`, quota },
@@ -227,7 +236,6 @@ export async function POST(request: NextRequest) {
     const user = await getUserWithDetails(userId)
     if (!user) return NextResponse.json({ error: 'User not found' }, { status: 404 })
 
-    // Only apply brand kit for starter+ plans
     const brandKit = canAccessFeature(planTier, 'brand_kit') ? user.brandKit : null
 
     const startMs = Date.now()
@@ -292,7 +300,7 @@ export async function POST(request: NextRequest) {
       console.error('DB campaign error (non-fatal):', dbErr)
     }
 
-    // Generate — prompt scoped to plan
+    // Generate with Claude
     const prompt = buildCampaignPrompt(mlsData, planTier, brandKit)
     const message = await anthropic.messages.create({
       model: 'claude-sonnet-4-20250514',
@@ -318,7 +326,12 @@ export async function POST(request: NextRequest) {
 
     const generationMs = Date.now() - startMs
 
-    // Save only what the plan includes
+    // FIX: Alert on slow generations (>30s indicates a cost/performance problem)
+    if (generationMs > 30_000) {
+      captureError(new Error(`Slow generation: ${generationMs}ms`), { generationMs, userId, planTier, mlsId })
+    }
+
+    // Save campaign content
     if (campaignRecord) {
       try {
         await db.update(campaigns)
@@ -329,7 +342,6 @@ export async function POST(request: NextRequest) {
             instagramPosts: campaignContent.instagram,
             emailJustListed: campaignContent.emailJustListed,
             emailStillAvailable: campaignContent.emailStillAvailable,
-            // Only save video scripts for pro+
             videoScript: canAccessFeature(planTier, 'video_script') && campaignContent.reelScripts
               ? JSON.stringify(campaignContent.reelScripts)
               : null,
@@ -343,17 +355,16 @@ export async function POST(request: NextRequest) {
       }
     }
 
-    await incrementCampaignUsage(userId)
-
-    // Track cost + performance for monitoring
+    // Track cost + performance
     trackGenerationCost({
       userId,
       planTier,
       mlsId,
       durationMs: generationMs,
+      estimatedInputTokens: message.usage.input_tokens,
+      estimatedOutputTokens: message.usage.output_tokens,
     })
 
-    // PostHog event for retention analytics
     const contentTypes = ['facebook', 'instagram', 'email_just_listed', 'email_still_available', 'flyer']
     if (campaignContent.reelScripts) contentTypes.push('video_script')
     trackCampaignGenerated({
@@ -387,7 +398,6 @@ export async function POST(request: NextRequest) {
       instagram: campaignContent.instagram,
       emailJustListed: campaignContent.emailJustListed,
       emailStillAvailable: campaignContent.emailStillAvailable,
-      // Only returned for pro+
       reelScripts: canAccessFeature(planTier, 'video_script')
         ? (campaignContent.reelScripts ?? [])
         : null,
@@ -399,6 +409,7 @@ export async function POST(request: NextRequest) {
       return NextResponse.json({ error: 'Invalid MLS ID format' }, { status: 400 })
     }
     console.error('Generation error:', err)
+    captureError(err, { userId, context: 'campaign_generation' })
     return NextResponse.json(
       { error: err.message || 'Campaign generation failed. Please try again.' },
       { status: 500 }
