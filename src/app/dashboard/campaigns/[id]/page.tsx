@@ -91,9 +91,14 @@ export default function CampaignDetailPage() {
   const [campaign, setCampaign] = useState<Campaign | null>(null)
   const [loading, setLoading] = useState(true)
   const [publishing, setPublishing] = useState(false)
+  const [planTier, setPlanTier] = useState<string>('free')
 
   useEffect(() => {
     fetchCampaign()
+    // Fetch plan tier to gate Pro-only sections
+    fetch('/api/billing/info').then(r => r.ok ? r.json() : null).then(d => {
+      if (d?.planTier) setPlanTier(d.planTier)
+    }).catch(() => {})
   }, [id])
 
   const fetchCampaign = async () => {
@@ -323,13 +328,14 @@ export default function CampaignDetailPage() {
         </Section>
       )}
 
-      {/* Video & Reel Scripts */}
-      {campaign.videoScript && (() => {
-        let reels: ReelScript[] = []
-        try { reels = JSON.parse(campaign.videoScript!) } catch { return null }
-        if (!reels.length) return null
-        return (
-          <Section title="Video & Reel Scripts" badge={`${reels.length} scripts`} icon={Video}>
+      {/* Video & Reel Scripts — Pro+ only */}
+      {['pro', 'brokerage', 'enterprise'].includes(planTier) ? (
+        campaign.videoScript && (() => {
+          let reels: ReelScript[] = []
+          try { reels = JSON.parse(campaign.videoScript!) } catch { return null }
+          if (!reels.length) return null
+          return (
+            <Section title="Video & Reel Scripts" badge={`${reels.length} scripts`} icon={Video}>
             <div className="divide-y divide-slate-100">
               {reels.map((reel, i) => (
                 <div key={i} className="p-5 space-y-4">
@@ -388,7 +394,29 @@ export default function CampaignDetailPage() {
             </div>
           </Section>
         )
-      })()}
+      })()
+      ) : (
+        <Section title="Video & Reel Scripts" badge="Pro" icon={Video}>
+          <div className="p-8 flex flex-col items-center text-center gap-4">
+            <div className="w-12 h-12 bg-purple-50 rounded-2xl flex items-center justify-center">
+              <Lock className="w-5 h-5 text-purple-400" />
+            </div>
+            <div>
+              <p className="font-semibold text-slate-800 mb-1">Video & Reel Scripts — Pro Plan</p>
+              <p className="text-sm text-slate-500 max-w-sm">
+                Get 6 weeks of ready-to-film video scripts with hooks, captions, and music suggestions. Upgrade to Pro to unlock.
+              </p>
+            </div>
+            <Link
+              href="/dashboard/billing"
+              className="inline-flex items-center gap-2 bg-purple-600 text-white text-sm font-semibold px-5 py-2.5 rounded-xl hover:bg-purple-700 transition-colors"
+            >
+              <Zap className="w-4 h-4" />
+              Upgrade to Pro
+            </Link>
+          </div>
+        </Section>
+      )}
 
       {/* Flyer */}
       <Section title="Print-Ready Flyer" badge="PDF" icon={Printer}>
