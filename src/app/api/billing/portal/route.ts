@@ -8,6 +8,8 @@ export async function POST(request: NextRequest) {
   const { userId } = await auth()
   if (!userId) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
 
+  const origin = request.headers.get('origin') || process.env.NEXT_PUBLIC_APP_URL || ''
+
   try {
     const dbUser = await getUserWithDetails(userId)
     const customerId = dbUser?.organization?.stripeCustomerId
@@ -24,7 +26,7 @@ export async function POST(request: NextRequest) {
 
     const sessionParams: any = {
       customer: customerId,
-      return_url: absoluteUrl('/dashboard/billing?portal_return=1'),
+      return_url: `${origin}/dashboard/billing`,
     }
 
     if (isCancelFlow) {
