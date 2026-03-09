@@ -17,6 +17,10 @@ export async function POST(request: NextRequest) {
   const { userId } = await auth()
   if (!userId) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
 
+  // Use the actual request origin so Stripe redirects back to whichever domain
+  // the user is on (preview URL, custom domain, etc) rather than the hardcoded APP_URL
+  const origin = request.headers.get('origin') || process.env.NEXT_PUBLIC_APP_URL || ''
+
   try {
     const body = await request.json()
     const { planId, billing } = RequestSchema.parse(body)
@@ -78,8 +82,8 @@ export async function POST(request: NextRequest) {
       mode: 'subscription',
       customer: customerId,
       line_items: [{ price: priceId, quantity: 1 }],
-      success_url: absoluteUrl('/dashboard/billing?success=true'),
-      cancel_url: absoluteUrl('/dashboard/billing?canceled=true'),
+      success_url: `${origin}/dashboard/billing?success=true`,
+      cancel_url: `${origin}/dashboard/billing?canceled=true`,
       metadata: { orgId: org.id, clerkUserId: userId, planId, billing },
       subscription_data: {
         ...(planId === 'brokerage' ? { trial_period_days: 14 } : {}),
