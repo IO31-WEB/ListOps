@@ -361,8 +361,16 @@ export async function POST(request: NextRequest) {
     if (!rl.success) {
       const resetIn = Math.ceil((rl.reset - Date.now()) / 1000 / 60)
       return NextResponse.json(
-        { error: `Too many requests. Try again in ${resetIn} minute${resetIn === 1 ? '' : 's'}.` },
-        { status: 429, headers: { 'X-RateLimit-Limit': String(rl.limit), 'X-RateLimit-Remaining': '0', 'X-RateLimit-Reset': String(rl.reset) } }
+        { error: `Too many requests. You can generate again in ${resetIn} minute${resetIn === 1 ? '' : 's'}.` },
+        {
+          status: 429,
+          headers: {
+            'X-RateLimit-Limit': String(rl.limit),
+            'X-RateLimit-Remaining': '0',
+            'X-RateLimit-Reset': String(rl.reset),
+            'Retry-After': String(Math.ceil((rl.reset - Date.now()) / 1000)),
+          },
+        }
       )
     }
 
@@ -410,7 +418,7 @@ export async function POST(request: NextRequest) {
         }).returning()
         listingRecord = newListing
       }
-    } catch (dbErr) { console.error('DB listing error:', dbErr) }
+    } catch (dbErr) { console.error('DB listing error (non-fatal):', dbErr) }
 
     // Create campaign record
     const micrositeSlug = `${slugify(address)}-${Date.now()}`
@@ -422,7 +430,7 @@ export async function POST(request: NextRequest) {
         status: 'generating', micrositeSlug,
       }).returning()
       campaignRecord = rec
-    } catch (dbErr) { console.error('DB campaign error:', dbErr) }
+    } catch (dbErr) { console.error('DB campaign error (non-fatal):', dbErr) }
 
     // Build multipart message — text prompt + MLS photos as base64 vision blocks
     const promptText = buildCampaignPrompt(mlsData, planTier, brandKit, (user as any).aiPersona)
@@ -473,7 +481,8 @@ export async function POST(request: NextRequest) {
     }
 
     const generationMs = Date.now() - startMs
-    if (generationMs > 60_000) {
+    // Alert on slow generations (>30s indicates a cost/performance problem)
+    if (generationMs > 30_000) {
       captureError(new Error(`Slow generation: ${generationMs}ms`), { generationMs, userId, planTier, mlsId })
     }
 
@@ -506,7 +515,7 @@ export async function POST(request: NextRequest) {
           completionTokens: message.usage.output_tokens,
           updatedAt: new Date(),
         }).where(eq(campaigns.id, campaignRecord.id))
-      } catch (dbErr) { console.error('DB update error:', dbErr) }
+      } catch (dbErr) { console.error('DB update error (non-fatal):', dbErr) }
     }
 
     trackGenerationCost({ userId, planTier, mlsId, durationMs: generationMs, estimatedInputTokens: message.usage.input_tokens, estimatedOutputTokens: message.usage.output_tokens })
