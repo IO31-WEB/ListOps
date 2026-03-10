@@ -196,7 +196,7 @@ export default function SettingsPage() {
             Cancel Subscription
           </Link>
           <button
-            onClick={() => toast.error('Please contact support@campaignai.io to delete your account.')}
+            onClick={() => toast.error('Please contact support@listops.io to delete your account.')}
             className="text-sm font-medium text-red-600 border border-red-200 px-4 py-2 rounded-xl hover:bg-red-50 transition-colors"
           >
             Delete Account
