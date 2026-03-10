@@ -46,7 +46,7 @@ export default async function DashboardPage() {
           <div>
             <div className="flex items-center gap-2 mb-2">
               <Zap className="w-4 h-4 text-amber-400" />
-              <span className="text-amber-400 text-xs font-semibold uppercase tracking-widest">CampaignAI</span>
+              <span className="text-amber-400 text-xs font-semibold uppercase tracking-widest">ListOps</span>
               <span className="text-xs text-slate-500 capitalize bg-slate-800 px-2 py-0.5 rounded-full ml-1">{planTier} plan</span>
             </div>
             <h2 className="font-display text-2xl sm:text-3xl font-semibold mb-2">
@@ -248,7 +248,7 @@ export default async function DashboardPage() {
           {
             title: planTier === 'free' ? 'Upgrade to Starter' : planTier === 'starter' ? 'Upgrade to Pro' : 'Manage Team',
             desc: planTier === 'free'
-              ? 'Get Brand Kit, 5 campaigns/month, and remove CampaignAI branding.'
+              ? 'Get Brand Kit, 5 campaigns/month, and remove ListOps branding.'
               : planTier === 'starter'
               ? 'Unlock unlimited campaigns, social scheduling & listing microsites.'
               : 'Add agents to your workspace for shared campaigns.',
