@@ -1,5 +1,5 @@
 /**
- * CampaignAI — Single Source of Truth for Plan Definitions & Feature Gates
+ * ListOps — Single Source of Truth for Plan Definitions & Feature Gates
  *
  * FIX: Previously split across stripe.ts and plans.ts, causing divergence bugs.
  * This is now the ONLY place plan data and feature gates are defined.
@@ -34,6 +34,14 @@ export const FEATURE_GATES = {
   multi_agent:          ['pro', 'brokerage', 'enterprise'],
   sso:                  ['enterprise'],
   api_access:           ['enterprise'],
+  // Content module gates
+  listing_copy:         ['free', 'starter', 'pro', 'brokerage', 'enterprise'],  // all plans
+  print_materials:      ['free', 'starter', 'pro', 'brokerage', 'enterprise'],  // all plans
+  photo_captions:       ['starter', 'pro', 'brokerage', 'enterprise'],
+  email_drip:           ['starter', 'pro', 'brokerage', 'enterprise'],
+  microsite_copy:       ['starter', 'pro', 'brokerage', 'enterprise'],
+  expanded_social:      ['pro', 'brokerage', 'enterprise'],   // TikTok, LinkedIn, X, Pinterest, Stories
+  virtual_tour_scripts: ['pro', 'brokerage', 'enterprise'],
 } as const satisfies Record<string, readonly PlanTier[]>
 
 export type Feature = keyof typeof FEATURE_GATES
@@ -94,7 +102,7 @@ export const PLANS: Plan[] = [
       { text: 'All 6 content types (FB, IG, Email, Flyer)', included: true },
       { text: 'Copy to clipboard', included: true },
       { text: 'Basic flyer template (1)', included: true },
-      { text: 'CampaignAI branding on outputs', included: true },
+      { text: 'ListOps branding on outputs', included: true },
       { text: 'Brand kit upload', included: false },
       { text: 'Campaign history', included: false },
       { text: 'Direct social scheduling', included: false },
@@ -123,7 +131,7 @@ export const PLANS: Plan[] = [
       { text: 'Brand kit (logo, colors, photo)', included: true, highlight: true },
       { text: 'Campaign history (30 days)', included: true },
       { text: '3 flyer templates (Classic, Luxury, Modern)', included: true },
-      { text: 'Remove CampaignAI branding', included: true },
+      { text: 'Remove ListOps branding', included: true },
       { text: 'Auto-generated listing microsite', included: true },
       { text: 'Direct social scheduling', included: false },
       { text: 'Video scripts', included: false },
@@ -151,7 +159,7 @@ export const PLANS: Plan[] = [
       { text: 'Full brand kit (logo, colors, photo)', included: true },
       { text: 'Campaign history (unlimited)', included: true },
       { text: '3 flyer templates + 5 color schemes (15 combos)', included: true },
-      { text: 'Remove CampaignAI branding', included: true },
+      { text: 'Remove ListOps branding', included: true },
       { text: 'Direct social scheduling (Meta, Buffer)', included: true, highlight: true },
       { text: 'Auto-generated listing microsite', included: true, highlight: true },
       { text: 'Video & reel scripts', included: true },
