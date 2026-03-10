@@ -46,14 +46,14 @@ function timeAgo(ms: number): string {
   return `${Math.floor(diff / 86_400_000)}d ago`
 }
 
-const NOTIF_STORAGE_KEY = 'campaignai_notifications_v3'
+const NOTIF_STORAGE_KEY = 'listops_notifications_v1'
 
 function getWelcomeNotifications(): Notification[] {
   // Only the welcome notification — seeded once, marked read immediately
   // Real campaign notifications come from the API
   const now = Date.now()
   return [
-    { id: 'welcome', type: 'info', title: 'Welcome to CampaignAI', body: 'Generate your first campaign to get started.', createdAt: now, read: false, href: '/dashboard/generate' },
+    { id: 'welcome', type: 'info', title: 'Welcome to ListOps', body: 'Generate your first campaign to get started.', createdAt: now, read: false, href: '/dashboard/generate' },
   ]
 }
 
