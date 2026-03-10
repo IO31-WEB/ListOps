@@ -6,28 +6,28 @@ import '@/styles/globals.css'
 
 export const metadata: Metadata = {
   title: {
-    default: 'CampaignAI — 6-Week Real Estate Marketing in One Click',
-    template: '%s | CampaignAI',
+    default: 'ListOps — 6-Week Real Estate Marketing in One Click',
+    template: '%s | ListOps',
   },
   description: 'Generate complete 6-week real estate marketing campaigns from your MLS listing ID. Facebook, Instagram, email, and print-ready flyers — all in about 60 seconds.',
   keywords: ['real estate marketing', 'MLS', 'real estate agent tools', 'listing marketing', 'AI real estate'],
-  authors: [{ name: 'CampaignAI' }],
-  creator: 'CampaignAI',
+  authors: [{ name: 'ListOps' }],
+  creator: 'ListOps',
   openGraph: {
     type: 'website',
     locale: 'en_US',
-    url: 'https://campaignai.io',
-    title: 'CampaignAI — 6-Week Real Estate Marketing in One Click',
+    url: 'https://listops.io',
+    title: 'ListOps — 6-Week Real Estate Marketing in One Click',
     description: 'Generate complete 6-week real estate marketing campaigns from your MLS listing ID.',
-    siteName: 'CampaignAI',
+    siteName: 'ListOps',
   },
   twitter: {
     card: 'summary_large_image',
-    title: 'CampaignAI',
+    title: 'ListOps',
     description: 'AI-powered real estate marketing campaigns from your MLS ID.',
   },
   robots: { index: true, follow: true },
-  metadataBase: new URL(process.env.NEXT_PUBLIC_APP_URL || 'https://campaignai.io'),
+  metadataBase: new URL(process.env.NEXT_PUBLIC_APP_URL || 'https://listops.io'),
 }
 
 export const viewport: Viewport = {
