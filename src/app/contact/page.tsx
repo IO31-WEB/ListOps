@@ -2,7 +2,7 @@
 
 import { useState } from 'react'
 import Link from 'next/link'
-import { Zap, ArrowRight, Mail, Send } from 'lucide-react'
+import { House, ArrowRight, Mail, Send } from 'lucide-react'
 import toast from 'react-hot-toast'
 
 export default function ContactPage() {
@@ -28,9 +28,9 @@ export default function ContactPage() {
         <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 h-16 flex items-center justify-between">
           <Link href="/" className="flex items-center gap-2.5">
             <div className="w-8 h-8 bg-slate-900 rounded-lg flex items-center justify-center">
-              <Zap className="w-4 h-4 text-amber-400" />
+              <House className="w-4 h-4 text-amber-400" />
             </div>
-            <span className="font-display font-semibold text-slate-900 text-lg">CampaignAI</span>
+            <span className="font-display font-semibold text-slate-900 text-lg">ListOps</span>
           </Link>
           <Link href="/sign-in" className="text-sm font-medium text-slate-600 hover:text-slate-900 transition-colors">Sign In</Link>
         </div>
@@ -93,7 +93,7 @@ export default function ContactPage() {
 
           <div className="text-center mt-8 text-sm text-slate-500">
             Or email us directly at{' '}
-            <a href="mailto:hello@campaignai.io" className="text-amber-600 hover:underline font-medium">hello@campaignai.io</a>
+            <a href="mailto:hello@listops.io" className="text-amber-600 hover:underline font-medium">hello@listops.io</a>
           </div>
         </div>
       </div>
