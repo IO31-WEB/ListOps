@@ -2,15 +2,15 @@ import type { Metadata } from 'next'
 import Link from 'next/link'
 
 export const metadata: Metadata = {
-  title: 'Security — CampaignAI',
-  description: 'How CampaignAI keeps your data and listings secure.',
+  title: 'Security — ListOps',
+  description: 'How ListOps keeps your data and listings secure.',
 }
 
 const practices = [
   { icon: '🔐', title: 'Encryption in transit & at rest', body: 'All data is encrypted using TLS 1.3 in transit and AES-256 at rest. Your listing data, brand assets, and personal information are never stored in plaintext.' },
   { icon: '🏦', title: 'SOC 2-grade infrastructure', body: 'We run on Vercel and Neon PostgreSQL — both maintain SOC 2 Type II compliance. Your data lives in US-based data centers with 99.9% uptime SLAs.' },
   { icon: '🔑', title: 'Authentication via Clerk', body: 'We use Clerk for authentication, which supports MFA, passkeys, and SSO. We never store your password — credentials are handled entirely by Clerk\'s secure systems.' },
-  { icon: '💳', title: 'Payments via Stripe', body: 'All billing is processed by Stripe. CampaignAI never sees or stores your card number. Stripe is PCI DSS Level 1 certified.' },
+  { icon: '💳', title: 'Payments via Stripe', body: 'All billing is processed by Stripe. ListOps never sees or stores your card number. Stripe is PCI DSS Level 1 certified.' },
   { icon: '🚫', title: 'No data selling', body: 'Your listing data, client information, and brand assets are never sold or shared with third parties for advertising purposes.' },
   { icon: '🔍', title: 'Access controls', body: 'Team features use role-based access control (owner, admin, agent, viewer). Admins control what each team member can see and do.' },
 ]
@@ -51,8 +51,8 @@ export default function SecurityPage() {
         <div style={{ background: '#0f172a', borderRadius: 20, padding: '40px', textAlign: 'center' }}>
           <h2 style={{ fontSize: 22, fontWeight: 800, color: 'white', marginBottom: 10 }}>Found a security issue?</h2>
           <p style={{ color: '#94a3b8', marginBottom: 20, fontSize: 15 }}>We take vulnerability reports seriously. Please disclose responsibly.</p>
-          <a href="mailto:security@getcampaignai.com" style={{ background: '#f59e0b', color: '#0f172a', padding: '12px 28px', borderRadius: 10, fontWeight: 700, fontSize: 15, textDecoration: 'none', display: 'inline-block' }}>
-            security@getcampaignai.com
+          <a href="mailto:security@listops.io" style={{ background: '#f59e0b', color: '#0f172a', padding: '12px 28px', borderRadius: 10, fontWeight: 700, fontSize: 15, textDecoration: 'none', display: 'inline-block' }}>
+            security@listops.io
           </a>
         </div>
       </div>
@@ -63,7 +63,7 @@ export default function SecurityPage() {
             <Link key={href} href={href} style={{ color: '#94a3b8', textDecoration: 'none' }}>{label}</Link>
           ))}
         </div>
-        © {new Date().getFullYear()} CampaignAI. All rights reserved.
+        © {new Date().getFullYear()} ListOps. All rights reserved.
       </footer>
     </div>
   )
