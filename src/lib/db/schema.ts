@@ -1,5 +1,5 @@
 /**
- * CampaignAI — Drizzle ORM Schema
+ * ListOps — Drizzle ORM Schema
  *
  * FIX: referrals.status changed from plain text to a proper pgEnum.
  * This enforces valid values at the DB level and prevents silent data corruption
@@ -259,10 +259,23 @@ export const campaigns = pgTable('campaigns', {
   scheduledPublishAt: timestamp('scheduled_publish_at'),
 
   analytics: jsonb('analytics').$type<{
+    // Performance metrics (legacy)
     facebookClicks?: number
     instagramReach?: number
     emailOpens?: number
     flyerDownloads?: number
+    // Content modules (stored here to avoid schema migrations per feature)
+    listingCopy?: any
+    emailDrip?: any
+    printMaterials?: any
+    photoCaptions?: any[]
+    micrositeCopy?: any
+    tiktok?: any[]
+    linkedin?: any[]
+    xThreads?: any[]
+    pinterest?: any[]
+    stories?: any[]
+    hashtagPacks?: any
   }>().default({}),
 
   promptTokens: integer('prompt_tokens'),
