@@ -2,7 +2,7 @@
 
 import { useState } from 'react'
 import Link from 'next/link'
-import { ArrowRight, Check, X, Zap, HelpCircle } from 'lucide-react'
+import { House, ArrowRight, Check, X, HelpCircle } from 'lucide-react'
 import { PLANS, ENTERPRISE_PLAN } from '@/lib/plans'
 import { formatCurrency } from '@/lib/utils'
 
@@ -24,7 +24,7 @@ const FEATURE_CATEGORIES = [
     features: [
       { name: 'Brand kit (logo, colors, photo)', free: false, starter: true, pro: true, brokerage: true },
       { name: 'Custom agent tagline', free: false, starter: true, pro: true, brokerage: true },
-      { name: 'Remove CampaignAI branding', free: false, starter: true, pro: true, brokerage: true },
+      { name: 'Remove ListOps branding', free: false, starter: true, pro: true, brokerage: true },
       { name: 'White-label all outputs', free: false, starter: false, pro: false, brokerage: true },
       { name: 'Custom app name & logo', free: false, starter: false, pro: false, brokerage: true },
       { name: 'Custom AI writing persona', free: false, starter: false, pro: true, brokerage: true },
@@ -81,9 +81,9 @@ export default function PricingPage() {
         <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 h-16 flex items-center justify-between">
           <Link href="/" className="flex items-center gap-2.5">
             <div className="w-8 h-8 bg-slate-900 rounded-lg flex items-center justify-center">
-              <Zap className="w-4 h-4 text-amber-400" />
+              <House className="w-4 h-4 text-amber-400" />
             </div>
-            <span className="font-display font-semibold text-slate-900 text-lg">CampaignAI</span>
+            <span className="font-display font-semibold text-slate-900 text-lg">ListOps</span>
           </Link>
           <div className="flex items-center gap-3">
             <Link href="/sign-in" className="hidden sm:block text-sm font-medium text-slate-600 hover:text-slate-900 px-4 py-2 transition-colors">Sign In</Link>
@@ -249,7 +249,7 @@ export default function PricingPage() {
             <div className="space-y-4">
               {[
                 {
-                  q: 'Does CampaignAI work with my MLS?',
+                  q: 'Does ListOps work with my MLS?',
                   a: 'We connect via SimplyRETS which covers 500+ MLS boards across the US. If your board isn\'t supported, contact us — we add new boards regularly.',
                 },
                 {
@@ -258,7 +258,7 @@ export default function PricingPage() {
                 },
                 {
                   q: 'What is white-labeling?',
-                  a: 'On Brokerage+ plans, you can remove all CampaignAI branding from flyers, emails, and microsites — replacing it with your brokerage name, logo, and colors. Clients only see your brand.',
+                  a: 'On Brokerage+ plans, you can remove all ListOps branding from flyers, emails, and microsites — replacing it with your brokerage name, logo, and colors. Clients only see your brand.',
                 },
                 {
                   q: 'Can multiple agents share one account?',
