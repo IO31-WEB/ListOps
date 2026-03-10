@@ -12,6 +12,8 @@ export default function SignInPage() {
         <span className="font-display font-semibold text-slate-900 text-xl">ListOps</span>
       </Link>
       <SignIn
+        forceRedirectUrl="/dashboard"
+        fallbackRedirectUrl="/dashboard"
         appearance={{
           elements: {
             rootBox: 'w-full max-w-md',
