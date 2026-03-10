@@ -1,4 +1,4 @@
-# CampaignAI — Phase 1 Complete
+# ListOps — Phase 1 Complete
 
 > 6-Week Real Estate Marketing in One Click. MLS-connected, Claude AI-powered.
 
@@ -46,7 +46,7 @@
 
 ```bash
 git clone <your-repo>
-cd campaignai
+cd listops
 npm install
 cp .env.example .env.local
 ```
@@ -58,7 +58,7 @@ cp .env.example .env.local
 **What it does:** Handles all sign up, sign in, social login, and session management.
 
 1. Go to [clerk.com](https://clerk.com) → Create application
-2. Name it "CampaignAI"
+2. Name it "ListOps"
 3. Enable Google + Email sign-in methods
 4. From your Clerk dashboard → **API Keys**:
    ```
@@ -76,10 +76,10 @@ cp .env.example .env.local
 
 **What it does:** Stores users, orgs, campaigns, brand kits, subscriptions.
 
-1. Go to [neon.tech](https://neon.tech) → Create project named "campaignai"
+1. Go to [neon.tech](https://neon.tech) → Create project named "listops"
 2. Copy the **Connection String** from the dashboard:
    ```
-   DATABASE_URL=postgresql://user:pass@ep-xxx.us-east-1.aws.neon.tech/campaignai?sslmode=require
+   DATABASE_URL=postgresql://user:pass@ep-xxx.us-east-1.aws.neon.tech/listops?sslmode=require
    ```
 3. Push the schema:
    ```bash
@@ -121,9 +121,9 @@ cp .env.example .env.local
 
    | Product | Monthly Price | Annual Price |
    |---|---|---|
-   | CampaignAI Starter | $29/mo | $249/yr |
-   | CampaignAI Pro | $79/mo | $699/yr |
-   | CampaignAI Brokerage | $299/mo | $2,499/yr |
+   | ListOps Starter | $29/mo | $249/yr |
+   | ListOps Pro | $79/mo | $699/yr |
+   | ListOps Brokerage | $299/mo | $2,499/yr |
 
    After creating each, copy the **Price ID** (starts with `price_`):
    ```
@@ -177,16 +177,16 @@ cp .env.example .env.local
 **What it does:** Stores brand kit images (logos, agent photos) and generated PDF flyers.
 
 1. Go to [cloudflare.com](https://cloudflare.com) → R2 Object Storage
-2. Create a bucket named `campaignai-assets`
+2. Create a bucket named `listops-assets`
 3. Create an **API Token** with R2 read/write permissions
-4. Set up a **Public Access Domain** for the bucket (e.g. `assets.campaignai.io`)
+4. Set up a **Public Access Domain** for the bucket (e.g. `assets.listops.io`)
 5. Copy credentials:
    ```
    R2_ACCOUNT_ID=xxx
    R2_ACCESS_KEY_ID=xxx
    R2_SECRET_ACCESS_KEY=xxx
-   R2_BUCKET_NAME=campaignai-assets
-   NEXT_PUBLIC_R2_PUBLIC_URL=https://assets.campaignai.io
+   R2_BUCKET_NAME=listops-assets
+   NEXT_PUBLIC_R2_PUBLIC_URL=https://assets.listops.io
    ```
 
 ---
@@ -196,11 +196,11 @@ cp .env.example .env.local
 **What it does:** Sends welcome emails, campaign-complete notifications, billing receipts.
 
 1. Go to [resend.com](https://resend.com) → Create account
-2. Add and verify your domain (e.g. `campaignai.io`)
+2. Add and verify your domain (e.g. `listops.io`)
 3. Create an API key:
    ```
    RESEND_API_KEY=re_xxx
-   RESEND_FROM_EMAIL=hello@campaignai.io
+   RESEND_FROM_EMAIL=hello@listops.io
    ```
 
 ---
