@@ -1,5 +1,5 @@
 /**
- * CampaignAI — Stripe Client + Billing Helpers
+ * ListOps — Stripe Client + Billing Helpers
  *
  * FIX: All plan definitions and feature gates have been moved to lib/plans.ts.
  * This file now contains only the Stripe client, webhook event types,
