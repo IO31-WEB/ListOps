@@ -46,7 +46,7 @@ export async function POST(req: NextRequest) {
 
     // Send invite email via Resend (or log if not configured)
     const resendKey = process.env.RESEND_API_KEY
-    const appUrl = process.env.NEXT_PUBLIC_APP_URL ?? 'https://campaign-ai-psi.vercel.app'
+    const appUrl = process.env.NEXT_PUBLIC_APP_URL ?? 'https://listops.io'
     const inviteUrl = `${appUrl}/sign-up?ref=${user.referralCode ?? ''}&team=1&email=${encodeURIComponent(email)}`
 
     if (resendKey) {
@@ -58,10 +58,10 @@ export async function POST(req: NextRequest) {
           const emailResult = await resend.emails.send({
             // Use onboarding@resend.dev until a custom domain is verified in Resend.
             // To use your own domain: add + verify it at resend.com/domains, then change this.
-            from: 'CampaignAI <onboarding@resend.dev>',
+            from: 'ListOps <onboarding@resend.dev>',
             to: email,
-            subject: `${user.firstName ?? 'Your colleague'} invited you to CampaignAI`,
-            html: `<div style="font-family:Arial,sans-serif;max-width:520px;margin:0 auto;padding:32px"><h2 style="color:#0f172a">You're invited to join CampaignAI</h2><p style="color:#475569">${user.firstName ?? 'A colleague'} has invited you to join their team on CampaignAI — the AI-powered real estate marketing platform.</p><p style="color:#475569">Generate complete 6-week listing campaigns in 90 seconds.</p><a href="${inviteUrl}" style="display:inline-block;background:#0f172a;color:white;padding:14px 28px;border-radius:10px;text-decoration:none;font-weight:700;margin:16px 0">Accept Invite →</a><p style="color:#94a3b8;font-size:13px">This invite expires in 7 days. If you didn't expect this, you can ignore this email.</p></div>`,
+            subject: `${user.firstName ?? 'Your colleague'} invited you to ListOps`,
+            html: `<div style="font-family:Arial,sans-serif;max-width:520px;margin:0 auto;padding:32px"><h2 style="color:#0f172a">You're invited to join ListOps</h2><p style="color:#475569">${user.firstName ?? 'A colleague'} has invited you to join their team on ListOps — the AI-powered real estate marketing platform.</p><p style="color:#475569">Generate complete 6-week listing campaigns in 90 seconds.</p><a href="${inviteUrl}" style="display:inline-block;background:#0f172a;color:white;padding:14px 28px;border-radius:10px;text-decoration:none;font-weight:700;margin:16px 0">Accept Invite →</a><p style="color:#94a3b8;font-size:13px">This invite expires in 7 days. If you didn't expect this, you can ignore this email.</p></div>`,
           })
           if (emailResult.error) {
             console.error('[invite] Resend error:', emailResult.error)
