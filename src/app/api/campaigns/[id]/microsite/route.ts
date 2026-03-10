@@ -17,7 +17,7 @@ import { auth } from '@clerk/nextjs/server'
 import { db } from '@/lib/db'
 import { campaigns } from '@/lib/db/schema'
 import { eq, and } from 'drizzle-orm'
-import { checkCampaignQuota } from '@/lib/user-service'
+import { checkCampaignQuota, getCampaign } from '@/lib/user-service'
 import { canAccessFeature } from '@/lib/stripe'
 import { z } from 'zod'
 
@@ -70,4 +70,30 @@ export async function POST(
     .returning()
 
   return NextResponse.json({ published: updated.micrositePublished })
+}
+
+// ── PATCH — push micrositeCopy to live microsite ──────────────
+export async function PATCH(
+  request: NextRequest,
+  { params }: { params: Promise<{ id: string }> }
+) {
+  const { userId } = await auth()
+  if (!userId) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
+
+  const { id } = await params
+  const { micrositeCopy } = await request.json()
+
+  const campaign = await getCampaign(id, userId)
+  if (!campaign) return NextResponse.json({ error: 'Not found' }, { status: 404 })
+
+  try {
+    const existing = campaign.analytics as any ?? {}
+    await db.update(campaigns)
+      .set({ analytics: { ...existing, micrositeCopy } as any, updatedAt: new Date() })
+      .where(eq(campaigns.id, id))
+    return NextResponse.json({ ok: true })
+  } catch (err) {
+    console.error('Microsite copy push error:', err)
+    return NextResponse.json({ error: 'Failed to update microsite copy' }, { status: 500 })
+  }
 }
