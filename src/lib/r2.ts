@@ -8,7 +8,7 @@
  */
 
 const R2_ENDPOINT = `https://${process.env.R2_ACCOUNT_ID}.r2.cloudflarestorage.com`
-const BUCKET = process.env.R2_BUCKET_NAME ?? 'campaignai-assets'
+const BUCKET = process.env.R2_BUCKET_NAME ?? 'listops-assets'
 const PUBLIC_URL = process.env.NEXT_PUBLIC_R2_PUBLIC_URL ?? ''
 
 function isConfigured() {
