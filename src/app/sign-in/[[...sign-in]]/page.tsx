@@ -1,15 +1,15 @@
 import { SignIn } from '@clerk/nextjs'
 import Link from 'next/link'
-import { Zap } from 'lucide-react'
+import { House } from 'lucide-react'
 
 export default function SignInPage() {
   return (
     <div className="min-h-screen bg-[var(--cream)] flex flex-col items-center justify-center px-4 py-16">
       <Link href="/" className="flex items-center gap-2.5 mb-10">
         <div className="w-9 h-9 bg-slate-900 rounded-xl flex items-center justify-center">
-          <Zap className="w-4.5 h-4.5 text-amber-400" />
+          <House className="w-4.5 h-4.5 text-amber-400" />
         </div>
-        <span className="font-display font-semibold text-slate-900 text-xl">CampaignAI</span>
+        <span className="font-display font-semibold text-slate-900 text-xl">ListOps</span>
       </Link>
       <SignIn
         appearance={{
