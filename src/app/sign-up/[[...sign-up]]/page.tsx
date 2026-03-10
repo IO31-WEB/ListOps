@@ -1,6 +1,6 @@
 import { SignUp } from '@clerk/nextjs'
 import Link from 'next/link'
-import { Zap, Check } from 'lucide-react'
+import { House, Check } from 'lucide-react'
 
 export default function SignUpPage() {
   return (
@@ -13,9 +13,9 @@ export default function SignUpPage() {
         <div className="relative">
           <Link href="/" className="flex items-center gap-2.5">
             <div className="w-9 h-9 bg-amber-500 rounded-xl flex items-center justify-center">
-              <Zap className="w-4.5 h-4.5 text-slate-900" />
+              <House className="w-4.5 h-4.5 text-slate-900" />
             </div>
-            <span className="font-display font-semibold text-white text-xl">CampaignAI</span>
+            <span className="font-display font-semibold text-white text-xl">ListOps</span>
           </Link>
         </div>
 
@@ -55,7 +55,7 @@ export default function SignUpPage() {
         </div>
 
         <div className="relative text-xs text-slate-600">
-          © {new Date().getFullYear()} CampaignAI — Built for real estate agents
+          © {new Date().getFullYear()} ListOps — Built for real estate agents
         </div>
       </div>
 
@@ -64,9 +64,9 @@ export default function SignUpPage() {
         {/* Mobile logo */}
         <Link href="/" className="flex lg:hidden items-center gap-2.5 mb-10">
           <div className="w-9 h-9 bg-slate-900 rounded-xl flex items-center justify-center">
-            <Zap className="w-4.5 h-4.5 text-amber-400" />
+            <House className="w-4.5 h-4.5 text-amber-400" />
           </div>
-          <span className="font-display font-semibold text-slate-900 text-xl">CampaignAI</span>
+          <span className="font-display font-semibold text-slate-900 text-xl">ListOps</span>
         </Link>
         <SignUp
           appearance={{
