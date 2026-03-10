@@ -5,7 +5,7 @@ import Link from 'next/link'
 import { usePathname } from 'next/navigation'
 import { UserButton } from '@clerk/nextjs'
 import {
-  Zap, LayoutDashboard, FolderOpen, Plus, Palette,
+  House, Zap, LayoutDashboard, FolderOpen, Plus, Palette,
   CreditCard, Users, BarChart2, Settings, ChevronLeft, Gift,
   ChevronRight, Menu, X, HelpCircle
 } from 'lucide-react'
@@ -63,14 +63,14 @@ export function DashboardSidebar() {
         {!collapsed && (
           <Link href="/dashboard" className="flex items-center gap-2.5">
             <div className="w-8 h-8 bg-slate-900 rounded-lg flex items-center justify-center flex-shrink-0">
-              <Zap className="w-4 h-4 text-amber-400" />
+              <House className="w-4 h-4 text-amber-400" />
             </div>
-            <span className="font-display font-semibold text-slate-900">CampaignAI</span>
+            <span className="font-display font-semibold text-slate-900">ListOps</span>
           </Link>
         )}
         {collapsed && (
           <div className="w-8 h-8 bg-slate-900 rounded-lg flex items-center justify-center">
-            <Zap className="w-4 h-4 text-amber-400" />
+            <House className="w-4 h-4 text-amber-400" />
           </div>
         )}
         <button
