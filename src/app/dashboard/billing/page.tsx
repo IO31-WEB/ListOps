@@ -34,7 +34,7 @@ const FEATURE_COMPARISON = [
   { category: 'Brand & Customization', features: [
     { name: 'Brand kit (logo, colors, photo)', free: false, starter: true, pro: true, brokerage: true },
     { name: 'Custom agent tagline & persona', free: false, starter: true, pro: true, brokerage: true },
-    { name: 'Remove CampaignAI branding', free: false, starter: true, pro: true, brokerage: true },
+    { name: 'Remove ListOps branding', free: false, starter: true, pro: true, brokerage: true },
     { name: 'White-label all outputs', free: false, starter: false, pro: false, brokerage: true },
     { name: 'Custom app name & logo', free: false, starter: false, pro: false, brokerage: true },
   ]},
@@ -395,7 +395,7 @@ export default function BillingPage() {
               <div className="text-slate-400 text-xs">Pricing per board/brokerage</div>
             </div>
             <a
-              href="mailto:enterprise@campaignai.io?subject=Enterprise%20Inquiry"
+              href="mailto:enterprise@listops.io?subject=Enterprise%20Inquiry"
               className="inline-flex items-center gap-2 bg-amber-400 text-slate-900 font-bold px-6 py-3 rounded-xl hover:bg-amber-300 transition-all text-sm"
             >
               Contact Sales
@@ -413,7 +413,7 @@ export default function BillingPage() {
         <div>
           <h4 className="font-semibold text-slate-900 text-sm mb-1">White-Label Available on Brokerage & Enterprise</h4>
           <p className="text-xs text-slate-600 leading-relaxed">
-            Remove all CampaignAI branding from every output — flyers, emails, microsites. Use your own app name, logo, and support email.
+            Remove all ListOps branding from every output — flyers, emails, microsites. Use your own app name, logo, and support email.
             Agents at your brokerage will see your brand, not ours.
             Available starting at the <strong>Brokerage plan</strong> ($299/mo).
           </p>
