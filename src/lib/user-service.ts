@@ -1,5 +1,5 @@
 /**
- * CampaignAI — User & Organization Service
+ * ListOps — User & Organization Service
  *
  * FIXES APPLIED:
  * 1. consumeCampaignQuota() — atomic check-and-increment eliminates TOCTOU race condition
