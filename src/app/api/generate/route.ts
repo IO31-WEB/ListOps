@@ -453,7 +453,7 @@ export async function POST(request: NextRequest) {
     }
 
     // Photos first so Claude sees them before reading caption instructions, then the text prompt
-    const messageContent: Anthropic.ContentBlockParam[] = [
+    const messageContent: Array<Anthropic.ImageBlockParam | Anthropic.TextBlockParam> = [
       ...photoBlocks,
       { type: 'text', text: promptText },
     ]
