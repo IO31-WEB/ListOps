@@ -38,7 +38,7 @@ export async function POST(
     if (!campaign) return NextResponse.json({ error: 'Campaign not found' }, { status: 404 })
 
     const planTier = quota.planTier
-    const appUrl = process.env.NEXT_PUBLIC_APP_URL ?? 'https://campaign-ai-psi.vercel.app'
+    const appUrl = process.env.NEXT_PUBLIC_APP_URL ?? 'https://listops.io'
     const flyerUrl = `${appUrl}/flyer/${id}?template=classic`
 
     // Return cached PDF if already generated
