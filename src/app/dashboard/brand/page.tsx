@@ -214,7 +214,7 @@ export default function BrandPage() {
           </div>
           <h2 className="font-display text-2xl font-semibold text-slate-900 mb-3">Brand Kit — Starter+ Feature</h2>
           <p className="text-slate-600 mb-2 leading-relaxed">
-            Upload your logo, headshot, brand colors, and contact info once. CampaignAI will automatically apply your brand to every flyer, email, and piece of content you generate.
+            Upload your logo, headshot, brand colors, and contact info once. ListOps will automatically apply your brand to every flyer, email, and piece of content you generate.
           </p>
           <p className="text-sm text-slate-500 mb-8">
             Your branding is the #1 thing that separates your marketing from generic content. Set it once, benefit forever.
