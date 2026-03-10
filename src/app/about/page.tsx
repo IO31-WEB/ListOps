@@ -2,7 +2,7 @@ import type { Metadata } from 'next'
 import Link from 'next/link'
 
 export const metadata: Metadata = {
-  title: 'About — CampaignAI',
+  title: 'About — ListOps',
   description: 'We help real estate agents generate professional marketing campaigns in 90 seconds.',
 }
 
@@ -27,7 +27,7 @@ export default function AboutPage() {
             Built for agents who'd rather be selling
           </h1>
           <p style={{ fontSize: 18, color: '#94a3b8', lineHeight: 1.7, margin: 0 }}>
-            CampaignAI was built out of frustration. Great agents were spending hours creating marketing content that should take minutes. We fixed that.
+            ListOps was built out of frustration. Great agents were spending hours creating marketing content that should take minutes. We fixed that.
           </p>
         </div>
       </div>
@@ -47,7 +47,7 @@ export default function AboutPage() {
         <div style={{ background: 'white', borderRadius: 20, padding: '48px', boxShadow: '0 1px 3px rgba(0,0,0,0.08)', marginBottom: 32 }}>
           <h2 style={{ fontSize: 28, fontWeight: 800, color: '#0f172a', marginBottom: 20 }}>What we built</h2>
           <p style={{ fontSize: 16, color: '#475569', lineHeight: 1.8, marginBottom: 16 }}>
-            CampaignAI connects to your MLS, reads your listing, and generates a complete 6-week marketing campaign in about 90 seconds. Six content types, all on-brand, all ready to post or print.
+            ListOps connects to your MLS, reads your listing, and generates a complete 6-week marketing campaign in about 90 seconds. Six content types, all on-brand, all ready to post or print.
           </p>
           <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(200px, 1fr))', gap: 12, marginTop: 24 }}>
             {['Facebook Posts (6 weeks)', 'Instagram Captions', 'Just Listed Email', 'Still Available Email', 'Print-Ready Flyer', 'Listing Microsite'].map(item => (
@@ -61,7 +61,7 @@ export default function AboutPage() {
         <div style={{ background: 'white', borderRadius: 20, padding: '48px', boxShadow: '0 1px 3px rgba(0,0,0,0.08)', marginBottom: 48 }}>
           <h2 style={{ fontSize: 28, fontWeight: 800, color: '#0f172a', marginBottom: 20 }}>Our commitment</h2>
           <p style={{ fontSize: 16, color: '#475569', lineHeight: 1.8, marginBottom: 16 }}>
-            We're building CampaignAI for the long term. That means no dark patterns, no surprise charges, no selling your data. Your listing data and brand information stays yours.
+            We're building ListOps for the long term. That means no dark patterns, no surprise charges, no selling your data. Your listing data and brand information stays yours.
           </p>
           <p style={{ fontSize: 16, color: '#475569', lineHeight: 1.8 }}>
             We succeed when you close more deals — that's the only metric that matters to us.
@@ -84,7 +84,7 @@ export default function AboutPage() {
             <Link key={href} href={href} style={{ color: '#94a3b8', textDecoration: 'none' }}>{label}</Link>
           ))}
         </div>
-        © {new Date().getFullYear()} CampaignAI. All rights reserved.
+        © {new Date().getFullYear()} ListOps. All rights reserved.
       </footer>
     </div>
   )
