@@ -59,7 +59,7 @@ export async function GET() {
       notifications.push({
         id: 'welcome',
         type: 'info',
-        title: 'Welcome to CampaignAI',
+        title: 'Welcome to ListOps',
         body: 'Generate your first campaign to get started.',
         createdAt: user.createdAt.getTime(),
         read: true,
