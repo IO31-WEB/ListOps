@@ -32,14 +32,14 @@ export default function ReferralPage() {
 
   const shareTwitter = () => {
     if (!data?.referralUrl) return
-    const text = encodeURIComponent(`I use CampaignAI to generate 6-week real estate campaigns in 90 seconds. Check it out:`)
+    const text = encodeURIComponent(`I use ListOps to generate 6-week real estate campaigns in 90 seconds. Check it out:`)
     window.open(`https://twitter.com/intent/tweet?text=${text}&url=${encodeURIComponent(data.referralUrl)}`, '_blank')
   }
 
   const shareEmail = () => {
     if (!data?.referralUrl) return
-    const subject = encodeURIComponent('Try CampaignAI — AI real estate marketing in 90s')
-    const body = encodeURIComponent(`Hey,\n\nI've been using CampaignAI to generate complete 6-week marketing campaigns for my listings in about 90 seconds. Facebook posts, Instagram captions, flyers, email copy — all done.\n\nSign up with my link and we both get a free month when you upgrade:\n${data.referralUrl}\n\nHope it helps!`)
+    const subject = encodeURIComponent('Try ListOps — AI real estate marketing in 90s')
+    const body = encodeURIComponent(`Hey,\n\nI've been using ListOps to generate complete 6-week marketing campaigns for my listings in about 90 seconds. Facebook posts, Instagram captions, flyers, email copy — all done.\n\nSign up with my link and we both get a free month when you upgrade:\n${data.referralUrl}\n\nHope it helps!`)
     window.open(`mailto:?subject=${subject}&body=${body}`)
   }
 
@@ -57,7 +57,7 @@ export default function ReferralPage() {
       {/* Header */}
       <div>
         <h1 className="font-display text-2xl font-semibold text-slate-900">Refer & Earn</h1>
-        <p className="text-sm text-slate-500 mt-1">Share CampaignAI with fellow agents — you both win.</p>
+        <p className="text-sm text-slate-500 mt-1">Share ListOps with fellow agents — you both win.</p>
       </div>
 
       {/* How it works */}
