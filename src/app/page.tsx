@@ -1,5 +1,5 @@
 import Link from 'next/link'
-import { ArrowRight, CheckCircle, Zap, Star, Users, TrendingUp, Shield, Clock } from 'lucide-react'
+import { House, ArrowRight, CheckCircle, Zap, Star, Users, TrendingUp, Shield, Clock } from 'lucide-react'
 import { PLANS } from '@/lib/plans'
 import { formatCurrency } from '@/lib/utils'
 
@@ -12,9 +12,9 @@ export default function HomePage() {
           <div className="flex items-center justify-between h-16">
             <Link href="/" className="flex items-center gap-2.5">
               <div className="w-8 h-8 bg-slate-900 rounded-lg flex items-center justify-center">
-                <Zap className="w-4 h-4 text-amber-400" />
+                <House className="w-4 h-4 text-amber-400" />
               </div>
-              <span className="font-display font-semibold text-slate-900 text-lg">CampaignAI</span>
+              <span className="font-display font-semibold text-slate-900 text-lg">ListOps</span>
             </Link>
 
             <div className="hidden md:flex items-center gap-8">
@@ -150,10 +150,10 @@ export default function HomePage() {
               { icon: '🖨️', tag: 'FL', title: 'Print-Ready Flyer', desc: 'Professional listing flyer with photos, specs, and your agent branding. Export as PDF instantly.', plan: 'All plans' },
               { icon: '📧', tag: 'EM', title: 'Email Newsletter Copy', desc: 'Just Listed and Still Available emails ready to paste into any email platform.', plan: 'All plans' },
               { icon: '🎯', tag: 'BK', title: 'Brand Kit', desc: 'Upload your logo, headshot, colors, and contact info once. Applied to every campaign automatically.', plan: 'Starter+' },
-              { icon: '🌐', tag: 'MS', title: 'Listing Microsite', desc: 'Auto-generated beautiful property page hosted at campaignai.io/l/[slug] — shareable instantly.', plan: 'Starter+' },
+              { icon: '🌐', tag: 'MS', title: 'Listing Microsite', desc: 'Auto-generated beautiful property page hosted at listops.io/l/[slug] — shareable instantly.', plan: 'Starter+' },
               { icon: '⏰', tag: 'SC', title: 'Social Scheduling', desc: 'Publish directly to Facebook and Instagram — no copy-pasting. Schedule weeks in advance.', plan: 'Pro+' },
               { icon: '🎬', tag: 'VS', title: 'Video & Reel Scripts', desc: 'AI-written scripts optimized for short-form video. Perfect for Reels and TikTok.', plan: 'Pro+' },
-              { icon: '🏢', tag: 'WL', title: 'White-Label', desc: 'Your brokerage brand on all outputs. Remove all CampaignAI branding from flyers and emails.', plan: 'Brokerage+' },
+              { icon: '🏢', tag: 'WL', title: 'White-Label', desc: 'Your brokerage brand on all outputs. Remove all ListOps branding from flyers and emails.', plan: 'Brokerage+' },
             ].map((feature) => (
               <div key={feature.title} className="bg-white rounded-2xl p-6 border border-slate-100 card-hover">
                 <div className="flex items-start justify-between mb-4">
@@ -235,7 +235,7 @@ export default function HomePage() {
           <div className="grid md:grid-cols-3 gap-6">
             {[
               {
-                quote: "I used to spend 3 hours creating marketing content for each listing. Now it takes me 60 seconds. CampaignAI paid for itself on the first listing.",
+                quote: "I used to spend 3 hours creating marketing content for each listing. Now it takes me 60 seconds. ListOps paid for itself on the first listing.",
                 author: "Sarah M.",
                 role: "REALTOR® • Austin, TX",
                 rating: 5,
@@ -294,7 +294,7 @@ export default function HomePage() {
                 <div className="w-7 h-7 bg-amber-500 rounded-lg flex items-center justify-center">
                   <Zap className="w-3.5 h-3.5 text-slate-900" />
                 </div>
-                <span className="font-display font-semibold text-white">CampaignAI</span>
+                <span className="font-display font-semibold text-white">ListOps</span>
               </div>
               <p className="text-sm leading-relaxed">AI-powered marketing campaigns for real estate agents. MLS-connected, Claude AI-powered.</p>
             </div>
@@ -327,7 +327,7 @@ export default function HomePage() {
             </div>
           </div>
           <div className="border-t border-slate-800 pt-8 flex flex-col sm:flex-row items-center justify-between gap-4 text-xs">
-            <p>© {new Date().getFullYear()} CampaignAI. All rights reserved.</p>
+            <p>© {new Date().getFullYear()} ListOps. All rights reserved.</p>
             <p>Powered by Claude AI + SimplyRETS MLS</p>
           </div>
         </div>
