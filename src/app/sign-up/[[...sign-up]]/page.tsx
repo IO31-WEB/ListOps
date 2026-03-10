@@ -69,6 +69,8 @@ export default function SignUpPage() {
           <span className="font-display font-semibold text-slate-900 text-xl">ListOps</span>
         </Link>
         <SignUp
+          forceRedirectUrl="/dashboard"
+          fallbackRedirectUrl="/dashboard"
           appearance={{
             elements: {
               rootBox: 'w-full max-w-md',
