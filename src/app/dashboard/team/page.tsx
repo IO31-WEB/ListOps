@@ -133,7 +133,7 @@ export default async function TeamPage() {
           </div>
           <div className="grid sm:grid-cols-3 gap-4">
             {[
-              { icon: '🎨', title: 'White-Label', desc: 'Your brand on all outputs — no CampaignAI branding shown to agents or clients.' },
+              { icon: '🎨', title: 'White-Label', desc: 'Your brand on all outputs — no ListOps branding shown to agents or clients.' },
               { icon: '📊', title: 'Admin Dashboard', desc: 'See campaign activity across all agents in your workspace.' },
               { icon: '📋', title: 'Audit Logs', desc: 'Full compliance trail of all actions for all agents.' },
             ].map(f => (
