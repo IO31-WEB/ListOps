@@ -1,17 +1,11 @@
 /**
- * Campaign Generation API
+ * ListOps — Campaign Generation API
  *
- * FIXES APPLIED:
- * 1. consumeCampaignQuota() replaces checkCampaignQuota + incrementCampaignUsage
- *    — eliminates TOCTOU race that allowed free users to bypass limits
- * 2. Quota is consumed BEFORE calling Claude — no free generations on DB failure
- * 3. Slow generation alert (>30s) sent to Sentry
- * 4. Explicit ANTHROPIC_API_KEY check at startup
- *
- * FREE:     Facebook (6) + Instagram (6) + Email (2) — no brand kit
- * STARTER:  FREE + brand kit applied + microsite
- * PRO:      STARTER + Video/Reel Scripts (6)
- * BROKERAGE/ENTERPRISE: PRO + white-label brand override
+ * OUTPUT MODULES (plan-gated):
+ * FREE:       Facebook(6) + Instagram(6) + Email(2) + ListingCopy + PrintMaterials
+ * STARTER:    FREE + brand kit + microsite + EmailDrip(full) + PhotoCaptions
+ * PRO:        STARTER + VideoScripts(6+VirtualTour) + TikTok + LinkedIn + X + Stories
+ * BROKERAGE:  PRO + white-label override
  */
 
 import { NextRequest, NextResponse } from 'next/server'
@@ -29,9 +23,8 @@ import { rateLimitGenerate } from '@/lib/ratelimit'
 import { captureError, trackGenerationCost } from '@/lib/monitoring'
 import { trackCampaignGenerated } from '@/lib/posthog'
 
-// FIX: Explicit startup check — prevents opaque cold-start crash if key is missing
 if (!process.env.ANTHROPIC_API_KEY) {
-  throw new Error('[generate] ANTHROPIC_API_KEY is not set. Check your environment variables.')
+  throw new Error('[generate] ANTHROPIC_API_KEY is not set.')
 }
 
 const anthropic = new Anthropic({ apiKey: process.env.ANTHROPIC_API_KEY })
@@ -70,33 +63,44 @@ function getDemoListing(mlsId: string) {
 async function fetchMLSListing(mlsId: string) {
   const apiKey = process.env.SIMPLYRETS_API_KEY
   const apiSecret = process.env.SIMPLYRETS_API_SECRET
-
   const credentials = apiKey && apiSecret
     ? Buffer.from(`${apiKey}:${apiSecret}`).toString('base64')
     : Buffer.from('simplyrets:simplyrets').toString('base64')
-
   try {
     const res = await fetch(`https://api.simplyrets.com/properties/${mlsId}`, {
       headers: { Authorization: `Basic ${credentials}`, Accept: 'application/json' },
       signal: AbortSignal.timeout(8000),
     })
-    if (!res.ok) {
-      console.log(`MLS lookup failed (${res.status}) for ${mlsId} — using demo data`)
-      return { data: getDemoListing(mlsId), isDemo: true }
-    }
+    if (!res.ok) return { data: getDemoListing(mlsId), isDemo: true }
     return { data: await res.json(), isDemo: false }
   } catch {
-    console.log(`MLS connection failed for ${mlsId} — using demo data`)
     return { data: getDemoListing(mlsId), isDemo: true }
   }
 }
 
-// ── Build prompt — scoped to what the plan unlocks ─────────────
-function buildCampaignPrompt(listing: any, planTier: PlanTier, brandKit?: any, userAiPersona?: any) {
+// ── Fetch a photo URL and convert to base64 for vision API ────
+async function fetchPhotoAsBase64(url: string): Promise<{ data: string; mediaType: 'image/jpeg' | 'image/png' | 'image/webp' | 'image/gif' } | null> {
+  try {
+    const res = await fetch(url, { signal: AbortSignal.timeout(6000) })
+    if (!res.ok) return null
+    const contentType = res.headers.get('content-type') ?? 'image/jpeg'
+    const mediaType = (['image/jpeg','image/png','image/webp','image/gif'].includes(contentType)
+      ? contentType
+      : 'image/jpeg') as 'image/jpeg' | 'image/png' | 'image/webp' | 'image/gif'
+    const buffer = await res.arrayBuffer()
+    const data = Buffer.from(buffer).toString('base64')
+    return { data, mediaType }
+  } catch {
+    return null
+  }
+}
+
+// ── Master prompt builder ──────────────────────────────────────
+// Returns the text prompt string. Photos are attached as vision blocks at the call site.
+function buildCampaignPrompt(listing: any, planTier: PlanTier, brandKit?: any, userAiPersona?: any): string {
   const address = [
     listing.address?.deliveryLine || listing.address?.line1,
-    listing.address?.city,
-    listing.address?.state,
+    listing.address?.city, listing.address?.state,
   ].filter(Boolean).join(', ')
 
   const price = listing.listPrice ? `$${listing.listPrice.toLocaleString()}` : 'Price upon request'
@@ -108,6 +112,8 @@ function buildCampaignPrompt(listing: any, planTier: PlanTier, brandKit?: any, u
   const description = listing.remarks ?? ''
   const features = Array.isArray(listing.property?.features) ? listing.property.features.join(', ') : ''
   const city = listing.address?.city ?? ''
+  const state = listing.address?.state ?? ''
+  const photoCount = (listing.photos ?? []).length
 
   const hasBrandKit = canAccessFeature(planTier, 'brand_kit') && !!brandKit
   const agentName = hasBrandKit
@@ -123,12 +129,12 @@ function buildCampaignPrompt(listing: any, planTier: PlanTier, brandKit?: any, u
   const isWhiteLabel = canAccessFeature(planTier, 'white_label') && brandKit?.brokerageName
   const isPaidPlan = planTier !== 'free'
   const brandingLine = isWhiteLabel
-    ? `Brokerage: ${brandKit.brokerageName} — remove all CampaignAI mentions`
+    ? `Brokerage: ${brandKit.brokerageName} — remove all ListOps mentions`
     : isPaidPlan
-    ? `Agent: ${agentName} — do not mention CampaignAI in any outputs`
-    : 'Presented by CampaignAI'
+    ? `Agent: ${agentName} — do not mention ListOps in any outputs`
+    : 'Presented by ListOps'
 
-  const listingUrl = `https://campaignai.io/l/listing-${listing.mlsId || listing.listingId}`
+  const listingUrl = `${process.env.NEXT_PUBLIC_APP_URL || 'https://listops.io'}/l/listing-${listing.mlsId || listing.listingId}`
 
   const toneGuides: Record<string, string> = {
     professional: 'authoritative, data-driven, and polished.',
@@ -138,79 +144,208 @@ function buildCampaignPrompt(listing: any, planTier: PlanTier, brandKit?: any, u
   }
   const toneGuide = toneGuides[tone] ?? toneGuides['professional']
 
-  const includeReelScripts = canAccessFeature(planTier, 'video_script')
+  const agentSigParts = [agentName, agentTitle, brokerageName, agentPhone, agentEmail].filter(Boolean)
+  const agentSignature = agentSigParts.join(' | ')
 
-  // Agent signature block required at the bottom of every Facebook/Instagram post
-  const agentSignatureParts = [agentName, agentTitle, brokerageName, agentPhone, agentEmail].filter(Boolean)
-  const agentSignature = agentSignatureParts.join(' | ')
+  const hasVideo = canAccessFeature(planTier, 'video_script')
+  const hasExpanded = ['pro', 'brokerage', 'enterprise'].includes(planTier)
+  const hasEmailDrip = canAccessFeature(planTier, 'brand_kit') // Starter+
+  const hasMicrosite = canAccessFeature(planTier, 'listing_microsite')
 
-  const jsonSchema = `{
+  // Number of photos being sent as vision attachments (set by buildMessageContent)
+  const attachedPhotoCount = Math.min((listing.photos ?? []).length, 10)
+  const hasPhotos = attachedPhotoCount > 0
+
+  // Photo captions instructions — when photos are attached Claude describes what it actually sees
+  const photoCaptionsSchema = hasPhotos
+    ? Array.from({ length: attachedPhotoCount }, (_, i) => (
+        `{"photoIndex": ${i}, "room": "Identify this room/space from the image (e.g. Kitchen, Primary Bedroom, Backyard)", "altText": "SEO alt text under 125 chars — describe exactly what's visible in this photo", "instagramCaption": "40-60 word Instagram caption written about what you actually see in this specific image. Scene-setting, sensory details. End with a hook to DM for a showing.", "overlayText": "3-5 word overlay text for Stories/Reels graphic — punchy visual label for this image", "stagingNote": "One concrete staging or photography improvement tip based on what you see in this image"}`
+      )).join(',\n    ')
+    : `{"photoIndex": 0, "room": "Exterior/Front", "altText": "SEO alt text", "instagramCaption": "40-60 word caption", "overlayText": "3-5 word overlay", "stagingNote": "Staging tip"}`
+
+  return `You are a senior real estate marketing strategist and copywriter with computer vision capabilities. Generate a complete, modular marketing package for the listing below. I am attaching the actual MLS photos — use them to write photo-specific captions based on what you literally see. Every output is published directly to clients — polish, legal compliance, and zero AI clichés are non-negotiable.
+${hasPhotos ? `\nPHOTOS: ${attachedPhotoCount} MLS listing photos are attached to this message. For the photoCaptions array, look at each image carefully and write captions based on what you actually see — specific finishes, colors, features, light, space. Do not guess room types; identify them from the images.\n` : ''}
+LISTING DATA:
+- Address: ${address}
+- Price: ${price}
+- Beds: ${beds} | Baths: ${baths} | Sqft: ${sqft.toLocaleString()} | Year Built: ${yearBuilt} | Type: ${propertyType}
+- Description: ${description}
+- Features: ${features}
+- City/State: ${city}, ${state}
+- Listing URL: ${listingUrl}
+- Photos: ${photoCount > 0 ? photoCount + ' photos attached as images in this message — analyze each one' : 'None available'}
+
+AGENT: ${agentName}${agentPhone ? ` | ${agentPhone}` : ''}${agentEmail ? ` | ${agentEmail}` : ''}${brokerageName ? ` | ${brokerageName}` : ''}${tagline ? ` | "${tagline}"` : ''}
+TONE: ${toneGuide}
+BRANDING: ${brandingLine}
+
+WEEK THEMES (use for all 6-week calendars):
+1: Just Listed — excitement, first impressions
+2: Property Features — showcase best rooms and details  
+3: Neighborhood & Lifestyle — area, schools, walkability, community
+4: Open House — invitation, social proof, FOMO
+5: Investment Value — ROI, market position, appreciation
+6: Final Call — urgency, last chance, still available
+
+WRITING STANDARDS (non-negotiable):
+- Write like a trusted local expert, never a hype machine
+- No exclamation points unless truly warranted. Vary sentence length.
+- Specific sensory details (gleaming, sun-drenched, airy) — never vague (nice, great, amazing)
+- Every Facebook/Instagram post ends with agent signature on its own line: ${agentSignature}
+- No ALL CAPS except agent signature. No emoji overuse.
+- Real estate compliance: never mention race, religion, national origin, sex, disability, familial status
+- Never use "This won't last" or "Dream home" — they signal AI
+- Each week must feel genuinely different in angle, tone, and target reader
+
+Return ONLY valid JSON with exactly this structure (no markdown, no code fences):
+
+{
+  "listingCopy": {
+    "headline": "The single strongest headline for this property (12 words max)",
+    "headlineVariations": [
+      "Variation 1 — luxury angle",
+      "Variation 2 — lifestyle/neighborhood angle",
+      "Variation 3 — investment/value angle",
+      "Variation 4 — family/space angle",
+      "Variation 5 — first-time buyer angle",
+      "Variation 6 — urgency angle",
+      "Variation 7 — feature-forward angle",
+      "Variation 8 — emotional/aspirational angle",
+      "Variation 9 — local expert angle",
+      "Variation 10 — concise punchy angle"
+    ],
+    "fullDescription": "800-1200 word professional MLS listing description. Open with a scene-setting hook. Build through features naturally. Include neighborhood context. Close with a CTA. Write like the best listing description in the market.",
+    "bulletPoints": [
+      "Strongest buyer appeal point — lead with the outcome, not the feature",
+      "Second strongest — e.g. 'Chef's kitchen with quartz island — entertain without leaving home'",
+      "Third",
+      "Fourth",
+      "Fifth",
+      "Sixth",
+      "Seventh",
+      "Eighth"
+    ],
+    "neighborhoodStory": "150-200 word lifestyle paragraph about the neighborhood, walkability, schools, dining, commute. Make the reader feel what it's like to live here.",
+    "seoMetaTitle": "SEO meta title under 60 characters",
+    "seoMetaDescription": "SEO meta description 150-160 characters with primary keyword and CTA",
+    "spanishDescription": "200-300 word Spanish translation of the core description for Spanish-speaking buyer outreach",
+    "toneVariants": {
+      "luxury": "50-word luxury reframe of the headline and opening",
+      "firstTimeBuyer": "50-word first-time buyer reframe — approachable, reassuring, milestone-focused",
+      "investor": "50-word investor reframe — ROI, rental potential, market appreciation"
+    }
+  },
   "facebook": [
-    {"week": 1, "theme": "Just Listed", "copy": "2-3 focused paragraphs (130-180 words). Open with a vivid scene-setting hook — make the reader feel the home. Naturally weave in 2-3 standout features. Close with a direct CTA and ${listingUrl}. Final line break then agent signature exactly: ${agentSignature}", "hashtags": ["realtor","justlisted","${city.toLowerCase().replace(/\s/g, '')}realestate","${city.toLowerCase().replace(/\s/g, '')}homes","newhome"]}
+    {"week": 1, "theme": "Just Listed", "copy": "2-3 focused paragraphs (130-180 words). Scene-setting hook. 2-3 standout features. CTA + ${listingUrl}. Final line: ${agentSignature}", "hashtags": ["realtor","justlisted","${city.toLowerCase().replace(/\s/g, '')}realestate","${city.toLowerCase().replace(/\s/g, '')}homes","newhome"]}
   ],
   "instagram": [
-    {"week": 1, "caption": "80-120 words. Bold 1-line hook (no emoji opener). 2-3 sentences on the lifestyle. CTA + ${listingUrl}. Final line then agent signature: ${agentSignature}", "hashtags": ["justlisted","realestate","homeforsale","${city.toLowerCase().replace(/\s/g, '')}homes","realtor","listingagent"]}
+    {"week": 1, "caption": "80-120 words. Bold 1-line hook. 2-3 lifestyle sentences. CTA + ${listingUrl}. Final line: ${agentSignature}", "hashtags": ["justlisted","realestate","homeforsale","${city.toLowerCase().replace(/\s/g, '')}homes","realtor","listingagent"]}
   ],
   "emailJustListed": "200-300 word just listed email body with full property details and CTA",
-  "emailStillAvailable": "150-200 word still available follow-up with urgency"${includeReelScripts ? `,
+  "emailStillAvailable": "150-200 word still available follow-up with urgency",
+  ${hasEmailDrip ? `
+  "emailDrip": {
+    "sellerUpdate": "150-200 word seller update email — showing activity report, market context, next steps",
+    "buyerDripDay1": "150 word Day 1 buyer lead nurture — welcome, what to expect, listing highlights",
+    "buyerDripDay7": "150 word Day 7 buyer drip — neighborhood spotlight, schools, lifestyle",
+    "buyerDripDay14": "150 word Day 14 buyer drip — feature deep-dive, open house invite",
+    "buyerDripDay30": "150 word Day 30 buyer drip — urgency, final push, direct CTA",
+    "openHouseInvite": "150-200 word open house invitation email — date/time TBD placeholder, excitement, social proof",
+    "postShowingFeedback": "100-word post-showing feedback request — warm, professional, not pushy",
+    "marketReport": "200-word neighborhood market report email — recent comps context, positioning this listing"
+  },` : ''}
+  "printMaterials": {
+    "yardSignRider": "Two punchy lines max. Fits on a 6\" yard sign rider. E.g. '4BD · 3BA · $649K | Call Alex: 512-555-0100'",
+    "postcardHeadline": "Postcard front headline — bold, 8 words max",
+    "postcardBody": "Postcard back body copy — 60-80 words. Address, price, key features, agent contact.",
+    "openHouseSignIn": "Open house info packet intro paragraph — welcoming, sets expectations, captures lead intent",
+    "brochureCopy": "150-200 word brochure body copy — full property story in print format",
+    "magazineAd": "60-80 word magazine ad copy — premium tone, strong visual reference, bold CTA"
+  },
+  "photoCaptions": [
+    // Generate one entry per attached photo. For each: identify the room from what you see.
+    {"photoIndex": 0, "room": "identify from image", "altText": "SEO alt text under 125 chars — describe what you actually see", "instagramCaption": "40-60 word caption based on what you see — sensory details, lifestyle angle, end with hook to DM", "overlayText": "3-5 word Stories overlay text", "stagingNote": "One practical staging improvement tip based on what you see"}
+    // ...repeat for each photo attached, in order
+  ],
+  ${hasMicrosite ? `
+  "micrositeCopy": {
+    "heroHeadline": "Large hero headline for the listing microsite — punchy, 8 words max",
+    "heroSubheadline": "Hero subheadline — 15-20 words, expands on headline",
+    "aboutHeading": "Section heading for property description",
+    "aboutBody": "300-400 word property description optimized for the microsite — slightly more editorial than MLS copy",
+    "neighborhoodHeading": "Neighborhood section heading",
+    "neighborhoodBody": "150-200 word neighborhood story for the microsite",
+    "ctaHeading": "Schedule a showing CTA heading",
+    "ctaSubtext": "CTA subtext — 15 words, creates urgency without cliché",
+    "photoCaptionTemplate": "Template caption for photo gallery — uses [ROOM] placeholder"
+  },` : ''}
+  ${hasVideo ? `
   "reelScripts": [
     {
       "week": 1,
       "title": "Just Listed Hook",
       "duration": "30–45 sec",
       "hook": "Opening line spoken to camera — grabs attention in 3 seconds",
-      "script": "Full word-for-word spoken script with scene directions in [brackets]. Natural, energetic, conversational. Include address, price, top features. End with a clear CTA.",
+      "script": "Full word-for-word spoken script with [scene directions in brackets]. Natural, energetic, conversational. End with clear CTA.",
       "captions": ["on-screen text line 1", "on-screen text line 2", "on-screen text line 3"],
       "music": "Suggested music vibe"
     }
-  ]` : ''}
-}`
+  ],
+  "virtualTourScripts": [
+    {
+      "type": "Matterport Walkthrough",
+      "duration": "90 sec",
+      "script": "Full narration script for a Matterport/3D virtual tour. Room-by-room with transitions. Written to be read by the agent on camera or as voice-over."
+    },
+    {
+      "type": "30-Second Highlight Reel",
+      "duration": "30 sec",
+      "script": "Fast-paced highlight script. Hook → 3 best features → price → CTA. Every word earns its place."
+    },
+    {
+      "type": "Drone Footage Voice-Over",
+      "duration": "45 sec",
+      "script": "Aerial/drone footage narration. Opens with neighborhood context, zooms to property, highlights exterior and lot. Cinematic tone."
+    },
+    {
+      "type": "What Buyers Will Love",
+      "duration": "60 sec",
+      "script": "Timed walkthrough script: 0-15s kitchen, 15-30s primary suite, 30-45s outdoor space, 45-60s neighborhood/CTA. Each beat clearly marked."
+    }
+  ],` : ''}
+  ${hasExpanded ? `
+  "tiktok": [
+    {"week": 1, "hook": "First 3 seconds — scroll-stopping spoken line", "script": "15-30 sec TikTok script. Hook → reveal → 2 features → price drop + CTA. Conversational. Trending audio suggestion included.", "trendingAudio": "Suggested trending audio style or sound", "onScreenText": ["text overlay 1", "text overlay 2", "text overlay 3"]}
+  ],
+  "linkedin": [
+    {"week": 1, "post": "150-200 word LinkedIn update. Professional tone. Leads with market insight, not just listing details. Tags relevant professionals. Ends with CTA.", "hashtags": ["realestate","${city.toLowerCase().replace(/\s/g, '')}","justlisted","realtor"]}
+  ],
+  "xThreads": [
+    {"week": 1, "tweets": ["Tweet 1 (280 chars max) — hook/announcement", "Tweet 2 — strongest feature", "Tweet 3 — neighborhood angle", "Tweet 4 — price/value", "Tweet 5 — CTA + listing URL"]}
+  ],
+  "stories": [
+    {"week": 1, "platform": "Instagram/Facebook Stories", "slides": [
+      {"slideNumber": 1, "text": "Slide 1 text — hook/announcement", "cta": "Swipe up / Tap for details"},
+      {"slideNumber": 2, "text": "Slide 2 — key stat or feature", "cta": null},
+      {"slideNumber": 3, "text": "Slide 3 — neighborhood", "cta": null},
+      {"slideNumber": 4, "text": "Slide 4 — price reveal", "cta": "DM me for a showing"},
+      {"slideNumber": 5, "text": "Slide 5 — agent contact", "cta": "Tap to call"}
+    ]}
+  ],
+  "hashtagPacks": {
+    "justListed": ["justlisted","newhome","forsale","realestate","${city.toLowerCase().replace(/\s/g, '')}realestate","homeforsale","realtor","listingagent","${state.toLowerCase()}realestate","${propertyType.toLowerCase().replace(/\s/g, '')}"],
+    "luxury": ["luxuryhomes","luxuryrealestate","dreamhome","luxurylisting","highend","${city.toLowerCase().replace(/\s/g, '')}luxury","premiumrealestate","exquisivehomes","estatehomes","topagent"],
+    "openHouse": ["openhouse","openhousetoday","openhouseweekend","comeseeithisweekend","househunting","homestaging","buyandhome","${city.toLowerCase().replace(/\s/g, '')}openhouse","tourtoday","realestatetour"],
+    "postingSchedule": "Week 1: Monday Just Listed (FB+IG) | Tuesday TikTok | Wednesday Stories | Thursday LinkedIn | Friday X thread | Week 2-6: same cadence, rotate weekly theme"
+  }` : ''}
+}
 
-  return `You are a senior real estate marketing strategist and copywriter. Your copy is published directly to MLS clients — it must be polished, persuasive, legally compliant, and indistinguishable from expert human writing.
-
-LISTING:
-- Address: ${address}
-- Price: ${price}
-- Beds: ${beds} | Baths: ${baths} | Sqft: ${sqft.toLocaleString()}
-- Year Built: ${yearBuilt} | Type: ${propertyType}
-- Description: ${description}
-- Features: ${features}
-- City: ${city}
-- URL: ${listingUrl}
-
-AGENT: ${agentName}${agentPhone ? ` | ${agentPhone}` : ''}${agentEmail ? ` | ${agentEmail}` : ''}${brokerageName ? ` | ${brokerageName}` : ''}${tagline ? ` | "${tagline}"` : ''}
-TONE: ${toneGuide}
-BRANDING: ${brandingLine}
-
-WEEK THEMES:
-1: Just Listed — excitement, first impressions
-2: Property Features — showcase the best rooms and details
-3: Neighborhood & Lifestyle — area, schools, walkability, community
-4: Open House — invitation, social proof, FOMO
-5: Investment Value — ROI, market position, appreciation potential
-6: Final Call — urgency, last chance, still available
-
-WRITING STANDARDS — follow these exactly:
-- Write like a trusted local expert, not a hype machine. No exclamation points unless truly warranted.
-- Vary sentence length. Mix short punchy sentences with longer, flowing ones.
-- Use specific sensory details (gleaming, sun-drenched, airy) — never vague adjectives (nice, great, amazing).
-- Every post must end with the agent signature on its own line: ${agentSignature}
-- No ALL CAPS except the agent signature block. No overuse of emojis.
-- Facebook posts: conversational, story-first, 130-180 words of body copy + agent signature
-- Instagram captions: tighter, lifestyle-led, 80-120 words of body copy + agent signature
-- Each week's post must feel genuinely different — different angle, different reader, different emotional hook
-- Real estate advertising compliance: no mention of race, religion, national origin, sex, disability, or familial status
-- Never use the phrase "This won't last" or "Dream home" — they're clichéd and signal AI
-
-Return ONLY valid JSON (no markdown, no code fences):
-
-${jsonSchema}
-
-Rules:
-- Generate all 6 weeks for facebook and instagram — each week must be distinct in angle and tone
-${includeReelScripts ? '- Generate all 6 weeks for reelScripts — each unique to its weekly theme\n- Reel scripts must sound like the agent speaking naturally to camera, not an ad voiceover' : ''}
+RULES:
+- Generate ALL 6 weeks for facebook and instagram — each must be genuinely distinct
+${hasVideo ? '- Generate ALL 6 weeks for reelScripts — each unique to its weekly theme\n- Reel scripts must sound like the agent speaking naturally to camera' : ''}
+${hasExpanded ? '- Generate ALL 6 weeks for tiktok, linkedin, xThreads, stories' : ''}
 - Agent signature must appear at the bottom of every facebook and instagram post
-- Return ONLY the JSON object`
+- Return ONLY the JSON object — no explanation, no markdown`
 }
 
 // ── POST handler ───────────────────────────────────────────────
@@ -222,28 +357,15 @@ export async function POST(request: NextRequest) {
     const body = await request.json()
     const { mlsId } = RequestSchema.parse(body)
 
-    // Rate limit: 5 generations per 10 min per user
     const rl = await rateLimitGenerate(userId)
     if (!rl.success) {
       const resetIn = Math.ceil((rl.reset - Date.now()) / 1000 / 60)
       return NextResponse.json(
-        { error: `Too many requests. You can generate again in ${resetIn} minute${resetIn === 1 ? '' : 's'}.` },
-        {
-          status: 429,
-          headers: {
-            'X-RateLimit-Limit': String(rl.limit),
-            'X-RateLimit-Remaining': '0',
-            'X-RateLimit-Reset': String(rl.reset),
-            'Retry-After': String(Math.ceil((rl.reset - Date.now()) / 1000)),
-          },
-        }
+        { error: `Too many requests. Try again in ${resetIn} minute${resetIn === 1 ? '' : 's'}.` },
+        { status: 429, headers: { 'X-RateLimit-Limit': String(rl.limit), 'X-RateLimit-Remaining': '0', 'X-RateLimit-Reset': String(rl.reset) } }
       )
     }
 
-    // FIX: consumeCampaignQuota atomically checks AND increments in one DB operation.
-    // This replaces the old checkCampaignQuota + incrementCampaignUsage pattern
-    // which had a TOCTOU race allowing concurrent requests to bypass the limit.
-    // Quota is consumed BEFORE calling Claude so a DB failure can't yield a free generation.
     const quota = await consumeCampaignQuota(userId)
     if (!quota.allowed) {
       return NextResponse.json(
@@ -257,87 +379,93 @@ export async function POST(request: NextRequest) {
     if (!user) return NextResponse.json({ error: 'User not found' }, { status: 404 })
 
     const brandKit = canAccessFeature(planTier, 'brand_kit') ? user.brandKit : null
-
     const startMs = Date.now()
     const { data: mlsData, isDemo } = await fetchMLSListing(mlsId)
 
     const address = [
       mlsData.address?.deliveryLine || mlsData.address?.line1,
-      mlsData.address?.city,
-      mlsData.address?.state,
+      mlsData.address?.city, mlsData.address?.state,
     ].filter(Boolean).join(', ')
 
-    // Cache listing in DB
-    let listingRecord
+    // Cache listing
+    let listingRecord: any
     try {
-      const existingListing = await db.query.listings.findFirst({
+      const existing = await db.query.listings.findFirst({
         where: and(eq(listings.mlsId, mlsId), eq(listings.agentId, user.id)),
       })
-      if (existingListing) {
-        listingRecord = existingListing
+      if (existing) {
+        listingRecord = existing
       } else {
         const [newListing] = await db.insert(listings).values({
-          mlsId,
-          agentId: user.id,
-          orgId: user.orgId ?? undefined,
+          mlsId, agentId: user.id, orgId: user.orgId ?? undefined,
           address: mlsData.address?.deliveryLine || mlsData.address?.line1,
-          city: mlsData.address?.city,
-          state: mlsData.address?.state,
-          zip: mlsData.address?.postalCode,
-          price: mlsData.listPrice?.toString(),
-          bedrooms: mlsData.property?.bedrooms,
-          bathrooms: mlsData.property?.bathsFull?.toString(),
-          sqft: mlsData.property?.area,
-          yearBuilt: mlsData.property?.yearBuilt,
-          propertyType: mlsData.property?.type,
-          description: mlsData.remarks,
-          features: mlsData.property?.features ?? [],
-          photos: mlsData.photos ?? [],
-          rawData: mlsData,
-          listingAgentName: `${mlsData.agent?.firstName ?? ''} ${mlsData.agent?.lastName ?? ''}`.trim(),
+          city: mlsData.address?.city, state: mlsData.address?.state,
+          zip: mlsData.address?.postalCode, price: mlsData.listPrice?.toString(),
+          bedrooms: mlsData.property?.bedrooms, bathrooms: mlsData.property?.bathsFull?.toString(),
+          sqft: mlsData.property?.area, yearBuilt: mlsData.property?.yearBuilt,
+          propertyType: mlsData.property?.type, description: mlsData.remarks,
+          features: mlsData.property?.features ?? [], photos: mlsData.photos ?? [],
+          rawData: mlsData, listingAgentName: `${mlsData.agent?.firstName ?? ''} ${mlsData.agent?.lastName ?? ''}`.trim(),
           expiresAt: new Date(Date.now() + 24 * 60 * 60 * 1000),
         }).returning()
         listingRecord = newListing
       }
-    } catch (dbErr) {
-      console.error('DB listing error (non-fatal):', dbErr)
-    }
+    } catch (dbErr) { console.error('DB listing error:', dbErr) }
 
     // Create campaign record
     const micrositeSlug = `${slugify(address)}-${Date.now()}`
     let campaignRecord: any
     try {
       const [rec] = await db.insert(campaigns).values({
-        listingId: listingRecord?.id ?? undefined,
-        agentId: user.id,
-        orgId: user.orgId ?? undefined,
-        brandKitId: brandKit?.id ?? undefined,
-        status: 'generating',
-        micrositeSlug,
+        listingId: listingRecord?.id, agentId: user.id,
+        orgId: user.orgId ?? undefined, brandKitId: brandKit?.id ?? undefined,
+        status: 'generating', micrositeSlug,
       }).returning()
       campaignRecord = rec
-    } catch (dbErr) {
-      console.error('DB campaign error (non-fatal):', dbErr)
+    } catch (dbErr) { console.error('DB campaign error:', dbErr) }
+
+    // Build multipart message — text prompt + MLS photos as base64 vision blocks
+    const promptText = buildCampaignPrompt(mlsData, planTier, brandKit, (user as any).aiPersona)
+    const rawPhotos: string[] = mlsData.photos ?? []
+    const photoUrls = rawPhotos.slice(0, 10)
+
+    // Fetch photos in parallel (best-effort — failures are silently dropped)
+    const photoBlocks: Anthropic.ImageBlockParam[] = []
+    if (photoUrls.length > 0) {
+      const fetched = await Promise.all(photoUrls.map(fetchPhotoAsBase64))
+      for (let i = 0; i < fetched.length; i++) {
+        const photo = fetched[i]
+        if (photo) {
+          photoBlocks.push({
+            type: 'image',
+            source: { type: 'base64', media_type: photo.mediaType, data: photo.data },
+          })
+        }
+      }
     }
 
-    // Generate with Claude
-    const prompt = buildCampaignPrompt(mlsData, planTier, brandKit, (user as any).aiPersona)
+    // Photos first so Claude sees them before reading caption instructions, then the text prompt
+    const messageContent: Anthropic.ContentBlockParam[] = [
+      ...photoBlocks,
+      { type: 'text', text: promptText },
+    ]
+
     const message = await anthropic.messages.create({
       model: 'claude-sonnet-4-20250514',
-      max_tokens: 8000,
-      messages: [{ role: 'user', content: prompt }],
+      max_tokens: 16000,
+      messages: [{ role: 'user', content: messageContent }],
     })
 
     const responseText = message.content[0].type === 'text' ? message.content[0].text : ''
 
-    let campaignContent: any
+    let content: any
     try {
       const cleaned = responseText.replace(/```json\n?/g, '').replace(/```\n?/g, '').trim()
-      campaignContent = JSON.parse(cleaned)
+      content = JSON.parse(cleaned)
     } catch {
       const jsonMatch = responseText.match(/\{[\s\S]*\}/)
       if (jsonMatch) {
-        try { campaignContent = JSON.parse(jsonMatch[0]) }
+        try { content = JSON.parse(jsonMatch[0]) }
         catch { throw new Error('AI response could not be parsed. Please try again.') }
       } else {
         throw new Error('AI response could not be parsed. Please try again.')
@@ -345,94 +473,86 @@ export async function POST(request: NextRequest) {
     }
 
     const generationMs = Date.now() - startMs
-
-    // FIX: Alert on slow generations (>30s indicates a cost/performance problem)
-    if (generationMs > 30_000) {
+    if (generationMs > 60_000) {
       captureError(new Error(`Slow generation: ${generationMs}ms`), { generationMs, userId, planTier, mlsId })
     }
 
-    // Save campaign content
+    // Save to DB
     if (campaignRecord) {
       try {
-        await db.update(campaigns)
-          .set({
-            status: 'complete',
-            generationMs,
-            facebookPosts: campaignContent.facebook,
-            instagramPosts: campaignContent.instagram,
-            emailJustListed: campaignContent.emailJustListed,
-            emailStillAvailable: campaignContent.emailStillAvailable,
-            videoScript: canAccessFeature(planTier, 'video_script') && campaignContent.reelScripts
-              ? JSON.stringify(campaignContent.reelScripts)
-              : null,
-            promptTokens: message.usage.input_tokens,
-            completionTokens: message.usage.output_tokens,
-            updatedAt: new Date(),
-          })
-          .where(eq(campaigns.id, campaignRecord.id))
-      } catch (dbErr) {
-        console.error('DB update error (non-fatal):', dbErr)
-      }
+        await db.update(campaigns).set({
+          status: 'complete', generationMs,
+          facebookPosts: content.facebook,
+          instagramPosts: content.instagram,
+          emailJustListed: content.emailJustListed,
+          emailStillAvailable: content.emailStillAvailable,
+          videoScript: canAccessFeature(planTier, 'video_script') && content.reelScripts
+            ? JSON.stringify({ reelScripts: content.reelScripts, virtualTourScripts: content.virtualTourScripts ?? [] })
+            : null,
+          // Store all new modules in the analytics jsonb field as an extension
+          analytics: {
+            listingCopy: content.listingCopy,
+            emailDrip: content.emailDrip ?? null,
+            printMaterials: content.printMaterials,
+            photoCaptions: content.photoCaptions,
+            micrositeCopy: content.micrositeCopy ?? null,
+            tiktok: content.tiktok ?? null,
+            linkedin: content.linkedin ?? null,
+            xThreads: content.xThreads ?? null,
+                stories: content.stories ?? null,
+            hashtagPacks: content.hashtagPacks ?? null,
+          } as any,
+          promptTokens: message.usage.input_tokens,
+          completionTokens: message.usage.output_tokens,
+          updatedAt: new Date(),
+        }).where(eq(campaigns.id, campaignRecord.id))
+      } catch (dbErr) { console.error('DB update error:', dbErr) }
     }
 
-    // Track cost + performance
-    trackGenerationCost({
-      userId,
-      planTier,
-      mlsId,
-      durationMs: generationMs,
-      estimatedInputTokens: message.usage.input_tokens,
-      estimatedOutputTokens: message.usage.output_tokens,
-    })
+    trackGenerationCost({ userId, planTier, mlsId, durationMs: generationMs, estimatedInputTokens: message.usage.input_tokens, estimatedOutputTokens: message.usage.output_tokens })
 
-    const contentTypes = ['facebook', 'instagram', 'email_just_listed', 'email_still_available', 'flyer']
-    if (campaignContent.reelScripts) contentTypes.push('video_script')
-    trackCampaignGenerated({
-      userId,
-      planTier,
-      mlsId,
-      durationMs: generationMs,
-      isDemo: !!isDemo,
-      contentTypes,
-    })
+    const contentTypes = ['facebook', 'instagram', 'email_just_listed', 'email_still_available', 'listing_copy', 'print_materials', 'photo_captions', 'flyer']
+    if (content.reelScripts) contentTypes.push('video_script', 'virtual_tour')
+    if (content.tiktok) contentTypes.push('tiktok', 'linkedin', 'x_threads', 'stories')
+    trackCampaignGenerated({ userId, planTier, mlsId, durationMs: generationMs, isDemo: !!isDemo, contentTypes })
 
     return NextResponse.json({
       campaignId: campaignRecord?.id,
-      isDemo,
-      planTier,
+      isDemo, planTier,
       brandKit: brandKit ? {
         logoUrl: brandKit.logoUrl ?? '',
         brokerageLogo: (brandKit as any).brokerageLogo ?? '',
         agentPhotoUrl: brandKit.agentPhotoUrl ?? '',
       } : null,
       listing: {
-        address,
-        price: mlsData.listPrice ? `$${mlsData.listPrice.toLocaleString()}` : 'Price on request',
-        beds: mlsData.property?.bedrooms ?? 0,
-        baths: mlsData.property?.bathsFull ?? 0,
-        sqft: mlsData.property?.area ?? 0,
-        photos: mlsData.photos ?? [],
-        description: mlsData.remarks ?? '',
+        address, price: mlsData.listPrice ? `$${mlsData.listPrice.toLocaleString()}` : 'Price on request',
+        beds: mlsData.property?.bedrooms ?? 0, baths: mlsData.property?.bathsFull ?? 0,
+        sqft: mlsData.property?.area ?? 0, photos: mlsData.photos ?? [], description: mlsData.remarks ?? '',
       },
-      facebook: campaignContent.facebook,
-      instagram: campaignContent.instagram,
-      emailJustListed: campaignContent.emailJustListed,
-      emailStillAvailable: campaignContent.emailStillAvailable,
-      reelScripts: canAccessFeature(planTier, 'video_script')
-        ? (campaignContent.reelScripts ?? [])
-        : null,
+      // Core outputs
+      listingCopy: content.listingCopy,
+      facebook: content.facebook,
+      instagram: content.instagram,
+      emailJustListed: content.emailJustListed,
+      emailStillAvailable: content.emailStillAvailable,
+      emailDrip: content.emailDrip ?? null,
+      printMaterials: content.printMaterials,
+      photoCaptions: content.photoCaptions,
+      micrositeCopy: content.micrositeCopy ?? null,
+      reelScripts: canAccessFeature(planTier, 'video_script') ? (content.reelScripts ?? []) : null,
+      virtualTourScripts: canAccessFeature(planTier, 'video_script') ? (content.virtualTourScripts ?? []) : null,
+      tiktok: canAccessFeature(planTier, 'video_script') ? (content.tiktok ?? null) : null,
+      linkedin: canAccessFeature(planTier, 'video_script') ? (content.linkedin ?? null) : null,
+      xThreads: canAccessFeature(planTier, 'video_script') ? (content.xThreads ?? null) : null,
+      stories: canAccessFeature(planTier, 'video_script') ? (content.stories ?? null) : null,
+      hashtagPacks: content.hashtagPacks ?? null,
       generationMs,
     })
 
   } catch (err: any) {
-    if (err instanceof z.ZodError) {
-      return NextResponse.json({ error: 'Invalid MLS ID format' }, { status: 400 })
-    }
+    if (err instanceof z.ZodError) return NextResponse.json({ error: 'Invalid MLS ID format' }, { status: 400 })
     console.error('Generation error:', err)
     captureError(err, { userId, context: 'campaign_generation' })
-    return NextResponse.json(
-      { error: err.message || 'Campaign generation failed. Please try again.' },
-      { status: 500 }
-    )
+    return NextResponse.json({ error: err.message || 'Campaign generation failed. Please try again.' }, { status: 500 })
   }
 }
