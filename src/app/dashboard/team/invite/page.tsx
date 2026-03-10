@@ -166,7 +166,7 @@ export default function InviteAgentPage() {
 
       <div className="flex items-center gap-2 text-xs text-slate-400 bg-slate-50 border border-slate-200 rounded-xl px-4 py-3">
         <Users className="w-4 h-4 flex-shrink-0" />
-        Invites expire after 7 days. The agent will need to create a CampaignAI account if they don't have one.
+        Invites expire after 7 days. The agent will need to create a ListOps account if they don't have one.
       </div>
     </div>
   )
