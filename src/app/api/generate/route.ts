@@ -230,6 +230,7 @@ Return ONLY valid JSON with exactly this structure (no markdown, no code fences)
     "neighborhoodStory": "80-100 word neighborhood lifestyle paragraph — walkability, schools, dining.",
     "seoMetaTitle": "SEO meta title under 60 characters",
     "seoMetaDescription": "SEO meta description 150-160 characters with primary keyword and CTA",
+    "spanishDescription": "100-150 word Spanish translation of the core description",
     "toneVariants": {
       "luxury": "50-word luxury reframe of the headline and opening",
       "firstTimeBuyer": "50-word first-time buyer reframe — approachable, reassuring, milestone-focused",
@@ -249,7 +250,11 @@ Return ONLY valid JSON with exactly this structure (no markdown, no code fences)
     "buyerDripDay1": "100 word Day 1 buyer nurture — welcome and listing highlights",
     "buyerDripDay7": "100 word Day 7 drip — neighborhood spotlight",
     "openHouseInvite": "100 word open house invite — date TBD placeholder",
-    "sellerUpdate": "100 word seller activity update — showings, market context"
+    "sellerUpdate": "100 word seller activity update — showings, market context",
+    "buyerDripDay14": "100 word Day 14 drip — feature deep-dive, open house invite",
+    "buyerDripDay30": "100 word Day 30 drip — urgency, final push, direct CTA",
+    "postShowingFeedback": "70-word post-showing feedback request — warm, not pushy",
+    "marketReport": "120-word neighborhood market report email — recent comps, positioning"
   },` : ''}
   "printMaterials": {
     "yardSignRider": "Two punchy lines max. Fits on a 6\" yard sign rider. E.g. '4BD · 3BA · $649K | Call Alex: 512-555-0100'",
@@ -259,6 +264,12 @@ Return ONLY valid JSON with exactly this structure (no markdown, no code fences)
     "brochureCopy": "150-200 word brochure body copy — full property story in print format",
     "magazineAd": "60-80 word magazine ad copy — premium tone, strong visual reference, bold CTA"
   },
+  ${hasExpanded ? `"hashtagPacks": {
+    "justListed": ["justlisted","newhome","forsale","realestate","${city.toLowerCase().replace(/\s/g, '')}realestate","homeforsale","realtor","listingagent","${state.toLowerCase()}realestate"],
+    "openHouse": ["openhouse","openhousetoday","househunting","homestaging","${city.toLowerCase().replace(/\s/g, '')}openhouse","tourtoday","realestatetour"],
+    "luxury": ["luxuryhomes","luxuryrealestate","luxurylisting","${city.toLowerCase().replace(/\s/g, '')}luxury","premiumrealestate","topagent"],
+    "postingSchedule": "Week 1: Mon Just Listed (FB+IG) | Tue TikTok | Wed Stories | Thu LinkedIn | Fri X | Weeks 2-6: same cadence, rotate weekly theme"
+  },` : ''}
   "photoCaptions": [
     // Generate one entry per attached photo. For each: identify the room from what you see.
     {"photoIndex": 0, "room": "identify from image", "altText": "SEO alt text under 125 chars — describe what you actually see", "instagramCaption": "40-60 word caption based on what you see — sensory details, lifestyle angle, end with hook to DM", "overlayText": "3-5 word Stories overlay text", "stagingNote": "One practical staging improvement tip based on what you see"}
@@ -442,8 +453,7 @@ WEEK THEMES: 1:Just Listed 2:Property Features 3:Neighborhood 4:Open House 5:Inv
     {"week": 4, "platform": "Instagram/Facebook Stories", "slides": [{"slideNumber": 1,"text":"...","cta":null},{"slideNumber": 2,"text":"...","cta":null},{"slideNumber": 3,"text":"...","cta":null},{"slideNumber": 4,"text":"...","cta":null},{"slideNumber": 5,"text":"...","cta":null}]},
     {"week": 5, "platform": "Instagram/Facebook Stories", "slides": [{"slideNumber": 1,"text":"...","cta":null},{"slideNumber": 2,"text":"...","cta":null},{"slideNumber": 3,"text":"...","cta":null},{"slideNumber": 4,"text":"...","cta":null},{"slideNumber": 5,"text":"...","cta":null}]},
     {"week": 6, "platform": "Instagram/Facebook Stories", "slides": [{"slideNumber": 1,"text":"...","cta":null},{"slideNumber": 2,"text":"...","cta":null},{"slideNumber": 3,"text":"...","cta":null},{"slideNumber": 4,"text":"...","cta":null},{"slideNumber": 5,"text":"...","cta":null}]}
-  ]
-}
+  ]}
 
 RULES:
 - Generate ALL 6 weeks for every array — each week must use its theme and feel distinct
@@ -608,6 +618,7 @@ export async function POST(request: NextRequest) {
         content.linkedin = proContent.linkedin ?? null
         content.xThreads = proContent.xThreads ?? null
         content.stories = proContent.stories ?? null
+
       } catch (e) {
         console.error('Pro content parse error (non-fatal):', e)
       }
