@@ -23,6 +23,9 @@ import { rateLimitGenerate } from '@/lib/ratelimit'
 import { captureError, trackGenerationCost } from '@/lib/monitoring'
 import { trackCampaignGenerated } from '@/lib/posthog'
 
+// Vercel: allow up to 300 seconds for this route (also set in vercel.json)
+export const maxDuration = 300
+
 if (!process.env.ANTHROPIC_API_KEY) {
   throw new Error('[generate] ANTHROPIC_API_KEY is not set.')
 }
