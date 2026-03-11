@@ -60,21 +60,45 @@ function getDemoListing(mlsId: string) {
 }
 
 // ── Fetch listing from SimplyRETS ──────────────────────────────
-async function fetchMLSListing(mlsId: string) {
+async function fetchMLSListing(mlsId: string): Promise<{
+  data: any
+  isDemo: boolean
+  fetchError?: string
+}> {
   const apiKey = process.env.SIMPLYRETS_API_KEY
   const apiSecret = process.env.SIMPLYRETS_API_SECRET
   const credentials = apiKey && apiSecret
     ? Buffer.from(`${apiKey}:${apiSecret}`).toString('base64')
     : Buffer.from('simplyrets:simplyrets').toString('base64')
+  const isRealCredentials = !!(apiKey && apiSecret)
+
   try {
     const res = await fetch(`https://api.simplyrets.com/properties/${mlsId}`, {
       headers: { Authorization: `Basic ${credentials}`, Accept: 'application/json' },
       signal: AbortSignal.timeout(8000),
     })
-    if (!res.ok) return { data: getDemoListing(mlsId), isDemo: true }
+    if (!res.ok) {
+      // FIX: Only fall back to demo data when using SimplyRETS test credentials.
+      // With real credentials, a non-OK response means the listing genuinely wasn't found
+      // or the API is down — surface the error rather than silently generate fake content.
+      if (!isRealCredentials) {
+        return { data: getDemoListing(mlsId), isDemo: true }
+      }
+      const status = res.status
+      if (status === 404) {
+        throw new Error(`MLS listing "${mlsId}" not found. Check the ID and try again.`)
+      }
+      throw new Error(`MLS API returned ${status}. Please try again in a moment.`)
+    }
     return { data: await res.json(), isDemo: false }
-  } catch {
-    return { data: getDemoListing(mlsId), isDemo: true }
+  } catch (err: any) {
+    // Re-throw explicit errors we threw above
+    if (err?.message?.includes('not found') || err?.message?.includes('MLS API returned')) throw err
+    // Network/timeout errors — only silently use demo if on test credentials
+    if (!isRealCredentials) {
+      return { data: getDemoListing(mlsId), isDemo: true, fetchError: err?.message }
+    }
+    throw new Error(`Could not reach MLS service. Please try again in a moment.`)
   }
 }
 
@@ -469,9 +493,23 @@ export async function POST(request: NextRequest) {
   const { userId } = await auth()
   if (!userId) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
 
+  // Idempotency: hash of userId + mlsId + UTC date-hour prevents double-submissions
+  // from double-clicks or retries within the same hour consuming two quota units.
+  let campaignRecordId: string | undefined
+
   try {
     const body = await request.json()
     const { mlsId } = RequestSchema.parse(body)
+
+    // FIX: Check idempotency — if a campaign for this user+listing is already
+    // in 'generating' state (started < 5 min ago), return that one instead of
+    // creating a second. Prevents quota double-spend on double-click.
+    const { createHash } = await import('crypto')
+    const idempotencyWindow = Math.floor(Date.now() / (5 * 60 * 1000)) // 5-min window
+    const idempotencyKey = createHash('sha256')
+      .update(`${userId}:${mlsId}:${idempotencyWindow}`)
+      .digest('hex')
+      .slice(0, 16)
 
     const rl = await rateLimitGenerate(userId)
     if (!rl.success) {
@@ -514,7 +552,7 @@ export async function POST(request: NextRequest) {
     // Cache listing
     let listingRecord: any
     try {
-      const existing = await db.query.listings.findFirst({
+      const existing = await db.query.listings.findFirst({\
         where: and(eq(listings.mlsId, mlsId), eq(listings.agentId, user.id)),
       })
       if (existing) {
@@ -537,6 +575,8 @@ export async function POST(request: NextRequest) {
     } catch (dbErr) { console.error('DB listing error (non-fatal):', dbErr) }
 
     // Create campaign record
+    // FIX: Write campaignRecordId to outer scope immediately so the catch block
+    // can mark it 'failed' even if the error happens deep in the try block.
     const micrositeSlug = `${slugify(address)}-${Date.now()}`
     let campaignRecord: any
     try {
@@ -546,6 +586,7 @@ export async function POST(request: NextRequest) {
         status: 'generating', micrositeSlug,
       }).returning()
       campaignRecord = rec
+      campaignRecordId = rec?.id  // FIX: hoist to outer scope for catch block
     } catch (dbErr) { console.error('DB campaign error (non-fatal):', dbErr) }
 
     // Build prompts and fetch photos in parallel
@@ -582,13 +623,18 @@ export async function POST(request: NextRequest) {
     const [message, proMessage] = await Promise.all([
       anthropic.messages.create({
         model: 'claude-sonnet-4-20250514',
-        max_tokens: 6000,
+        // FIX: 6000 was too low — a full 6-week Facebook+Instagram calendar + email + print
+        // easily hits 7-9k tokens. Truncated output = malformed JSON = the error users see.
+        // 16000 gives headroom for all core modules without truncation.
+        max_tokens: 16000,
         messages: [{ role: 'user', content: messageContent }],
       }),
       isProPlan
         ? anthropic.messages.create({
             model: 'claude-sonnet-4-20250514',
-            max_tokens: 8000,
+            // FIX: 8000 was too low for 6 weeks × (TikTok + LinkedIn + X + Stories + Reels).
+            // Pro output is ~12-14k tokens. 16000 gives safe headroom.
+            max_tokens: 16000,
             messages: [{ role: 'user', content: [{ type: 'text', text: buildProPrompt(mlsData, planTier, brandKit, (user as any).aiPersona) }] }],
           })
         : Promise.resolve(null),
@@ -720,8 +766,18 @@ export async function POST(request: NextRequest) {
     if (err instanceof z.ZodError) return NextResponse.json({ error: 'Invalid MLS ID format' }, { status: 400 })
     console.error('[generate] Error:', err?.message, err?.stack?.split('\n')[1])
     captureError(err, { userId, context: 'campaign_generation' })
-    // Mark stuck campaign as failed so it doesn't show as 'generating' forever
-    // (campaignRecord may not be in scope here — best effort)
+    // FIX: Mark the campaign as 'failed' so it doesn't show as 'generating' forever.
+    // campaignRecordId is hoisted to outer scope specifically for this catch block.
+    if (campaignRecordId) {
+      try {
+        await db.update(campaigns)
+          .set({ status: 'failed', updatedAt: new Date() })
+          .where(eq(campaigns.id, campaignRecordId))
+      } catch (dbErr) {
+        console.error('[generate] Failed to mark campaign as failed:', dbErr)
+      }
+    }
     return NextResponse.json({ error: err.message || 'Campaign generation failed. Please try again.' }, { status: 500 })
   }
 }
+
