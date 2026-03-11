@@ -552,7 +552,7 @@ export async function POST(request: NextRequest) {
     // Cache listing
     let listingRecord: any
     try {
-      const existing = await db.query.listings.findFirst({\
+      const existing = await db.query.listings.findFirst({
         where: and(eq(listings.mlsId, mlsId), eq(listings.agentId, user.id)),
       })
       if (existing) {
