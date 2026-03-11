@@ -321,7 +321,7 @@ export default function BrandPage() {
           <FormField label="Phone" type="tel" value={form.agentPhone} onChange={set('agentPhone')} placeholder="(512) 555-0100" />
           <FormField label="Email" type="email" value={form.agentEmail} onChange={set('agentEmail')} placeholder="sarah@reedrealty.com" />
           <div className="sm:col-span-2">
-            <FormField label="Website" type="url" value={form.agentWebsite} onChange={set('agentWebsite')} placeholder="https://sarahmitchell.com" />
+            <FormField label="Website" type="text" value={form.agentWebsite} onChange={set('agentWebsite')} placeholder="https://sarahmitchell.com" />
           </div>
           <FormField label="Brokerage Name" value={form.brokerageName} onChange={set('brokerageName')} placeholder="Reed Realty Group" />
           <div className="sm:col-span-2">
