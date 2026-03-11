@@ -273,7 +273,7 @@ export const campaigns = pgTable('campaigns', {
     tiktok?: any[]
     linkedin?: any[]
     xThreads?: any[]
-    pinterest?: any[]
+
     stories?: any[]
     hashtagPacks?: any
   }>().default({}),
