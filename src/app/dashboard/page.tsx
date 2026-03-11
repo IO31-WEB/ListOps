@@ -13,7 +13,7 @@ export default async function DashboardPage() {
 
   const stats = await getDashboardStats(userId)
   if (!stats) {
-  const { getOrCreateUser, getDashboardStats: refetch } = await import('@/lib/user-service')
+  const { getOrCreateUser } = await import('@/lib/user-service')
   const { currentUser } = await import('@clerk/nextjs/server')
   const clerkUser = await currentUser()
   if (clerkUser) {
@@ -24,7 +24,7 @@ export default async function DashboardPage() {
       avatarUrl: clerkUser.imageUrl ?? undefined,
     })
   }
-  redirect('/dashboard')
+  redirect('/onboarding')
 }
 
   const { planTier, totalCampaigns, campaignsThisMonth, campaignLimit, recentCampaigns,
