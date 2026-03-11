@@ -3,7 +3,7 @@
 import { useState, useCallback, useEffect } from 'react'
 import { useDropzone } from 'react-dropzone'
 import {
-  Upload, Check, AlertCircle, Palette, User, Globe, Phone,
+  Upload, Check, Palette, User, Globe,
   Mail, Lock, Zap, Save, Loader2, Image, Building2, MessageSquare
 } from 'lucide-react'
 import toast from 'react-hot-toast'
@@ -34,54 +34,104 @@ function ColorPicker({ label, value, onChange }: { label: string; value: string;
   )
 }
 
-function ImageUploadZone({ label, hint, currentUrl, onUpload }: {
-  label: string; hint: string; currentUrl: string; onUpload: (url: string) => void
+type ImageSlot = 'logo' | 'agentPhoto' | 'brokerageLogo'
+
+function ImageUploadZone({ label, hint, currentUrl, slot, onUpload }: {
+  label: string
+  hint: string
+  currentUrl: string
+  slot: ImageSlot
+  onUpload: (url: string) => void
 }) {
   const [preview, setPreview] = useState<string>(currentUrl || '')
   const [uploading, setUploading] = useState(false)
 
+  const uploadFile = useCallback(async (file: File) => {
+    setUploading(true)
+    try {
+      const form = new FormData()
+      form.append('file', file)
+      const res = await fetch(`/api/brand-kit/upload?slot=${slot}`, {
+        method: 'POST',
+        body: form,
+      })
+      const data = await res.json()
+
+      // R2 not configured in this environment — fall back to base64 data URL
+      if (!res.ok && data?.error === 'R2_NOT_CONFIGURED') {
+        await new Promise<void>((resolve, reject) => {
+          const reader = new FileReader()
+          reader.onload = (e) => {
+            const dataUrl = e.target?.result as string
+            setPreview(dataUrl)
+            onUpload(dataUrl)
+            resolve()
+          }
+          reader.onerror = () => reject(new Error('Failed to read file'))
+          reader.readAsDataURL(file)
+        })
+        toast.success('Image ready (local preview)')
+        return
+      }
+
+      if (!res.ok) throw new Error(data?.error || `Upload failed (${res.status})`)
+
+      setPreview(data.url)
+      onUpload(data.url)
+      toast.success('Image uploaded!')
+    } catch (err: unknown) {
+      const msg = err instanceof Error ? err.message : 'Upload failed'
+      toast.error(msg)
+    } finally {
+      setUploading(false)
+    }
+  }, [slot, onUpload])
+
   const onDrop = useCallback((files: File[]) => {
     const file = files[0]
-    if (!file) return
-    setUploading(true)
-    // Convert to base64 data URL so it persists in the DB across sessions
-    const reader = new FileReader()
-    reader.onload = (e) => {
-      const dataUrl = e.target?.result as string
-      setPreview(dataUrl)
-      onUpload(dataUrl)
-      setUploading(false)
-      toast.success('Image uploaded!')
-    }
-    reader.onerror = () => {
-      setUploading(false)
-      toast.error('Failed to read image')
-    }
-    reader.readAsDataURL(file)
-  }, [onUpload])
+    if (file) uploadFile(file)
+  }, [uploadFile])
 
   const { getRootProps, getInputProps, isDragActive } = useDropzone({
-    onDrop, accept: { 'image/*': ['.png', '.jpg', '.jpeg', '.svg', '.webp'] },
-    maxFiles: 1, maxSize: 5 * 1024 * 1024,
+    onDrop,
+    accept: { 'image/*': ['.png', '.jpg', '.jpeg', '.svg', '.webp'] },
+    maxFiles: 1,
+    maxSize: 5 * 1024 * 1024,
+    onDropRejected: (rejections) => {
+      const reason = rejections[0]?.errors[0]?.message ?? 'Invalid file'
+      toast.error(reason)
+    },
   })
 
   return (
     <div>
       <label className="block text-xs font-semibold text-slate-600 mb-1.5">{label}</label>
-      <div {...getRootProps()} className={`relative border-2 border-dashed rounded-xl p-5 text-center cursor-pointer transition-all ${isDragActive ? 'border-amber-400 bg-amber-50' : 'border-slate-200 hover:border-slate-300 hover:bg-slate-50'}`}>
+      <div
+        {...getRootProps()}
+        className={`relative border-2 border-dashed rounded-xl p-5 text-center cursor-pointer transition-all ${
+          isDragActive ? 'border-amber-400 bg-amber-50' : 'border-slate-200 hover:border-slate-300 hover:bg-slate-50'
+        }`}
+      >
         <input {...getInputProps()} />
         {preview ? (
           <div className="flex items-center gap-4">
             <img src={preview} alt="Preview" className="w-16 h-16 object-contain rounded-lg border border-slate-200 bg-white" />
             <div className="text-left">
-              <p className="text-xs font-semibold text-green-700 flex items-center gap-1"><Check className="w-3 h-3" /> Uploaded</p>
+              <p className="text-xs font-semibold text-green-700 flex items-center gap-1">
+                <Check className="w-3 h-3" /> Uploaded
+              </p>
               <p className="text-xs text-slate-500 mt-0.5">Click or drag to replace</p>
             </div>
           </div>
         ) : (
           <div>
-            {uploading ? <Loader2 className="w-6 h-6 text-slate-400 animate-spin mx-auto mb-2" /> : <Upload className="w-6 h-6 text-slate-400 mx-auto mb-2" />}
-            <p className="text-xs font-medium text-slate-700">{uploading ? 'Uploading...' : 'Drop file or click to upload'}</p>
+            {uploading
+              ? <Loader2 className="w-6 h-6 text-slate-400 animate-spin mx-auto mb-2" />
+              : <Upload className="w-6 h-6 text-slate-400 mx-auto mb-2" />
+            }
+            <p className="text-xs font-medium text-slate-700">
+              {uploading ? 'Uploading…' : 'Drop file or click to upload'}
+            </p>
             <p className="text-xs text-slate-400 mt-1">{hint}</p>
           </div>
         )}
@@ -287,9 +337,9 @@ export default function BrandPage() {
           <h2 className="font-display font-semibold text-slate-900">Photos & Logos</h2>
         </div>
         <div className="grid sm:grid-cols-3 gap-5">
-          <ImageUploadZone label="Agent Headshot" hint="PNG, JPG, WebP • Max 5MB" currentUrl={form.agentPhotoUrl} onUpload={set('agentPhotoUrl')} />
-          <ImageUploadZone label="Agent/Team Logo" hint="PNG, SVG recommended" currentUrl={form.logoUrl} onUpload={set('logoUrl')} />
-          <ImageUploadZone label="Brokerage Logo" hint="PNG, SVG recommended" currentUrl={form.brokerageLogo} onUpload={set('brokerageLogo')} />
+          <ImageUploadZone label="Agent Headshot"   hint="PNG, JPG, WebP • Max 5MB" currentUrl={form.agentPhotoUrl} slot="agentPhoto"    onUpload={set('agentPhotoUrl')} />
+          <ImageUploadZone label="Agent/Team Logo"  hint="PNG, SVG recommended"     currentUrl={form.logoUrl}       slot="logo"         onUpload={set('logoUrl')} />
+          <ImageUploadZone label="Brokerage Logo"   hint="PNG, SVG recommended"     currentUrl={form.brokerageLogo} slot="brokerageLogo" onUpload={set('brokerageLogo')} />
         </div>
       </div>
 
