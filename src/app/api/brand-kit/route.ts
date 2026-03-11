@@ -6,12 +6,28 @@ import { users } from '@/lib/db/schema'
 import { eq } from 'drizzle-orm'
 import { z } from 'zod'
 
-// Helper: accepts a valid URL string, empty string, or undefined/null
+// Normalize a URL value: prepend https:// if the user omitted the protocol,
+// pass through empty/undefined as-is, reject anything that still isn't a
+// recognisable URL after normalisation.
+function normalizeUrl(v: string | undefined): string | undefined {
+  if (!v || v.trim() === '') return ''
+  const trimmed = v.trim()
+  // Already has a protocol
+  if (/^https?:\/\//i.test(trimmed)) return trimmed
+  // Looks like a domain/path — prepend https://
+  if (/^[\w-]+(\.[\w-]+)/.test(trimmed)) return `https://${trimmed}`
+  return trimmed // let refine catch truly malformed values
+}
+
+// Helper: accepts a valid URL string, empty string, or undefined/null.
+// Also auto-prepends https:// when the protocol is missing.
 const optionalUrl = () =>
-  z.string().optional().refine(
-    (v) => !v || v === '' || /^https?:\/\//.test(v),
-    { message: 'Must be a valid URL or empty' }
-  )
+  z.string().optional()
+    .transform(normalizeUrl)
+    .refine(
+      (v) => !v || v === '' || /^https?:\/\/.+\..+/.test(v),
+      { message: 'Must be a valid URL or empty' }
+    )
 
 const optionalEmail = () =>
   z.string().optional().refine(
@@ -80,6 +96,10 @@ export async function POST(request: NextRequest) {
 
     // tone lives on users.aiPersona — strip it from brandKit upsert, save separately
     const { tone, ...rest } = data as any
+    // Normalize instagramHandle — strip leading @ if present
+    if (rest.instagramHandle) {
+      rest.instagramHandle = rest.instagramHandle.replace(/^@+/, '')
+    }
     const brandKit = await upsertBrandKit(user.id, user.orgId!, rest)
 
     // Save tone to users.aiPersona (the column that actually exists for this field)
