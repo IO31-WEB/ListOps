@@ -41,7 +41,7 @@ export default function HomePage() {
         <div className="max-w-5xl mx-auto text-center">
           <div className="inline-flex items-center gap-2 bg-amber-50 border border-amber-200 text-amber-800 text-xs font-medium px-3 py-1.5 rounded-full mb-8 animate-fade-in">
             <span className="w-1.5 h-1.5 rounded-full bg-amber-500 animate-pulse" />
-            MLS-Connected • Claude AI • ~90s Generation
+            MLS-Connected • Claude AI Vision • Real Listing Data
           </div>
 
           <h1 className="font-display text-5xl sm:text-6xl lg:text-7xl font-semibold text-slate-900 leading-[1.05] mb-6 animate-fade-in animate-stagger-1">
@@ -51,7 +51,7 @@ export default function HomePage() {
           </h1>
 
           <p className="text-lg sm:text-xl text-slate-600 max-w-2xl mx-auto mb-10 leading-relaxed animate-fade-in animate-stagger-2">
-            Enter your MLS listing ID and get a complete 6-week marketing campaign — Facebook posts, Instagram captions, a print-ready flyer, and email copy — all generated in about 90 seconds.
+            Enter your MLS listing ID and get a complete 6-week marketing campaign — headlines, social posts, email sequences, print materials, video scripts, and a listing microsite — all generated in under 2 minutes.
           </p>
 
           <div className="flex flex-col sm:flex-row items-center justify-center gap-4 animate-fade-in animate-stagger-3">
@@ -74,10 +74,10 @@ export default function HomePage() {
         {/* Stats bar */}
         <div className="max-w-4xl mx-auto mt-20 grid grid-cols-2 sm:grid-cols-4 gap-px bg-slate-200 rounded-2xl overflow-hidden shadow-sm animate-fade-in animate-stagger-5">
           {[
-            { value: '~90s', label: 'Avg. Generation Time' },
-            { value: '6 Types', label: 'Content Per Campaign' },
+            { value: '<2 min', label: 'Avg. Generation Time' },
+            { value: '10+', label: 'Content Modules' },
             { value: '6 Weeks', label: 'Of Posts & Emails' },
-            { value: 'MLS Live', label: 'Real Listing Data' },
+            { value: '500+', label: 'MLS Boards Supported' },
           ].map((stat) => (
             <div key={stat.label} className="bg-white px-6 py-6 text-center">
               <div className="font-display text-2xl sm:text-3xl font-semibold text-slate-900">{stat.value}</div>
@@ -108,13 +108,13 @@ export default function HomePage() {
               {
                 num: '02',
                 title: 'Click Generate',
-                desc: 'Claude AI reads your listing and produces a complete 6-week campaign — Facebook posts, Instagram captions, a printable flyer, and two email drafts. Every word tailored to your property.',
+                desc: 'Claude AI reads your listing, analyzes your MLS photos with vision, and produces a complete campaign — headlines, 6-week social calendars, email sequences, print materials, video scripts, and a listing microsite. Every word tailored to your specific property.',
                 icon: '⚡',
               },
               {
                 num: '03',
                 title: 'Copy and Publish',
-                desc: 'Every piece of content is formatted and ready to use immediately. One click copies to clipboard. Or use Pro scheduling to publish directly to Facebook and Instagram.',
+                desc: 'Every piece of content is formatted and ready to use immediately. One click copies to clipboard. Share your listing microsite instantly. Download your print flyer as a PDF.',
                 icon: '🚀',
               },
             ].map((step) => (
@@ -145,15 +145,15 @@ export default function HomePage() {
 
           <div className="grid sm:grid-cols-2 lg:grid-cols-3 gap-6">
             {[
-              { icon: '📱', tag: 'FB', title: '6-Week Facebook Calendar', desc: 'Themed posts for launch, features, neighborhood, open house, lifestyle, and final call.', plan: 'All plans' },
-              { icon: '📸', tag: 'IG', title: '6-Week Instagram Calendar', desc: 'Platform-optimized captions with curated hashtag sets. Your listing URL in every post.', plan: 'All plans' },
-              { icon: '🖨️', tag: 'FL', title: 'Print-Ready Flyer', desc: 'Professional listing flyer with photos, specs, and your agent branding. Export as PDF instantly.', plan: 'All plans' },
-              { icon: '📧', tag: 'EM', title: 'Email Newsletter Copy', desc: 'Just Listed and Still Available emails ready to paste into any email platform.', plan: 'All plans' },
-              { icon: '🎯', tag: 'BK', title: 'Brand Kit', desc: 'Upload your logo, headshot, colors, and contact info once. Applied to every campaign automatically.', plan: 'Starter+' },
-              { icon: '🌐', tag: 'MS', title: 'Listing Microsite', desc: 'Auto-generated beautiful property page hosted at listops.io/l/[slug] — shareable instantly.', plan: 'Starter+' },
-              { icon: '⏰', tag: 'SC', title: 'Social Scheduling', desc: 'Publish directly to Facebook and Instagram — no copy-pasting. Schedule weeks in advance.', plan: 'Pro+' },
-              { icon: '🎬', tag: 'VS', title: 'Video & Reel Scripts', desc: 'AI-written scripts optimized for short-form video. Perfect for Reels and TikTok.', plan: 'Pro+' },
-              { icon: '🏢', tag: 'WL', title: 'White-Label', desc: 'Your brokerage brand on all outputs. Remove all ListOps branding from flyers and emails.', plan: 'Brokerage+' },
+              { icon: '📝', tag: 'COPY', title: 'Listing Copy Suite', desc: '10 headline variations, full MLS description, neighborhood story, SEO meta, Spanish translation, and tone variants for luxury, investor, and first-time buyer angles.', plan: 'All plans' },
+              { icon: '📱', tag: 'FB+IG', title: '6-Week Social Calendar', desc: 'Themed posts for every week — launch, features, neighborhood, open house, investment value, and final call. Facebook and Instagram formatted separately.', plan: 'All plans' },
+              { icon: '📧', tag: 'EMAIL', title: 'Email Campaign Suite', desc: 'Just Listed and Still Available emails plus an 8-template drip sequence: buyer Day 1–30, seller update, open house invite, post-showing follow-up, and market report.', plan: 'Free (2) / Starter+ (all 8)' },
+              { icon: '🖨️', tag: 'PRINT', title: 'Print & Offline Materials', desc: 'Yard sign rider, postcard headline and body, open house info packet, brochure copy, and magazine ad — plus a fully branded print-ready PDF flyer.', plan: 'All plans' },
+              { icon: '📸', tag: 'PHOTO', title: 'AI Photo Captions', desc: 'Claude Vision analyzes each MLS photo and writes: Instagram caption, SEO alt text, Stories overlay text, and a concrete staging improvement tip — per room.', plan: 'Starter+' },
+              { icon: '🌐', tag: 'SITE', title: 'Listing Microsite', desc: 'Auto-generated property page at listops.io/l/[slug] with hero copy, neighborhood story, and CTA — publish or unpublish in one click. Includes view analytics.', plan: 'Starter+' },
+              { icon: '🎬', tag: 'VIDEO', title: 'Video & Reel Scripts', desc: '6 weekly reel scripts with hook, full script, on-screen text, and music suggestion. Plus Matterport walkthrough, drone voice-over, 30-sec highlight reel, and timed walkthrough narration.', plan: 'Pro+' },
+              { icon: '📲', tag: 'MULTI', title: 'TikTok, LinkedIn & X', desc: '6 weeks of TikTok scripts with trending audio suggestions, LinkedIn market-insight posts, X thread sequences, and Instagram/Facebook Stories slide decks.', plan: 'Pro+' },
+              { icon: '🏢', tag: 'WL', title: 'White-Label & Team Tools', desc: 'Replace all ListOps branding with your brokerage identity. Admin dashboard, per-agent analytics, compliance audit logs, and up to 25 agent seats.', plan: 'Brokerage+' },
             ].map((feature) => (
               <div key={feature.title} className="bg-white rounded-2xl p-6 border border-slate-100 card-hover">
                 <div className="flex items-start justify-between mb-4">
@@ -235,7 +235,7 @@ export default function HomePage() {
           <div className="grid md:grid-cols-3 gap-6">
             {[
               {
-                quote: "I used to spend 3 hours creating marketing content for each listing. Now it takes me 60 seconds. ListOps paid for itself on the first listing.",
+                quote: "I used to spend 3 hours creating marketing content for each listing. Now it takes me under 2 minutes. ListOps paid for itself on the first listing.",
                 author: "Sarah M.",
                 role: "REALTOR® • Austin, TX",
                 rating: 5,
@@ -276,7 +276,7 @@ export default function HomePage() {
           <h2 className="font-display text-4xl sm:text-5xl font-semibold text-slate-900 mb-4">
             Your Listings Deserve <em>Better Marketing.</em>
           </h2>
-          <p className="text-slate-600 mb-8 text-lg">Generate a complete 6-week marketing campaign for any listing in about 90 seconds — fully branded, ready to publish.</p>
+          <p className="text-slate-600 mb-8 text-lg">Generate a complete multi-channel marketing campaign for any listing in under 2 minutes — fully branded, ready to publish.</p>
           <Link href="/sign-up" className="inline-flex items-center gap-2 bg-slate-900 text-amber-50 font-semibold px-10 py-4 rounded-xl hover:bg-slate-800 transition-all hover:shadow-xl hover:shadow-slate-900/20 text-base">
             Start Free — 3 Campaigns Included
             <ArrowRight className="w-4 h-4" />
