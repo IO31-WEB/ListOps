@@ -204,6 +204,10 @@ export async function upsertBrandKit(userId: string, orgId: string, data: Partia
 // ── Quota check (READ-ONLY — no side effects) ──────────────────
 // Use this for informational checks (PDF route, dashboard, billing page).
 // Use consumeCampaignQuota() in the generate route to atomically gate + increment.
+// FIX: Previous version had a DB write (counter reset) inside this "read-only" function.
+// That was a lie in the documentation and a correctness bug — if checkCampaignQuota
+// fired the reset and then consumeCampaignQuota also checked needsReset, the counter
+// could be reset twice. Now truly read-only: returns adjusted values without writing.
 export async function checkCampaignQuota(clerkId: string): Promise<{
   allowed: boolean; used: number; limit: number | 'unlimited'; planTier: PlanTier; resetsAt?: Date
 }> {
@@ -221,22 +225,18 @@ export async function checkCampaignQuota(clerkId: string): Promise<{
 
   const now = new Date()
 
-  // FIX: Use billing period end for reset calculation when available
   const periodEnd = sub?.stripeCurrentPeriodEnd
   const needsReset = periodEnd
     ? user.lastResetAt < new Date(periodEnd.getTime() - 30 * 24 * 60 * 60 * 1000)
     : (now.getMonth() !== new Date(user.lastResetAt).getMonth() ||
        now.getFullYear() !== new Date(user.lastResetAt).getFullYear())
 
-  if (needsReset) {
-    await db.update(users).set({ campaignsUsedThisMonth: 0, lastResetAt: now }).where(eq(users.id, user.id))
-    const nextReset = periodEnd ?? new Date(now.getFullYear(), now.getMonth() + 1, 1)
-    return { allowed: true, used: 0, limit, planTier: plan, resetsAt: nextReset }
-  }
-
   const nextReset = periodEnd ?? new Date(now.getFullYear(), now.getMonth() + 1, 1)
-  const used = user.campaignsUsedThisMonth
-  return { allowed: limit === 'unlimited' || used < limit, used, limit, planTier: plan, resetsAt: nextReset }
+
+  // FIX: If reset is needed, return used=0 without writing to DB.
+  // consumeCampaignQuota() handles the actual reset atomically.
+  const effectiveUsed = needsReset ? 0 : user.campaignsUsedThisMonth
+  return { allowed: limit === 'unlimited' || effectiveUsed < limit, used: effectiveUsed, limit, planTier: plan, resetsAt: nextReset }
 }
 
 // ── Atomic quota gate + increment ─────────────────────────────
