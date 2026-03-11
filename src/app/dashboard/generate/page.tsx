@@ -1,6 +1,6 @@
 'use client'
 
-import { useState } from 'react'
+import { useState, useEffect, useRef } from 'react'
 import { useRouter } from 'next/navigation'
 import { Zap, Check, AlertTriangle, Loader2 } from 'lucide-react'
 import toast from 'react-hot-toast'
@@ -23,8 +23,26 @@ const STEPS: GenStep[] = [
   { id: 'saving',    label: 'Saving campaign to your account',                      status: 'pending' },
 ]
 
-// Step animation cadence matches ~60s total generation time
-const STEP_INTERVAL_MS = 9_500
+// Step animation: advance through steps but STOP before 'saving' so it spins until the API responds
+const STEP_INTERVAL_MS = 22_000
+
+// Shows a live elapsed timer so users know the app is working, not frozen
+function ElapsedTimer() {
+  const [elapsed, setElapsed] = useState(0)
+  useEffect(() => {
+    const start = Date.now()
+    const t = setInterval(() => setElapsed(Math.floor((Date.now() - start) / 1000)), 1000)
+    return () => clearInterval(t)
+  }, [])
+  const mins = Math.floor(elapsed / 60)
+  const secs = elapsed % 60
+  const label = mins > 0 ? `${mins}m ${secs}s elapsed` : `${secs}s elapsed`
+  return (
+    <span className="text-xs text-slate-500 animate-pulse tabular-nums">
+      {elapsed < 10 ? '~2 min remaining' : label}
+    </span>
+  )
+}
 
 export default function GeneratePage() {
   const router = useRouter()
@@ -134,7 +152,7 @@ export default function GeneratePage() {
           <div className="border-t border-slate-100 pt-5 space-y-3">
             <div className="flex items-center justify-between mb-2">
               <p className="text-xs font-semibold text-slate-700 uppercase tracking-wider">Building Your Campaign</p>
-              <span className="text-xs text-slate-500 animate-pulse">~60 seconds</span>
+              <ElapsedTimer />
             </div>
             {steps.map(step => (
               <div key={step.id} className="flex items-center gap-3">
