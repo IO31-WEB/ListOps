@@ -1,4 +1,4 @@
--/**
+/**
  * ListOps — Campaign Generation API
  *
  * OUTPUT MODULES (plan-gated):
@@ -26,11 +26,8 @@ import { trackCampaignGenerated } from '@/lib/posthog'
 // Vercel: allow up to 300 seconds for this route (also set in vercel.json)
 export const maxDuration = 300
 
-if (!process.env.ANTHROPIC_API_KEY) {
-  throw new Error('[generate] ANTHROPIC_API_KEY is not set.')
-}
-
-const anthropic = new Anthropic({ apiKey: process.env.ANTHROPIC_API_KEY })
+// Anthropic client — key is validated at request time inside the POST handler
+const anthropic = new Anthropic({ apiKey: process.env.ANTHROPIC_API_KEY ?? '' })
 
 const RequestSchema = z.object({
   mlsId: z.string().min(1).max(50),
@@ -456,6 +453,9 @@ RULES:
 
 // ── POST handler ───────────────────────────────────────────────
 export async function POST(request: NextRequest) {
+  if (!process.env.ANTHROPIC_API_KEY) {
+    return NextResponse.json({ error: 'Server misconfiguration: missing API key.' }, { status: 500 })
+  }
   const { userId } = await auth()
   if (!userId) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
 
