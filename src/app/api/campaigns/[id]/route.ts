@@ -1,6 +1,9 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { auth } from '@clerk/nextjs/server'
 import { getCampaign } from '@/lib/user-service'
+import { db } from '@/lib/db'
+import { campaigns } from '@/lib/db/schema'
+import { eq, and } from 'drizzle-orm'
 
 export async function GET(
   request: NextRequest,
@@ -12,6 +15,20 @@ export async function GET(
   const { id } = await params
   const campaign = await getCampaign(id, userId)
   if (!campaign) return NextResponse.json({ error: 'Not found' }, { status: 404 })
+
+  // Auto-expire campaigns stuck in 'generating' for more than 10 minutes.
+  // This happens when the Vercel function times out before the AI finishes.
+  if (campaign.status === 'generating') {
+    const ageMs = Date.now() - new Date(campaign.createdAt).getTime()
+    if (ageMs > 10 * 60 * 1000) {
+      try {
+        await db.update(campaigns)
+          .set({ status: 'failed', updatedAt: new Date() })
+          .where(eq(campaigns.id, campaign.id))
+        campaign.status = 'failed'
+      } catch { /* non-fatal */ }
+    }
+  }
 
   // Unpack content modules stored in the analytics JSONB column onto the top-level
   // campaign object so the frontend can read them directly (e.g. campaign.tiktok,
