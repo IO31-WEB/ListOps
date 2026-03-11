@@ -13,13 +13,14 @@
  *   3. Add SENTRY_DSN to Vercel env vars
  */
 
-// Sentry loaded lazily via require() — no type import needed at build time
+// FIX: eval('require') breaks tree-shaking in webpack/turbopack and can fail
+// to resolve module paths in bundled environments. Use a try/catch import instead.
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
 let Sentry: any = null
 
 try {
-  // eslint-disable-next-line @typescript-eslint/no-var-requires
-  Sentry = eval("require")('@sentry/nextjs')
+  // eslint-disable-next-line @typescript-eslint/no-require-imports
+  Sentry = require('@sentry/nextjs')
 } catch {
   // Sentry not installed yet — all calls are no-ops
 }
@@ -69,8 +70,11 @@ export function trackGenerationCost(opts: {
     estimatedCostUsd: parseFloat(totalCost.toFixed(4)),
   })
 
-  if (totalCost > 0.10) {
-    // Alert if a single generation costs more than $0.10
+  // FIX: Previous threshold was $0.10 — a normal Pro generation (parallel calls,
+  // ~16k + 16k tokens) costs ~$0.30-0.40. Every Pro generation was firing a Sentry
+  // alert, creating alert fatigue that would cause real alerts to be ignored.
+  // New threshold: $0.75 — only fires when something is genuinely abnormal.
+  if (totalCost > 0.75) {
     captureError(new Error(`High generation cost: $${totalCost.toFixed(4)}`), opts)
   }
 }
