@@ -351,6 +351,112 @@ ${hasExpanded ? '- Generate ALL 6 weeks for tiktok, linkedin, xThreads, stories'
 - Return ONLY the JSON object — no explanation, no markdown`
 }
 
+// ── Pro-only parallel prompt (TikTok, LinkedIn, X, Stories, Reel Scripts, Virtual Tours) ──
+// This runs in parallel with the core prompt for Pro+ plans, cutting total time ~50%.
+function buildProPrompt(listing: any, planTier: PlanTier, brandKit?: any, userAiPersona?: any): string {
+  const address = [
+    listing.address?.deliveryLine || listing.address?.line1,
+    listing.address?.city, listing.address?.state,
+  ].filter(Boolean).join(', ')
+
+  const price = listing.listPrice ? `$${listing.listPrice.toLocaleString()}` : 'Price upon request'
+  const beds = listing.property?.bedrooms ?? 0
+  const baths = listing.property?.bathsFull ?? 0
+  const sqft = listing.property?.area ?? 0
+  const city = listing.address?.city ?? ''
+  const state = listing.address?.state ?? ''
+  const description = listing.remarks ?? ''
+  const features = Array.isArray(listing.property?.features) ? listing.property.features.join(', ') : ''
+
+  const hasBrandKit = canAccessFeature(planTier, 'brand_kit') && !!brandKit
+  const agentName = hasBrandKit
+    ? (brandKit?.agentName || `${listing.agent?.firstName ?? ''} ${listing.agent?.lastName ?? ''}`.trim() || 'Your Agent')
+    : `${listing.agent?.firstName ?? ''} ${listing.agent?.lastName ?? ''}`.trim() || 'Your Agent'
+  const agentPhone = hasBrandKit ? (brandKit?.agentPhone || listing.agent?.contact?.office || '') : ''
+  const agentTitle = hasBrandKit ? (brandKit?.agentTitle || 'REALTOR®') : 'REALTOR®'
+  const brokerageName = hasBrandKit ? (brandKit?.brokerageName || '') : ''
+  const tone = hasBrandKit ? (userAiPersona?.tone || brandKit?.aiPersona?.tone || 'professional') : 'professional'
+  const toneGuides: Record<string, string> = {
+    professional: 'authoritative, data-driven, and polished.',
+    friendly: 'warm, conversational, and approachable.',
+    luxury: 'elevated, aspirational, and refined.',
+    energetic: 'enthusiastic, compelling, and urgent.',
+  }
+  const toneGuide = toneGuides[tone] ?? toneGuides['professional']
+  const agentSigParts = [agentName, agentTitle, brokerageName, agentPhone].filter(Boolean)
+  const agentSignature = agentSigParts.join(' | ')
+  const listingUrl = `${process.env.NEXT_PUBLIC_APP_URL || 'https://listops.io'}/l/listing-${listing.mlsId || listing.listingId}`
+
+  return `You are a senior real estate marketing strategist. Generate Pro-tier social and video content for this listing. Return ONLY valid JSON — no markdown, no code fences.
+
+LISTING: ${address} | ${price} | ${beds}bd ${baths}ba ${sqft.toLocaleString()}sqft
+DESCRIPTION: ${description}
+FEATURES: ${features}
+AGENT: ${agentSignature}
+TONE: ${toneGuide}
+WEEK THEMES: 1:Just Listed 2:Property Features 3:Neighborhood 4:Open House 5:Investment Value 6:Final Call
+
+{
+  "reelScripts": [
+    {"week": 1, "title": "Just Listed Hook", "duration": "30–45 sec", "hook": "Opening line spoken to camera — grabs attention in 3 seconds", "script": "Full word-for-word spoken script with [scene directions]. Natural, energetic, conversational. End with CTA.", "captions": ["on-screen text 1", "on-screen text 2", "on-screen text 3"], "music": "Suggested music vibe"},
+    {"week": 2, "title": "Feature Showcase", "duration": "30–45 sec", "hook": "...", "script": "...", "captions": ["..."], "music": "..."},
+    {"week": 3, "title": "Neighborhood Story", "duration": "30–45 sec", "hook": "...", "script": "...", "captions": ["..."], "music": "..."},
+    {"week": 4, "title": "Open House Invite", "duration": "30–45 sec", "hook": "...", "script": "...", "captions": ["..."], "music": "..."},
+    {"week": 5, "title": "Investment Angle", "duration": "30–45 sec", "hook": "...", "script": "...", "captions": ["..."], "music": "..."},
+    {"week": 6, "title": "Final Call", "duration": "30–45 sec", "hook": "...", "script": "...", "captions": ["..."], "music": "..."}
+  ],
+  "virtualTourScripts": [
+    {"type": "Matterport Walkthrough", "duration": "90 sec", "script": "Full room-by-room narration script for a 3D virtual tour. Written to be read by the agent on camera or as voice-over."},
+    {"type": "30-Second Highlight Reel", "duration": "30 sec", "script": "Fast-paced highlight script. Hook → 3 best features → price → CTA."},
+    {"type": "Drone Footage Voice-Over", "duration": "45 sec", "script": "Aerial footage narration. Opens with neighborhood, zooms to property, highlights exterior. Cinematic tone."},
+    {"type": "What Buyers Will Love", "duration": "60 sec", "script": "Timed walkthrough: 0-15s kitchen, 15-30s primary suite, 30-45s outdoor, 45-60s neighborhood/CTA."}
+  ],
+  "tiktok": [
+    {"week": 1, "hook": "First 3 seconds — scroll-stopping spoken line", "script": "15-30 sec TikTok script. Hook → reveal → 2 features → price + CTA. Conversational.", "trendingAudio": "Suggested audio style", "onScreenText": ["overlay 1", "overlay 2", "overlay 3"]},
+    {"week": 2, "hook": "...", "script": "...", "trendingAudio": "...", "onScreenText": ["..."]},
+    {"week": 3, "hook": "...", "script": "...", "trendingAudio": "...", "onScreenText": ["..."]},
+    {"week": 4, "hook": "...", "script": "...", "trendingAudio": "...", "onScreenText": ["..."]},
+    {"week": 5, "hook": "...", "script": "...", "trendingAudio": "...", "onScreenText": ["..."]},
+    {"week": 6, "hook": "...", "script": "...", "trendingAudio": "...", "onScreenText": ["..."]}
+  ],
+  "linkedin": [
+    {"week": 1, "post": "150-200 word LinkedIn update. Professional tone. Market insight first, listing second. CTA.", "hashtags": ["realestate", "${city.toLowerCase().replace(/\s/g, '')}", "justlisted", "realtor"]},
+    {"week": 2, "post": "...", "hashtags": ["..."]},
+    {"week": 3, "post": "...", "hashtags": ["..."]},
+    {"week": 4, "post": "...", "hashtags": ["..."]},
+    {"week": 5, "post": "...", "hashtags": ["..."]},
+    {"week": 6, "post": "...", "hashtags": ["..."]}
+  ],
+  "xThreads": [
+    {"week": 1, "tweets": ["Tweet 1 (280 chars) — hook", "Tweet 2 — best feature", "Tweet 3 — neighborhood", "Tweet 4 — price/value", "Tweet 5 — CTA + ${listingUrl}"]},
+    {"week": 2, "tweets": ["...","...","...","...","..."]},
+    {"week": 3, "tweets": ["...","...","...","...","..."]},
+    {"week": 4, "tweets": ["...","...","...","...","..."]},
+    {"week": 5, "tweets": ["...","...","...","...","..."]},
+    {"week": 6, "tweets": ["...","...","...","...","..."]}
+  ],
+  "stories": [
+    {"week": 1, "platform": "Instagram/Facebook Stories", "slides": [
+      {"slideNumber": 1, "text": "Hook/announcement", "cta": "Swipe up"},
+      {"slideNumber": 2, "text": "Key stat or feature", "cta": null},
+      {"slideNumber": 3, "text": "Neighborhood", "cta": null},
+      {"slideNumber": 4, "text": "Price reveal", "cta": "DM me for a showing"},
+      {"slideNumber": 5, "text": "Agent contact", "cta": "Tap to call"}
+    ]},
+    {"week": 2, "platform": "Instagram/Facebook Stories", "slides": [{"slideNumber": 1,"text":"...","cta":null},{"slideNumber": 2,"text":"...","cta":null},{"slideNumber": 3,"text":"...","cta":null},{"slideNumber": 4,"text":"...","cta":null},{"slideNumber": 5,"text":"...","cta":null}]},
+    {"week": 3, "platform": "Instagram/Facebook Stories", "slides": [{"slideNumber": 1,"text":"...","cta":null},{"slideNumber": 2,"text":"...","cta":null},{"slideNumber": 3,"text":"...","cta":null},{"slideNumber": 4,"text":"...","cta":null},{"slideNumber": 5,"text":"...","cta":null}]},
+    {"week": 4, "platform": "Instagram/Facebook Stories", "slides": [{"slideNumber": 1,"text":"...","cta":null},{"slideNumber": 2,"text":"...","cta":null},{"slideNumber": 3,"text":"...","cta":null},{"slideNumber": 4,"text":"...","cta":null},{"slideNumber": 5,"text":"...","cta":null}]},
+    {"week": 5, "platform": "Instagram/Facebook Stories", "slides": [{"slideNumber": 1,"text":"...","cta":null},{"slideNumber": 2,"text":"...","cta":null},{"slideNumber": 3,"text":"...","cta":null},{"slideNumber": 4,"text":"...","cta":null},{"slideNumber": 5,"text":"...","cta":null}]},
+    {"week": 6, "platform": "Instagram/Facebook Stories", "slides": [{"slideNumber": 1,"text":"...","cta":null},{"slideNumber": 2,"text":"...","cta":null},{"slideNumber": 3,"text":"...","cta":null},{"slideNumber": 4,"text":"...","cta":null},{"slideNumber": 5,"text":"...","cta":null}]}
+  ]
+}
+
+RULES:
+- Generate ALL 6 weeks for every array — each week must use its theme and feel distinct
+- Reel scripts must sound like the agent speaking naturally to camera
+- Return ONLY the JSON object`
+}
+
 // ── POST handler ───────────────────────────────────────────────
 export async function POST(request: NextRequest) {
   const { userId } = await auth()
@@ -435,10 +541,11 @@ export async function POST(request: NextRequest) {
       campaignRecord = rec
     } catch (dbErr) { console.error('DB campaign error (non-fatal):', dbErr) }
 
-    // Build multipart message — text prompt + MLS photos as base64 vision blocks
+    // Build prompts and fetch photos in parallel
     const promptText = buildCampaignPrompt(mlsData, planTier, brandKit, (user as any).aiPersona)
     const rawPhotos: string[] = mlsData.photos ?? []
-    const photoUrls = rawPhotos.slice(0, 10)
+    // Cap at 3 photos — each base64 image adds ~3k input tokens with diminishing copy quality returns
+    const photoUrls = rawPhotos.slice(0, 3)
 
     // Fetch photos in parallel (best-effort — failures are silently dropped)
     const photoBlocks: Anthropic.ImageBlockParam[] = []
@@ -455,37 +562,63 @@ export async function POST(request: NextRequest) {
       }
     }
 
-    // Photos first so Claude sees them before reading caption instructions, then the text prompt
+    // Core message content: photos first so Claude sees them before caption instructions
     const messageContent: Array<Anthropic.ImageBlockParam | Anthropic.TextBlockParam> = [
       ...photoBlocks,
       { type: 'text', text: promptText },
     ]
 
-    const message = await anthropic.messages.create({
-      model: 'claude-sonnet-4-20250514',
-      max_tokens: 16000,
-      messages: [{ role: 'user', content: messageContent }],
-    })
+    const isProPlan = ['pro', 'brokerage', 'enterprise'].includes(planTier)
 
-    const responseText = message.content[0].type === 'text' ? message.content[0].text : ''
+    // For Pro+ plans: fire two API calls in parallel — core content + Pro-only content.
+    // This cuts generation time from ~2-3 min down to ~45-60s.
+    const [message, proMessage] = await Promise.all([
+      anthropic.messages.create({
+        model: 'claude-sonnet-4-20250514',
+        max_tokens: 10000,
+        messages: [{ role: 'user', content: messageContent }],
+      }),
+      isProPlan
+        ? anthropic.messages.create({
+            model: 'claude-sonnet-4-20250514',
+            max_tokens: 8000,
+            messages: [{ role: 'user', content: [{ type: 'text', text: buildProPrompt(mlsData, planTier, brandKit, (user as any).aiPersona) }] }],
+          })
+        : Promise.resolve(null),
+    ])
 
-    let content: any
-    try {
-      const cleaned = responseText.replace(/```json\n?/g, '').replace(/```\n?/g, '').trim()
-      content = JSON.parse(cleaned)
-    } catch {
-      const jsonMatch = responseText.match(/\{[\s\S]*\}/)
-      if (jsonMatch) {
-        try { content = JSON.parse(jsonMatch[0]) }
-        catch { throw new Error('AI response could not be parsed. Please try again.') }
-      } else {
+    function parseJSON(raw: string) {
+      const cleaned = raw.replace(/```json\n?/g, '').replace(/```\n?/g, '').trim()
+      try { return JSON.parse(cleaned) }
+      catch {
+        const m = cleaned.match(/\{[\s\S]*\}/)
+        if (m) return JSON.parse(m[0])
         throw new Error('AI response could not be parsed. Please try again.')
       }
     }
 
+    const responseText = message.content[0].type === 'text' ? message.content[0].text : ''
+    const content: any = parseJSON(responseText)
+
+    // Merge Pro content if the second call succeeded
+    if (proMessage) {
+      const proText = proMessage.content[0].type === 'text' ? proMessage.content[0].text : ''
+      try {
+        const proContent = parseJSON(proText)
+        content.reelScripts = proContent.reelScripts ?? null
+        content.virtualTourScripts = proContent.virtualTourScripts ?? null
+        content.tiktok = proContent.tiktok ?? null
+        content.linkedin = proContent.linkedin ?? null
+        content.xThreads = proContent.xThreads ?? null
+        content.stories = proContent.stories ?? null
+      } catch (e) {
+        console.error('Pro content parse error (non-fatal):', e)
+      }
+    }
+
     const generationMs = Date.now() - startMs
-    // Alert on slow generations (>30s indicates a cost/performance problem)
-    if (generationMs > 30_000) {
+    // Alert on very slow generations (>90s even with parallel calls)
+    if (generationMs > 90_000) {
       captureError(new Error(`Slow generation: ${generationMs}ms`), { generationMs, userId, planTier, mlsId })
     }
 
@@ -514,14 +647,14 @@ export async function POST(request: NextRequest) {
                 stories: content.stories ?? null,
             hashtagPacks: content.hashtagPacks ?? null,
           } as any,
-          promptTokens: message.usage.input_tokens,
-          completionTokens: message.usage.output_tokens,
+          promptTokens: message.usage.input_tokens + (proMessage?.usage.input_tokens ?? 0),
+          completionTokens: message.usage.output_tokens + (proMessage?.usage.output_tokens ?? 0),
           updatedAt: new Date(),
         }).where(eq(campaigns.id, campaignRecord.id))
       } catch (dbErr) { console.error('DB update error (non-fatal):', dbErr) }
     }
 
-    trackGenerationCost({ userId, planTier, mlsId, durationMs: generationMs, estimatedInputTokens: message.usage.input_tokens, estimatedOutputTokens: message.usage.output_tokens })
+    trackGenerationCost({ userId, planTier, mlsId, durationMs: generationMs, estimatedInputTokens: message.usage.input_tokens + (proMessage?.usage.input_tokens ?? 0), estimatedOutputTokens: message.usage.output_tokens + (proMessage?.usage.output_tokens ?? 0) })
 
     const contentTypes = ['facebook', 'instagram', 'email_just_listed', 'email_still_available', 'listing_copy', 'print_materials', 'photo_captions', 'flyer']
     if (content.reelScripts) contentTypes.push('video_script', 'virtual_tour')
