@@ -1,4 +1,4 @@
-/**
+-/**
  * ListOps — Campaign Generation API
  *
  * OUTPUT MODULES (plan-gated):
@@ -150,8 +150,10 @@ function buildCampaignPrompt(listing: any, planTier: PlanTier, brandKit?: any, u
   const agentSigParts = [agentName, agentTitle, brokerageName, agentPhone, agentEmail].filter(Boolean)
   const agentSignature = agentSigParts.join(' | ')
 
-  const hasVideo = canAccessFeature(planTier, 'video_script')
-  const hasExpanded = ['pro', 'brokerage', 'enterprise'].includes(planTier)
+  // hasVideo and hasExpanded content is now handled by buildProPrompt (parallel call).
+  // Force these false here so the core prompt stays small and fast.
+  const hasVideo = false
+  const hasExpanded = false
   const hasEmailDrip = canAccessFeature(planTier, 'brand_kit') // Starter+
   const hasMicrosite = canAccessFeature(planTier, 'listing_microsite')
 
@@ -217,7 +219,7 @@ Return ONLY valid JSON with exactly this structure (no markdown, no code fences)
       "Variation 9 — local expert angle",
       "Variation 10 — concise punchy angle"
     ],
-    "fullDescription": "800-1200 word professional MLS listing description. Open with a scene-setting hook. Build through features naturally. Include neighborhood context. Close with a CTA. Write like the best listing description in the market.",
+    "fullDescription": "400-600 word professional MLS listing description. Scene-setting hook, key features, neighborhood context, CTA.",
     "bulletPoints": [
       "Strongest buyer appeal point — lead with the outcome, not the feature",
       "Second strongest — e.g. 'Chef's kitchen with quartz island — entertain without leaving home'",
@@ -228,10 +230,9 @@ Return ONLY valid JSON with exactly this structure (no markdown, no code fences)
       "Seventh",
       "Eighth"
     ],
-    "neighborhoodStory": "150-200 word lifestyle paragraph about the neighborhood, walkability, schools, dining, commute. Make the reader feel what it's like to live here.",
+    "neighborhoodStory": "80-100 word neighborhood lifestyle paragraph — walkability, schools, dining.",
     "seoMetaTitle": "SEO meta title under 60 characters",
     "seoMetaDescription": "SEO meta description 150-160 characters with primary keyword and CTA",
-    "spanishDescription": "200-300 word Spanish translation of the core description for Spanish-speaking buyer outreach",
     "toneVariants": {
       "luxury": "50-word luxury reframe of the headline and opening",
       "firstTimeBuyer": "50-word first-time buyer reframe — approachable, reassuring, milestone-focused",
@@ -239,23 +240,19 @@ Return ONLY valid JSON with exactly this structure (no markdown, no code fences)
     }
   },
   "facebook": [
-    {"week": 1, "theme": "Just Listed", "copy": "2-3 focused paragraphs (130-180 words). Scene-setting hook. 2-3 standout features. CTA + ${listingUrl}. Final line: ${agentSignature}", "hashtags": ["realtor","justlisted","${city.toLowerCase().replace(/\s/g, '')}realestate","${city.toLowerCase().replace(/\s/g, '')}homes","newhome"]}
+    {"week": 1, "theme": "Just Listed", "copy": "100-130 words. Hook, 2 features, CTA + ${listingUrl}. Final line: ${agentSignature}", "hashtags": ["realtor","justlisted","${city.toLowerCase().replace(/\s/g, '')}realestate","${city.toLowerCase().replace(/\s/g, '')}homes","newhome"]}
   ],
   "instagram": [
-    {"week": 1, "caption": "80-120 words. Bold 1-line hook. 2-3 lifestyle sentences. CTA + ${listingUrl}. Final line: ${agentSignature}", "hashtags": ["justlisted","realestate","homeforsale","${city.toLowerCase().replace(/\s/g, '')}homes","realtor","listingagent"]}
+    {"week": 1, "caption": "60-80 words. Hook, lifestyle angle, CTA + ${listingUrl}. Final line: ${agentSignature}", "hashtags": ["justlisted","realestate","homeforsale","${city.toLowerCase().replace(/\s/g, '')}homes","realtor","listingagent"]}
   ],
   "emailJustListed": "200-300 word just listed email body with full property details and CTA",
   "emailStillAvailable": "150-200 word still available follow-up with urgency",
   ${hasEmailDrip ? `
   "emailDrip": {
-    "sellerUpdate": "150-200 word seller update email — showing activity report, market context, next steps",
-    "buyerDripDay1": "150 word Day 1 buyer lead nurture — welcome, what to expect, listing highlights",
-    "buyerDripDay7": "150 word Day 7 buyer drip — neighborhood spotlight, schools, lifestyle",
-    "buyerDripDay14": "150 word Day 14 buyer drip — feature deep-dive, open house invite",
-    "buyerDripDay30": "150 word Day 30 buyer drip — urgency, final push, direct CTA",
-    "openHouseInvite": "150-200 word open house invitation email — date/time TBD placeholder, excitement, social proof",
-    "postShowingFeedback": "100-word post-showing feedback request — warm, professional, not pushy",
-    "marketReport": "200-word neighborhood market report email — recent comps context, positioning this listing"
+    "buyerDripDay1": "100 word Day 1 buyer nurture — welcome and listing highlights",
+    "buyerDripDay7": "100 word Day 7 drip — neighborhood spotlight",
+    "openHouseInvite": "100 word open house invite — date TBD placeholder",
+    "sellerUpdate": "100 word seller activity update — showings, market context"
   },` : ''}
   "printMaterials": {
     "yardSignRider": "Two punchy lines max. Fits on a 6\" yard sign rider. E.g. '4BD · 3BA · $649K | Call Alex: 512-555-0100'",
@@ -575,7 +572,7 @@ export async function POST(request: NextRequest) {
     const [message, proMessage] = await Promise.all([
       anthropic.messages.create({
         model: 'claude-sonnet-4-20250514',
-        max_tokens: 10000,
+        max_tokens: 6000,
         messages: [{ role: 'user', content: messageContent }],
       }),
       isProPlan
