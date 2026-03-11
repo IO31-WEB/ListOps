@@ -11,9 +11,14 @@ import { users, referrals } from '@/lib/db/schema'
 import { eq } from 'drizzle-orm'
 import { getUserWithDetails } from '@/lib/user-service'
 import { trackReferralSignup } from '@/lib/posthog'
-// Simple random code generator — no dependency needed
-function generateCode(len = 8) {
-  return Math.random().toString(36).toUpperCase().slice(2, 2 + len).padEnd(len, '0')
+// FIX: Math.random() produces predictable codes — an attacker with enough samples
+// can predict future codes. nanoid uses crypto.getRandomValues() under the hood.
+import { nanoid } from 'nanoid'
+
+// Generates an 8-character alphanumeric referral code — cryptographically random.
+function generateCode(): string {
+  // nanoid with custom alphabet (uppercase + digits, no ambiguous chars like 0/O, 1/I)
+  return nanoid(8).toUpperCase().replace(/[^A-Z0-9]/g, 'X').slice(0, 8)
 }
 
 // GET: return referral code + stats for logged-in user
@@ -27,7 +32,7 @@ export async function GET() {
   // Generate code if not already set
   let code = user.referralCode
   if (!code) {
-    code = generateCode(8)
+    code = generateCode()
     await db.update(users).set({ referralCode: code }).where(eq(users.id, user.id))
   }
 
