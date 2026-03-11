@@ -1,6 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { auth } from '@clerk/nextjs/server'
-import { getUserWithDetails, upsertBrandKit, writeAuditLog } from '@/lib/user-service'
+import { getUserWithDetails, upsertBrandKit, writeAuditLog, checkCampaignQuota } from '@/lib/user-service'
 import { db } from '@/lib/db'
 import { users } from '@/lib/db/schema'
 import { eq } from 'drizzle-orm'
@@ -48,11 +48,16 @@ export async function POST(request: NextRequest) {
     const body = await request.json()
     const data = BrandKitSchema.parse(body)
 
-    const user = await getUserWithDetails(userId)
+    const [user, quota] = await Promise.all([
+      getUserWithDetails(userId),
+      checkCampaignQuota(userId),
+    ])
     if (!user) return NextResponse.json({ error: 'User not found' }, { status: 404 })
 
     // Check plan — brand kit requires starter+
-    const planTier = user.organization?.plan ?? 'free'
+    // Use checkCampaignQuota (same source as /api/billing/info) so Clerk metadata
+    // overrides are respected and the plan check stays in sync with the UI.
+    const planTier = quota.planTier
     if (planTier === 'free') {
       return NextResponse.json(
         { error: 'Brand Kit requires a Starter plan or above. Please upgrade.' },
