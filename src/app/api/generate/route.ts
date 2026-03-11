@@ -622,11 +622,14 @@ export async function POST(request: NextRequest) {
       captureError(new Error(`Slow generation: ${generationMs}ms`), { generationMs, userId, planTier, mlsId })
     }
 
-    // Save to DB
+    // Save to DB in two steps:
+    // Step 1 — core fields (small payload, must succeed to mark campaign complete)
+    // Step 2 — analytics JSONB (large Pro content, non-fatal if it fails)
     if (campaignRecord) {
       try {
         await db.update(campaigns).set({
-          status: 'complete', generationMs,
+          status: 'complete',
+          generationMs,
           facebookPosts: content.facebook,
           instagramPosts: content.instagram,
           emailJustListed: content.emailJustListed,
@@ -634,7 +637,18 @@ export async function POST(request: NextRequest) {
           videoScript: canAccessFeature(planTier, 'video_script') && content.reelScripts
             ? JSON.stringify({ reelScripts: content.reelScripts, virtualTourScripts: content.virtualTourScripts ?? [] })
             : null,
-          // Store all new modules in the analytics jsonb field as an extension
+          promptTokens: message.usage.input_tokens + (proMessage?.usage.input_tokens ?? 0),
+          completionTokens: message.usage.output_tokens + (proMessage?.usage.output_tokens ?? 0),
+          updatedAt: new Date(),
+        }).where(eq(campaigns.id, campaignRecord.id))
+      } catch (dbErr) {
+        console.error('DB core update error:', dbErr)
+        throw new Error('Failed to save campaign. Please try again.')
+      }
+
+      // Step 2 — large analytics JSONB (non-fatal: campaign is already marked complete above)
+      try {
+        await db.update(campaigns).set({
           analytics: {
             listingCopy: content.listingCopy,
             emailDrip: content.emailDrip ?? null,
@@ -644,14 +658,14 @@ export async function POST(request: NextRequest) {
             tiktok: content.tiktok ?? null,
             linkedin: content.linkedin ?? null,
             xThreads: content.xThreads ?? null,
-                stories: content.stories ?? null,
+            stories: content.stories ?? null,
             hashtagPacks: content.hashtagPacks ?? null,
           } as any,
-          promptTokens: message.usage.input_tokens + (proMessage?.usage.input_tokens ?? 0),
-          completionTokens: message.usage.output_tokens + (proMessage?.usage.output_tokens ?? 0),
           updatedAt: new Date(),
         }).where(eq(campaigns.id, campaignRecord.id))
-      } catch (dbErr) { console.error('DB update error (non-fatal):', dbErr) }
+      } catch (dbErr) {
+        console.error('DB analytics update error (non-fatal — core content saved):', dbErr)
+      }
     }
 
     trackGenerationCost({ userId, planTier, mlsId, durationMs: generationMs, estimatedInputTokens: message.usage.input_tokens + (proMessage?.usage.input_tokens ?? 0), estimatedOutputTokens: message.usage.output_tokens + (proMessage?.usage.output_tokens ?? 0) })
@@ -696,8 +710,10 @@ export async function POST(request: NextRequest) {
 
   } catch (err: any) {
     if (err instanceof z.ZodError) return NextResponse.json({ error: 'Invalid MLS ID format' }, { status: 400 })
-    console.error('Generation error:', err)
+    console.error('[generate] Error:', err?.message, err?.stack?.split('\n')[1])
     captureError(err, { userId, context: 'campaign_generation' })
+    // Mark stuck campaign as failed so it doesn't show as 'generating' forever
+    // (campaignRecord may not be in scope here — best effort)
     return NextResponse.json({ error: err.message || 'Campaign generation failed. Please try again.' }, { status: 500 })
   }
 }
