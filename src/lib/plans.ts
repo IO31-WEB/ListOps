@@ -40,7 +40,7 @@ export const FEATURE_GATES = {
   photo_captions:       ['starter', 'pro', 'brokerage', 'enterprise'],
   email_drip:           ['starter', 'pro', 'brokerage', 'enterprise'],
   microsite_copy:       ['starter', 'pro', 'brokerage', 'enterprise'],
-  expanded_social:      ['pro', 'brokerage', 'enterprise'],   // TikTok, LinkedIn, X, Pinterest, Stories
+  expanded_social:      ['pro', 'brokerage', 'enterprise'],   // TikTok, LinkedIn, X, Stories
   virtual_tour_scripts: ['pro', 'brokerage', 'enterprise'],
 } as const satisfies Record<string, readonly PlanTier[]>
 
