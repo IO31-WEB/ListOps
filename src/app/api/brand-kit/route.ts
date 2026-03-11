@@ -6,24 +6,37 @@ import { users } from '@/lib/db/schema'
 import { eq } from 'drizzle-orm'
 import { z } from 'zod'
 
+// Helper: accepts a valid URL string, empty string, or undefined/null
+const optionalUrl = () =>
+  z.string().optional().refine(
+    (v) => !v || v === '' || /^https?:\/\//.test(v),
+    { message: 'Must be a valid URL or empty' }
+  )
+
+const optionalEmail = () =>
+  z.string().optional().refine(
+    (v) => !v || v === '' || /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(v),
+    { message: 'Must be a valid email or empty' }
+  )
+
 const BrandKitSchema = z.object({
   agentName: z.string().max(100).optional(),
   agentTitle: z.string().max(100).optional(),
   agentPhone: z.string().max(30).optional(),
-  agentEmail: z.string().email().optional().or(z.literal('')),
-  agentWebsite: z.string().url().optional().or(z.literal('')),
+  agentEmail: optionalEmail(),
+  agentWebsite: optionalUrl(),
   brokerageName: z.string().max(150).optional(),
   tagline: z.string().max(200).optional(),
   disclaimer: z.string().max(500).optional(),
   primaryColor: z.string().regex(/^#[0-9a-fA-F]{6}$/).optional(),
   accentColor: z.string().regex(/^#[0-9a-fA-F]{6}$/).optional(),
   fontFamily: z.string().max(50).optional(),
-  facebookUrl: z.string().url().optional().or(z.literal('')),
+  facebookUrl: optionalUrl(),
   instagramHandle: z.string().max(50).optional(),
-  linkedinUrl: z.string().url().optional().or(z.literal('')),
-  logoUrl: z.string().optional().or(z.literal('')),
-  agentPhotoUrl: z.string().optional().or(z.literal('')),
-  brokerageLogo: z.string().url().optional().or(z.literal('')),
+  linkedinUrl: optionalUrl(),
+  logoUrl: z.string().optional(),
+  agentPhotoUrl: z.string().optional(),
+  brokerageLogo: optionalUrl(),
   tone: z.enum(['professional', 'friendly', 'luxury', 'energetic']).optional(),
 })
 
