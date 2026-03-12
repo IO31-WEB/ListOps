@@ -153,7 +153,7 @@ const response = await anthropic.beta.messages.create({
           source: {
             type: 'base64',
             media_type: 'application/pdf',
-            data: pdfb64,  
+            data: pdfBase64,  
           }
         },
         { type: 'text', text: 'Extract CoStar report details: property info, pricing, comps, etc.' }
