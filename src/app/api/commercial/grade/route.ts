@@ -15,7 +15,7 @@ import { costarReports, propertyGrades, gradeWeights } from '@/lib/db/schema'
 import { getUserWithDetails } from '@/lib/user-service'
 import { canAccess } from '@/lib/plans'
 import { captureError } from '@/lib/monitoring'
-import { ratelimit } from '@/lib/ratelimit'
+import { rateLimitAPI } from '@/lib/ratelimit'
 import { eq, and } from 'drizzle-orm'
 import { z } from 'zod'
 import {
@@ -46,10 +46,10 @@ export async function POST(request: NextRequest) {
     return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
   }
 
-  const rl = await ratelimit(userId, 'property_grade', 20, '1 h')
+  const rl = await rateLimitAPI(request.headers.get('x-forwarded-for') ?? userId)
   if (!rl.success) {
     return NextResponse.json(
-      { error: 'Rate limit exceeded. Max 20 grade generations per hour.' },
+      { error: 'Rate limit exceeded. Please try again later.' },
       { status: 429 }
     )
   }
