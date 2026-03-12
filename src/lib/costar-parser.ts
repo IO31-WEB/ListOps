@@ -141,9 +141,9 @@ export async function parseCostarPdf(
   pdfBase64: string,
   filename: string
 ): Promise<ParsedCostarReport> {
-const response = await anthropic.beta.messages.create({  
-  model: 'claude-3-5-sonnet-latest',  
-  max_tokens: 4096,  
+const response = await anthropic.beta.messages.create({
+  model: 'claude-3-5-sonnet-latest',
+  max_tokens: 4096,
   messages: [
     {
       role: 'user',
@@ -153,17 +153,14 @@ const response = await anthropic.beta.messages.create({
           source: {
             type: 'base64',
             media_type: 'application/pdf',
-            data: pdfBase64,  
+            data: pdfBase64,
           }
         },
-        { type: 'text', text: 'Extract CoStar report details: property info, pricing, comps, etc.' }
+        { type: 'text', text: USER_PROMPT }  
       ]
     }
-  ],
-  // Required for PDF support (runtime + sometimes types)
-  headers: {
-    'anthropic-beta': 'files-api-2025-04-14'  
-  }
+  ]
+});
 });
   const tokensUsed =
     (response.usage.input_tokens ?? 0) + (response.usage.output_tokens ?? 0)
