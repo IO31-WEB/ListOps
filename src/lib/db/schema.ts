@@ -14,7 +14,9 @@ import { relations } from 'drizzle-orm'
 
 // ── Enums ──────────────────────────────────────────────────────
 
-export const tierEnum = pgEnum('tier', ['free', 'starter', 'pro', 'brokerage', 'enterprise'])
+export const tierEnum = pgEnum('tier', ['free', 'starter', 'pro', 'commercial', 'brokerage', 'enterprise'])
+export const costarSourceEnum = pgEnum('costar_source', ['manual_upload', 'api_push', 'email_forward'])
+export const propertyGradeEnum = pgEnum('property_grade', ['A+', 'A', 'A-', 'B+', 'B', 'B-', 'C+', 'C', 'C-', 'D+', 'D', 'D-', 'F'])
 export const roleEnum = pgEnum('role', ['owner', 'admin', 'agent', 'viewer'])
 export const subStatusEnum = pgEnum('sub_status', ['trialing', 'active', 'past_due', 'canceled', 'paused'])
 export const campaignStatusEnum = pgEnum('campaign_status', ['generating', 'complete', 'failed', 'draft'])
@@ -345,4 +347,148 @@ export const campaignRelations = relations(campaigns, ({ one }) => ({
 export const subscriptionRelations = relations(subscriptions, ({ one }) => ({
   organization: one(organizations, { fields: [subscriptions.orgId], references: [organizations.id] }),
   user: one(users, { fields: [subscriptions.userId], references: [users.id] }),
+}))
+
+// ── CoStar Reports ─────────────────────────────────────────────
+
+export const costarReports = pgTable('costar_reports', {
+  id: uuid('id').primaryKey().defaultRandom(),
+  orgId: uuid('org_id').notNull().references(() => organizations.id, { onDelete: 'cascade' }),
+  userId: uuid('user_id').notNull().references(() => users.id, { onDelete: 'cascade' }),
+  propertyAddress: text('property_address').notNull(),
+  propertyCity: text('property_city'),
+  propertyState: text('property_state'),
+  propertyZip: text('property_zip'),
+  propertyLat: numeric('property_lat', { precision: 10, scale: 7 }),
+  propertyLng: numeric('property_lng', { precision: 10, scale: 7 }),
+  source: costarSourceEnum('source').notNull().default('manual_upload'),
+  rawPdfUrl: text('raw_pdf_url'),
+  rawPdfFilename: text('raw_pdf_filename'),
+  consumerSpend: jsonb('consumer_spend').$type<{ oneMile: CostarConsumerSpend; threeMile: CostarConsumerSpend; fiveMile: CostarConsumerSpend }>(),
+  demographics: jsonb('demographics').$type<{ oneMile: CostarDemographic; threeMile: CostarDemographic; fiveMile: CostarDemographic }>(),
+  trafficCounts: jsonb('traffic_counts').$type<CostarTrafficCount[]>(),
+  housingData: jsonb('housing_data').$type<CostarHousingData>(),
+  nearbyRetailers: jsonb('nearby_retailers').$type<CostarRetailer[]>(),
+  parseModel: text('parse_model'),
+  parseTokensUsed: integer('parse_tokens_used'),
+  parseCompletedAt: timestamp('parse_completed_at'),
+  parseError: text('parse_error'),
+  createdAt: timestamp('created_at').notNull().defaultNow(),
+  updatedAt: timestamp('updated_at').notNull().defaultNow(),
+}, (t) => ({
+  orgIdIdx: index('costar_org_id_idx').on(t.orgId),
+  userIdIdx: index('costar_user_id_idx').on(t.userId),
+}))
+
+export const propertyGrades = pgTable('property_grades', {
+  id: uuid('id').primaryKey().defaultRandom(),
+  orgId: uuid('org_id').notNull().references(() => organizations.id, { onDelete: 'cascade' }),
+  userId: uuid('user_id').notNull().references(() => users.id, { onDelete: 'cascade' }),
+  costarReportId: uuid('costar_report_id').notNull().references(() => costarReports.id, { onDelete: 'cascade' }),
+  overallGrade: propertyGradeEnum('overall_grade').notNull(),
+  overallScore: numeric('overall_score', { precision: 5, scale: 2 }).notNull(),
+  trafficScore: numeric('traffic_score', { precision: 5, scale: 2 }).notNull(),
+  trafficGrade: propertyGradeEnum('traffic_grade').notNull(),
+  consumerSpendScore: numeric('consumer_spend_score', { precision: 5, scale: 2 }).notNull(),
+  consumerSpendGrade: propertyGradeEnum('consumer_spend_grade').notNull(),
+  householdIncomeScore: numeric('household_income_score', { precision: 5, scale: 2 }).notNull(),
+  householdIncomeGrade: propertyGradeEnum('household_income_grade').notNull(),
+  demographicsScore: numeric('demographics_score', { precision: 5, scale: 2 }).notNull(),
+  demographicsGrade: propertyGradeEnum('demographics_grade').notNull(),
+  anchorTenantScore: numeric('anchor_tenant_score', { precision: 5, scale: 2 }).notNull(),
+  anchorTenantGrade: propertyGradeEnum('anchor_tenant_grade').notNull(),
+  anchorTenants: jsonb('anchor_tenants').$type<CostarAnchorTenant[]>(),
+  aiSummary: text('ai_summary'),
+  aiStrengths: jsonb('ai_strengths').$type<string[]>(),
+  aiRisks: jsonb('ai_risks').$type<string[]>(),
+  aiRecommendation: text('ai_recommendation'),
+  weightsSnapshot: jsonb('weights_snapshot').notNull().$type<CostarGradeWeights>(),
+  generatedAt: timestamp('generated_at').notNull().defaultNow(),
+  createdAt: timestamp('created_at').notNull().defaultNow(),
+}, (t) => ({
+  orgIdIdx: index('grade_org_id_idx').on(t.orgId),
+  costarReportIdx: index('grade_costar_report_idx').on(t.costarReportId),
+}))
+
+export const gradeWeights = pgTable('grade_weights', {
+  id: uuid('id').primaryKey().defaultRandom(),
+  orgId: uuid('org_id').notNull().references(() => organizations.id, { onDelete: 'cascade' }),
+  traffic: numeric('traffic', { precision: 4, scale: 2 }).notNull().default('0.25'),
+  consumerSpend: numeric('consumer_spend', { precision: 4, scale: 2 }).notNull().default('0.25'),
+  householdIncome: numeric('household_income', { precision: 4, scale: 2 }).notNull().default('0.20'),
+  demographics: numeric('demographics', { precision: 4, scale: 2 }).notNull().default('0.15'),
+  anchorTenant: numeric('anchor_tenant', { precision: 4, scale: 2 }).notNull().default('0.15'),
+  updatedAt: timestamp('updated_at').notNull().defaultNow(),
+}, (t) => ({
+  orgIdIdx: uniqueIndex('grade_weights_org_id_idx').on(t.orgId),
+}))
+
+// ── CoStar shared types ────────────────────────────────────────
+export interface CostarConsumerSpend {
+  totalSpecified: number
+  apparel: number
+  entertainmentHobbies: number
+  foodAlcohol: number
+  household: number
+  transportation: number
+  healthcare: number
+  education: number
+}
+export interface CostarDemographic {
+  population2024: number
+  populationGrowth5yr: number
+  medianAge: number
+  medianHouseholdIncome: number
+  avgHouseholdIncome: number
+  medianHomeValue: number
+  ownerOccupiedPct: number
+  bachelorsPlusPct: number
+  age65PlusPct: number
+  hispanicPct: number
+}
+export interface CostarTrafficCount {
+  street: string
+  crossStreet: string
+  avgDailyVolume: number
+  countYear: number
+  distanceMiles: number
+}
+export interface CostarHousingData {
+  medianHomeValue: number
+  ownerOccupiedPct: number
+  totalUnits: number
+  medianYearBuilt: number
+}
+export interface CostarRetailer {
+  name: string
+  distanceMiles: number
+  salesVolumeK: number | null
+  grade: string | null
+  direction: string | null
+  category: 'big_box' | 'fast_food' | 'fast_casual' | 'grocery' | 'pharmacy' | 'other'
+}
+export interface CostarAnchorTenant {
+  name: string
+  distanceMiles: number
+  category: string
+  salesGrade: string | null
+  impact: 'positive' | 'neutral' | 'negative'
+}
+export interface CostarGradeWeights {
+  traffic: number
+  consumerSpend: number
+  householdIncome: number
+  demographics: number
+  anchorTenant: number
+}
+
+export const costarReportRelations = relations(costarReports, ({ one, many }) => ({
+  organization: one(organizations, { fields: [costarReports.orgId], references: [organizations.id] }),
+  user: one(users, { fields: [costarReports.userId], references: [users.id] }),
+  grades: many(propertyGrades),
+}))
+
+export const propertyGradeRelations = relations(propertyGrades, ({ one }) => ({
+  costarReport: one(costarReports, { fields: [propertyGrades.costarReportId], references: [costarReports.id] }),
+  organization: one(organizations, { fields: [propertyGrades.orgId], references: [organizations.id] }),
 }))
