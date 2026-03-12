@@ -153,20 +153,18 @@ const response = await anthropic.beta.messages.create({
           source: {
             type: 'base64',
             media_type: 'application/pdf',
-            data: yourBase64PdfDataHere,  
+            data: pdfb64,  
           }
         },
-        // Add any text prompt after if needed
         { type: 'text', text: 'Extract CoStar report details: property info, pricing, comps, etc.' }
       ]
     }
   ],
   // Required for PDF support (runtime + sometimes types)
   headers: {
-    'anthropic-beta': 'files-api-2025-04-14'  // Current/recommended beta as of 2026; fallback to 'pdfs-2024-11-20' if error
+    'anthropic-beta': 'files-api-2025-04-14'  
   }
 });
-
   const tokensUsed =
     (response.usage.input_tokens ?? 0) + (response.usage.output_tokens ?? 0)
 
