@@ -29,6 +29,7 @@ import {
   scoreToGrade,
   generateGradeNarrative,
   DEFAULT_GRADE_WEIGHTS,
+  redistributeWeightsExcluding,
 } from '@/lib/property-grader'
 import type { PlanTier, } from '@/lib/plans'
 import type { CostarGradeWeights } from '@/lib/db/schema'
@@ -127,11 +128,17 @@ export async function POST(request: NextRequest) {
   const consumerSpendScore = scoreConsumerSpend(report.consumerSpend?.threeMile)
   const householdIncomeScore = scoreHouseholdIncome(report.demographics?.threeMile)
   const demographicsScore = scoreDemographics(report.demographics?.threeMile)
-  const { score: anchorTenantScore, anchors } = scoreAnchorTenants(report.nearbyRetailers ?? [])
+  const { score: anchorTenantScore, hasData: anchorHasData, anchors } = scoreAnchorTenants(report.nearbyRetailers ?? [])
+
+  // When anchor tenant data is missing, exclude it from the weighted average
+  // rather than penalizing the score for a data gap
+  const effectiveWeights = anchorHasData
+    ? weights
+    : redistributeWeightsExcluding('anchorTenant', weights)
 
   const overallScore = computeOverallScore(
     { traffic: trafficScore, consumerSpend: consumerSpendScore, householdIncome: householdIncomeScore, demographics: demographicsScore, anchorTenant: anchorTenantScore },
-    weights
+    effectiveWeights
   )
 
   const overallGrade = scoreToGrade(overallScore)
@@ -139,7 +146,7 @@ export async function POST(request: NextRequest) {
   const consumerSpendGrade = scoreToGrade(consumerSpendScore)
   const householdIncomeGrade = scoreToGrade(householdIncomeScore)
   const demographicsGrade = scoreToGrade(demographicsScore)
-  const anchorTenantGrade = scoreToGrade(anchorTenantScore)
+  const anchorTenantGrade = anchorHasData ? scoreToGrade(anchorTenantScore) : 'N/A'
 
   // Generate AI narrative
   let narrative
@@ -185,7 +192,7 @@ export async function POST(request: NextRequest) {
       aiStrengths: narrative?.strengths ?? null,
       aiRisks: narrative?.risks ?? null,
       aiRecommendation: narrative?.recommendation ?? null,
-      weightsSnapshot: weights as any,
+      weightsSnapshot: effectiveWeights as any,
     })
     .returning()
 
