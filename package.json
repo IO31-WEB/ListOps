@@ -17,7 +17,7 @@
     "db:migrate:prod": "npx tsx scripts/migrate.ts"
   },
   "dependencies": {
-    "@anthropic-ai/sdk": "^0.30.0",
+    "@anthropic-ai/sdk": "0.78.0",
     "@clerk/nextjs": "^6.0.0",
     "@neondatabase/serverless": "^0.9.4",
     "@radix-ui/react-accordion": "^1.2.0",
