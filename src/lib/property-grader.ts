@@ -187,8 +187,9 @@ const HIGH_VALUE_FAST_CASUAL = new Set([
 
 export function scoreAnchorTenants(
   retailers: CostarRetailer[]
-): { score: number; anchors: CostarAnchorTenant[] } {
-  if (!retailers.length) return { score: 50, anchors: [] }
+): { score: number; hasData: boolean; anchors: CostarAnchorTenant[] } {
+  // No data — flag hasData=false so callers can exclude from weighted average
+  if (!retailers.length) return { score: 50, hasData: false, anchors: [] }
 
   let score = 50 // baseline
   const anchors: CostarAnchorTenant[] = []
@@ -245,7 +246,27 @@ export function scoreAnchorTenants(
     }
   }
 
-  return { score: Math.min(100, score), anchors }
+  return { score: Math.min(100, score), hasData: true, anchors }
+}
+
+// ── Weight redistribution ────────────────────────────────────
+// When a category has no data, redistribute its weight proportionally
+// so the overall score isn't penalized for missing data.
+
+export function redistributeWeightsExcluding(
+  exclude: keyof CostarGradeWeights,
+  weights: CostarGradeWeights
+): CostarGradeWeights {
+  const excludedWeight = weights[exclude]
+  const remaining = 1 - excludedWeight
+  const factor = remaining > 0 ? 1 / remaining : 1
+  return {
+    traffic:         exclude === 'traffic'         ? 0 : weights.traffic * factor,
+    consumerSpend:   exclude === 'consumerSpend'   ? 0 : weights.consumerSpend * factor,
+    householdIncome: exclude === 'householdIncome' ? 0 : weights.householdIncome * factor,
+    demographics:    exclude === 'demographics'    ? 0 : weights.demographics * factor,
+    anchorTenant:    exclude === 'anchorTenant'    ? 0 : weights.anchorTenant * factor,
+  }
 }
 
 // ── Weighted Composite ────────────────────────────────────────
