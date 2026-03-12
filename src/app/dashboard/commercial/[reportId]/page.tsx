@@ -1,0 +1,435 @@
+'use client'
+
+import { useState, useEffect } from 'react'
+import { use } from 'react'
+import Link from 'next/link'
+import { ArrowLeft, Download, RefreshCw, Car, DollarSign, Home, Users, Store, TrendingUp, TrendingDown, Minus, AlertTriangle, CheckCircle, Building2, MapPin } from 'lucide-react'
+import toast from 'react-hot-toast'
+
+interface CostarReport {
+  id: string
+  propertyAddress: string
+  propertyCity: string | null
+  propertyState: string | null
+  propertyZip: string | null
+  rawPdfFilename: string | null
+  source: string
+  demographics: {
+    threeMile: {
+      population2024: number
+      populationGrowth5yr: number
+      medianAge: number
+      medianHouseholdIncome: number
+      avgHouseholdIncome: number
+      medianHomeValue: number
+      bachelorsPlusPct: number
+      age65PlusPct: number
+    } | null
+  } | null
+  trafficCounts: Array<{
+    street: string
+    avgDailyVolume: number
+    countYear: number
+    distanceMiles: number
+  }> | null
+  consumerSpend: {
+    threeMile: { totalSpecified: number; foodAlcohol: number; household: number } | null
+  } | null
+  createdAt: string
+}
+
+interface PropertyGrade {
+  id: string
+  overallGrade: string
+  overallScore: string
+  trafficScore: string
+  trafficGrade: string
+  consumerSpendScore: string
+  consumerSpendGrade: string
+  householdIncomeScore: string
+  householdIncomeGrade: string
+  demographicsScore: string
+  demographicsGrade: string
+  anchorTenantScore: string
+  anchorTenantGrade: string
+  anchorTenants: Array<{
+    name: string
+    distanceMiles: number
+    category: string
+    salesGrade: string | null
+    impact: 'positive' | 'neutral' | 'negative'
+  }> | null
+  aiSummary: string | null
+  aiStrengths: string[] | null
+  aiRisks: string[] | null
+  aiRecommendation: string | null
+  weightsSnapshot: Record<string, number>
+  generatedAt: string
+}
+
+const GRADE_BG: Record<string, string> = {
+  'A+': 'bg-emerald-500', 'A': 'bg-emerald-500', 'A-': 'bg-emerald-400',
+  'B+': 'bg-blue-500', 'B': 'bg-blue-500', 'B-': 'bg-blue-400',
+  'C+': 'bg-amber-500', 'C': 'bg-amber-500', 'C-': 'bg-amber-400',
+  'D+': 'bg-orange-500', 'D': 'bg-orange-500', 'D-': 'bg-orange-400',
+  'F': 'bg-red-500',
+}
+
+const GRADE_TEXT: Record<string, string> = {
+  'A+': 'text-emerald-700', 'A': 'text-emerald-700', 'A-': 'text-emerald-600',
+  'B+': 'text-blue-700', 'B': 'text-blue-700', 'B-': 'text-blue-600',
+  'C+': 'text-amber-700', 'C': 'text-amber-700', 'C-': 'text-amber-600',
+  'D+': 'text-orange-700', 'D': 'text-orange-700', 'D-': 'text-orange-600',
+  'F': 'text-red-700',
+}
+
+function ScoreBar({ score, grade }: { score: number; grade: string }) {
+  const pct = Math.round(score)
+  const bg = GRADE_BG[grade] ?? 'bg-slate-400'
+  return (
+    <div className="flex items-center gap-3">
+      <div className="flex-1 h-2.5 bg-slate-100 rounded-full overflow-hidden">
+        <div
+          className={`h-full rounded-full transition-all duration-700 ${bg}`}
+          style={{ width: `${pct}%` }}
+        />
+      </div>
+      <span className="text-sm font-bold text-slate-700 w-8 text-right">{pct}</span>
+    </div>
+  )
+}
+
+function GradeBadge({ grade, size = 'md' }: { grade: string; size?: 'sm' | 'md' | 'lg' }) {
+  const bg = GRADE_BG[grade] ?? 'bg-slate-400'
+  const sizes = { sm: 'w-8 h-8 text-sm', md: 'w-12 h-12 text-lg', lg: 'w-20 h-20 text-3xl' }
+  return (
+    <div className={`${bg} ${sizes[size]} rounded-xl flex items-center justify-center font-bold text-white flex-shrink-0`}>
+      {grade}
+    </div>
+  )
+}
+
+const CATEGORY_ICONS = {
+  traffic: Car,
+  consumerSpend: DollarSign,
+  householdIncome: Home,
+  demographics: Users,
+  anchorTenant: Store,
+}
+
+const CATEGORY_LABELS = {
+  traffic: 'Daily Traffic',
+  consumerSpend: 'Consumer Spend',
+  householdIncome: 'Household Income',
+  demographics: 'Demographics',
+  anchorTenant: 'Anchor Tenants',
+}
+
+const CATEGORY_DESCRIPTIONS = {
+  traffic: 'Average daily vehicle count on nearest arterial roads',
+  consumerSpend: 'Total annual consumer spending in the 3-mile trade area',
+  householdIncome: 'Median household income in the 3-mile trade area',
+  demographics: 'Population size, growth rate, education, and age profile',
+  anchorTenant: 'Big-box, grocery, and high-traffic retailers in proximity',
+}
+
+export default function GradeCardPage({ params }: { params: Promise<{ reportId: string }> }) {
+  const { reportId } = use(params)
+  const [report, setReport] = useState<CostarReport | null>(null)
+  const [grade, setGrade] = useState<PropertyGrade | null>(null)
+  const [loading, setLoading] = useState(true)
+  const [regenerating, setRegenerating] = useState(false)
+
+  async function fetchData() {
+    try {
+      const res = await fetch(`/api/commercial/reports?id=${reportId}`)
+      if (!res.ok) throw new Error('Failed to load report')
+      const data = await res.json()
+      setReport(data.report)
+      setGrade(data.grade)
+    } catch {
+      toast.error('Failed to load grade card')
+    } finally {
+      setLoading(false)
+    }
+  }
+
+  useEffect(() => { fetchData() }, [reportId])
+
+  async function handleRegenerate() {
+    setRegenerating(true)
+    try {
+      const res = await fetch('/api/commercial/grade', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ reportId, regenerate: true }),
+      })
+      const data = await res.json()
+      if (!res.ok) { toast.error(data.error ?? 'Regeneration failed'); return }
+      toast.success('Grade card regenerated')
+      await fetchData()
+    } catch {
+      toast.error('Regeneration failed')
+    } finally {
+      setRegenerating(false)
+    }
+  }
+
+  if (loading) {
+    return (
+      <div className="min-h-screen bg-[var(--cream)] flex items-center justify-center">
+        <RefreshCw className="w-6 h-6 text-amber-500 animate-spin" />
+      </div>
+    )
+  }
+
+  if (!report || !grade) {
+    return (
+      <div className="min-h-screen bg-[var(--cream)] p-8 flex flex-col items-center justify-center gap-4">
+        <AlertTriangle className="w-10 h-10 text-amber-500" />
+        <p className="text-slate-700 font-medium">Grade card not found</p>
+        <Link href="/dashboard/commercial" className="text-amber-600 underline">← Back to reports</Link>
+      </div>
+    )
+  }
+
+  const overallScore = Number(grade.overallScore)
+  const topTraffic = (report.trafficCounts ?? [])
+    .sort((a, b) => b.avgDailyVolume - a.avgDailyVolume)
+    .slice(0, 3)
+
+  const categories: Array<keyof typeof CATEGORY_ICONS> = [
+    'traffic', 'consumerSpend', 'householdIncome', 'demographics', 'anchorTenant',
+  ]
+
+  return (
+    <div className="min-h-screen bg-[var(--cream)] p-6 lg:p-8">
+      <div className="max-w-4xl mx-auto space-y-6">
+
+        {/* Nav */}
+        <div className="flex items-center justify-between">
+          <Link href="/dashboard/commercial" className="flex items-center gap-1.5 text-sm text-slate-500 hover:text-slate-800 transition-colors">
+            <ArrowLeft className="w-4 h-4" /> Back to Reports
+          </Link>
+          <button
+            onClick={handleRegenerate}
+            disabled={regenerating}
+            className="flex items-center gap-1.5 text-sm text-slate-500 hover:text-slate-800 disabled:opacity-50 transition-colors"
+          >
+            <RefreshCw className={`w-4 h-4 ${regenerating ? 'animate-spin' : ''}`} />
+            Regenerate
+          </button>
+        </div>
+
+        {/* Grade Card Hero */}
+        <div className="bg-white rounded-2xl border border-slate-200 overflow-hidden shadow-sm">
+
+          {/* Header band */}
+          <div className={`${GRADE_BG[grade.overallGrade] ?? 'bg-slate-500'} p-6 text-white`}>
+            <div className="flex items-start gap-5">
+              {/* Big grade circle */}
+              <div className="w-24 h-24 bg-white/20 backdrop-blur rounded-2xl flex flex-col items-center justify-center border-2 border-white/40 flex-shrink-0">
+                <span className="text-4xl font-black leading-none">{grade.overallGrade}</span>
+                <span className="text-sm font-medium opacity-80 mt-0.5">{overallScore.toFixed(1)}/100</span>
+              </div>
+
+              <div className="flex-1 min-w-0">
+                <div className="flex items-center gap-2 text-white/70 text-xs font-medium mb-1">
+                  <Building2 className="w-3.5 h-3.5" />
+                  COMMERCIAL SITE ANALYSIS
+                </div>
+                <h1 className="text-xl font-bold leading-tight">{report.propertyAddress}</h1>
+                {(report.propertyCity || report.propertyState) && (
+                  <p className="text-white/80 text-sm mt-0.5 flex items-center gap-1">
+                    <MapPin className="w-3.5 h-3.5" />
+                    {[report.propertyCity, report.propertyState, report.propertyZip].filter(Boolean).join(', ')}
+                  </p>
+                )}
+                <p className="text-white/60 text-xs mt-2">
+                  Graded {new Date(grade.generatedAt).toLocaleDateString('en-US', { month: 'long', day: 'numeric', year: 'numeric' })}
+                  {report.rawPdfFilename ? ` · Source: ${report.rawPdfFilename}` : ''}
+                </p>
+              </div>
+            </div>
+          </div>
+
+          {/* AI Summary */}
+          {grade.aiSummary && (
+            <div className="px-6 py-4 bg-slate-50 border-b border-slate-100">
+              <p className="text-slate-700 text-sm leading-relaxed">{grade.aiSummary}</p>
+              {grade.aiRecommendation && (
+                <p className="mt-2 text-sm font-semibold text-slate-900 flex items-center gap-2">
+                  <span className="w-2 h-2 rounded-full bg-amber-500 inline-block" />
+                  {grade.aiRecommendation}
+                </p>
+              )}
+            </div>
+          )}
+
+          {/* Category scores */}
+          <div className="p-6 space-y-5">
+            <h2 className="text-xs font-semibold text-slate-400 uppercase tracking-wider">Category Breakdown</h2>
+            {categories.map((cat) => {
+              const scoreKey = `${cat}Score` as keyof PropertyGrade
+              const gradeKey = `${cat}Grade` as keyof PropertyGrade
+              const Icon = CATEGORY_ICONS[cat]
+              const score = Number(grade[scoreKey])
+              const catGrade = grade[gradeKey] as string
+
+              return (
+                <div key={cat} className="space-y-1.5">
+                  <div className="flex items-center justify-between">
+                    <div className="flex items-center gap-2">
+                      <div className="w-7 h-7 bg-slate-100 rounded-lg flex items-center justify-center">
+                        <Icon className="w-3.5 h-3.5 text-slate-600" />
+                      </div>
+                      <div>
+                        <span className="text-sm font-semibold text-slate-800">{CATEGORY_LABELS[cat]}</span>
+                        <p className="text-xs text-slate-400 leading-none">{CATEGORY_DESCRIPTIONS[cat]}</p>
+                      </div>
+                    </div>
+                    <GradeBadge grade={catGrade} size="sm" />
+                  </div>
+                  <ScoreBar score={score} grade={catGrade} />
+                </div>
+              )
+            })}
+          </div>
+        </div>
+
+        {/* Strengths & Risks */}
+        {(grade.aiStrengths?.length || grade.aiRisks?.length) && (
+          <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+            {grade.aiStrengths?.length ? (
+              <div className="bg-emerald-50 border border-emerald-200 rounded-xl p-5">
+                <h3 className="text-sm font-semibold text-emerald-800 mb-3 flex items-center gap-2">
+                  <CheckCircle className="w-4 h-4" /> Strengths
+                </h3>
+                <ul className="space-y-2">
+                  {grade.aiStrengths.map((s, i) => (
+                    <li key={i} className="flex items-start gap-2 text-sm text-emerald-700">
+                      <TrendingUp className="w-3.5 h-3.5 mt-0.5 flex-shrink-0" />
+                      {s}
+                    </li>
+                  ))}
+                </ul>
+              </div>
+            ) : null}
+            {grade.aiRisks?.length ? (
+              <div className="bg-red-50 border border-red-200 rounded-xl p-5">
+                <h3 className="text-sm font-semibold text-red-800 mb-3 flex items-center gap-2">
+                  <AlertTriangle className="w-4 h-4" /> Risk Flags
+                </h3>
+                <ul className="space-y-2">
+                  {grade.aiRisks.map((r, i) => (
+                    <li key={i} className="flex items-start gap-2 text-sm text-red-700">
+                      <TrendingDown className="w-3.5 h-3.5 mt-0.5 flex-shrink-0" />
+                      {r}
+                    </li>
+                  ))}
+                </ul>
+              </div>
+            ) : null}
+          </div>
+        )}
+
+        {/* Traffic Detail */}
+        {topTraffic.length > 0 && (
+          <div className="bg-white rounded-xl border border-slate-200 p-5">
+            <h3 className="text-sm font-semibold text-slate-700 mb-4 flex items-center gap-2">
+              <Car className="w-4 h-4 text-slate-500" /> Traffic Counts
+            </h3>
+            <div className="space-y-2">
+              {topTraffic.map((t, i) => (
+                <div key={i} className="flex items-center justify-between py-2 border-b border-slate-50 last:border-0">
+                  <div>
+                    <p className="text-sm font-medium text-slate-800">{t.street}</p>
+                    <p className="text-xs text-slate-400">{t.distanceMiles} mi from subject · {t.countYear}</p>
+                  </div>
+                  <div className="text-right">
+                    <p className="text-sm font-bold text-slate-900">{t.avgDailyVolume.toLocaleString()}</p>
+                    <p className="text-xs text-slate-400">avg daily</p>
+                  </div>
+                </div>
+              ))}
+            </div>
+          </div>
+        )}
+
+        {/* Anchor Tenants */}
+        {grade.anchorTenants?.length ? (
+          <div className="bg-white rounded-xl border border-slate-200 p-5">
+            <h3 className="text-sm font-semibold text-slate-700 mb-4 flex items-center gap-2">
+              <Store className="w-4 h-4 text-slate-500" /> Nearby Anchors & Retailers
+            </h3>
+            <div className="space-y-2">
+              {grade.anchorTenants.map((a, i) => (
+                <div key={i} className="flex items-center gap-3 py-2 border-b border-slate-50 last:border-0">
+                  <div className={`w-2 h-2 rounded-full flex-shrink-0 ${
+                    a.impact === 'positive' ? 'bg-emerald-500' :
+                    a.impact === 'negative' ? 'bg-red-400' : 'bg-slate-300'
+                  }`} />
+                  <div className="flex-1 min-w-0">
+                    <p className="text-sm font-medium text-slate-800">{a.name}</p>
+                    <p className="text-xs text-slate-400">{a.category.replace('_', ' ')} · {a.distanceMiles} mi</p>
+                  </div>
+                  <div className="flex items-center gap-2">
+                    {a.salesGrade && (
+                      <span className="text-xs font-bold text-slate-500 bg-slate-100 px-2 py-0.5 rounded">
+                        {a.salesGrade}
+                      </span>
+                    )}
+                    {a.impact === 'positive' ? (
+                      <TrendingUp className="w-4 h-4 text-emerald-500" />
+                    ) : a.impact === 'negative' ? (
+                      <TrendingDown className="w-4 h-4 text-red-400" />
+                    ) : (
+                      <Minus className="w-4 h-4 text-slate-300" />
+                    )}
+                  </div>
+                </div>
+              ))}
+            </div>
+          </div>
+        ) : null}
+
+        {/* Demographics Snapshot */}
+        {report.demographics?.threeMile && (
+          <div className="bg-white rounded-xl border border-slate-200 p-5">
+            <h3 className="text-sm font-semibold text-slate-700 mb-4 flex items-center gap-2">
+              <Users className="w-4 h-4 text-slate-500" /> 3-Mile Demographics
+            </h3>
+            <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
+              {[
+                { label: 'Population', value: report.demographics.threeMile.population2024.toLocaleString() },
+                { label: '5-yr Growth', value: `${report.demographics.threeMile.populationGrowth5yr.toFixed(1)}%` },
+                { label: 'Median Age', value: report.demographics.threeMile.medianAge.toFixed(1) },
+                { label: 'Median HH Income', value: `$${report.demographics.threeMile.medianHouseholdIncome.toLocaleString()}` },
+                { label: 'Avg HH Income', value: `$${report.demographics.threeMile.avgHouseholdIncome.toLocaleString()}` },
+                { label: 'Median Home Value', value: `$${report.demographics.threeMile.medianHomeValue.toLocaleString()}` },
+                { label: 'Bachelor\'s+', value: `${report.demographics.threeMile.bachelorsPlusPct.toFixed(1)}%` },
+                { label: 'Age 65+', value: `${report.demographics.threeMile.age65PlusPct.toFixed(1)}%` },
+              ].map((stat) => (
+                <div key={stat.label} className="text-center p-3 bg-slate-50 rounded-lg">
+                  <p className="text-lg font-bold text-slate-900">{stat.value}</p>
+                  <p className="text-xs text-slate-500 mt-0.5">{stat.label}</p>
+                </div>
+              ))}
+            </div>
+          </div>
+        )}
+
+        {/* Grade weights footnote */}
+        <div className="text-xs text-slate-400 px-1">
+          <span className="font-medium">Grading weights: </span>
+          {Object.entries(grade.weightsSnapshot).map(([k, v], i, arr) => (
+            <span key={k}>
+              {CATEGORY_LABELS[k as keyof typeof CATEGORY_LABELS] ?? k} {(Number(v) * 100).toFixed(0)}%
+              {i < arr.length - 1 ? ' · ' : ''}
+            </span>
+          ))}
+        </div>
+      </div>
+    </div>
+  )
+}
