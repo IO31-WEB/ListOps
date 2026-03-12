@@ -7,7 +7,7 @@
  */
 
 // ── Plan Tier Type ─────────────────────────────────────────────
-export type PlanTier = 'free' | 'starter' | 'pro' | 'brokerage' | 'enterprise'
+export type PlanTier = 'free' | 'starter' | 'pro' | 'commercial' | 'brokerage' | 'enterprise'
 export type PlanId = PlanTier
 
 export type BillingInterval = 'month' | 'year'
@@ -16,32 +16,35 @@ export type BillingInterval = 'month' | 'year'
 // Single authoritative list. Both the API and UI read from here.
 // When adding a new feature, update this object ONLY — nowhere else.
 export const FEATURE_GATES = {
-  brand_kit:            ['starter', 'pro', 'brokerage', 'enterprise'],
-  campaign_history:     ['starter', 'pro', 'brokerage', 'enterprise'],
-  remove_branding:      ['starter', 'pro', 'brokerage', 'enterprise'],
+  brand_kit:            ['starter', 'pro', 'commercial', 'brokerage', 'enterprise'],
+  campaign_history:     ['starter', 'pro', 'commercial', 'brokerage', 'enterprise'],
+  remove_branding:      ['starter', 'pro', 'commercial', 'brokerage', 'enterprise'],
   // FIX: starter now correctly gets listing_microsite (was blocked in stripe.ts despite pricing page promise)
-  listing_microsite:    ['starter', 'pro', 'brokerage', 'enterprise'],
-  unlimited_campaigns:  ['pro', 'brokerage', 'enterprise'],
-  social_scheduling:    ['pro', 'brokerage', 'enterprise'],
-  video_script:         ['pro', 'brokerage', 'enterprise'],
-  team_seats:           ['pro', 'brokerage', 'enterprise'],
-  priority_generation:  ['pro', 'brokerage', 'enterprise'],
+  listing_microsite:    ['starter', 'pro', 'commercial', 'brokerage', 'enterprise'],
+  unlimited_campaigns:  ['pro', 'commercial', 'brokerage', 'enterprise'],
+  social_scheduling:    ['pro', 'commercial', 'brokerage', 'enterprise'],
+  video_script:         ['pro', 'commercial', 'brokerage', 'enterprise'],
+  team_seats:           ['pro', 'commercial', 'brokerage', 'enterprise'],
+  priority_generation:  ['pro', 'commercial', 'brokerage', 'enterprise'],
   white_label:          ['brokerage', 'enterprise'],
   analytics:            ['brokerage', 'enterprise'],
   analytics_dashboard:  ['brokerage', 'enterprise'],
   admin_dashboard:      ['brokerage', 'enterprise'],
   audit_logs:           ['brokerage', 'enterprise'],
-  multi_agent:          ['pro', 'brokerage', 'enterprise'],
+  multi_agent:          ['pro', 'commercial', 'brokerage', 'enterprise'],
   sso:                  ['enterprise'],
   api_access:           ['enterprise'],
   // Content module gates
   listing_copy:         ['free', 'starter', 'pro', 'brokerage', 'enterprise'],  // all plans
   print_materials:      ['free', 'starter', 'pro', 'brokerage', 'enterprise'],  // all plans
-  photo_captions:       ['starter', 'pro', 'brokerage', 'enterprise'],
-  email_drip:           ['starter', 'pro', 'brokerage', 'enterprise'],
-  microsite_copy:       ['starter', 'pro', 'brokerage', 'enterprise'],
-  expanded_social:      ['pro', 'brokerage', 'enterprise'],   // TikTok, LinkedIn, X, Stories
-  virtual_tour_scripts: ['pro', 'brokerage', 'enterprise'],
+  photo_captions:       ['starter', 'pro', 'commercial', 'brokerage', 'enterprise'],
+  email_drip:           ['starter', 'pro', 'commercial', 'brokerage', 'enterprise'],
+  microsite_copy:       ['starter', 'pro', 'commercial', 'brokerage', 'enterprise'],
+  expanded_social:      ['pro', 'commercial', 'brokerage', 'enterprise'],   // TikTok, LinkedIn, X, Stories
+  virtual_tour_scripts: ['pro', 'commercial', 'brokerage', 'enterprise'],
+  // Commercial plan gates
+  costar_integration:   ['commercial', 'brokerage', 'enterprise'],
+  property_grading:     ['commercial', 'brokerage', 'enterprise'],
 } as const satisfies Record<string, readonly PlanTier[]>
 
 export type Feature = keyof typeof FEATURE_GATES
@@ -59,6 +62,7 @@ export const CAMPAIGN_LIMITS: Record<PlanTier, number | 'unlimited'> = {
   free: 3,
   starter: 5,
   pro: 'unlimited',
+  commercial: 'unlimited',
   brokerage: 'unlimited',
   enterprise: 'unlimited',
 }
@@ -226,3 +230,41 @@ export const ENTERPRISE_PLAN = {
     'Annual invoicing (no credit card required)',
   ],
 }
+
+// ── Commercial Plan Definition ─────────────────────────────────
+// Appended separately to avoid patching the PLANS array inline.
+// The pricing page and billing page both iterate PLANS, so we insert
+// commercial between pro and brokerage at array position 3.
+
+;(function injectCommercialPlan() {
+  const proIndex = PLANS.findIndex(p => p.id === 'pro')
+  if (proIndex === -1 || PLANS.find(p => p.id === 'commercial')) return
+  PLANS.splice(proIndex + 1, 0, {
+    id: 'commercial',
+    name: 'Commercial',
+    tagline: 'For commercial real estate professionals',
+    monthlyPrice: 179,
+    yearlyPrice: 1590,
+    monthlyPriceId: process.env.STRIPE_COMMERCIAL_MONTHLY_PRICE_ID,
+    yearlyPriceId: process.env.STRIPE_COMMERCIAL_YEARLY_PRICE_ID,
+    highlighted: false,
+    badge: 'Commercial RE',
+    cta: 'Go Commercial',
+    campaignsPerMonth: 'unlimited',
+    maxAgents: 3,
+    features: [
+      { text: 'Everything in Pro', included: true, highlight: true },
+      { text: 'CoStar report upload & parsing', included: true, highlight: true },
+      { text: 'AI property grading card (A–F)', included: true, highlight: true },
+      { text: 'Traffic count scoring', included: true },
+      { text: 'Consumer spend analysis (1/3/5 mi)', included: true },
+      { text: 'Household income grading', included: true },
+      { text: 'Big-box & anchor tenant detection', included: true },
+      { text: 'CoStar API push integration', included: true },
+      { text: 'Demographic scoring', included: true },
+      { text: 'AI site narrative & risk flags', included: true },
+      { text: 'PDF grade card export', included: true },
+      { text: 'White-label outputs', included: false },
+    ],
+  })
+})()
