@@ -17,7 +17,7 @@ import { canAccess } from '@/lib/plans'
 import { uploadToR2 } from '@/lib/r2'
 import { parseCostarPdf, normalizeConsumerSpend, normalizeDemographic } from '@/lib/costar-parser'
 import { captureError } from '@/lib/monitoring'
-import { ratelimit } from '@/lib/ratelimit'
+import { rateLimitAPI } from '@/lib/ratelimit'
 import { eq } from 'drizzle-orm'
 import type { PlanTier } from '@/lib/plans'
 
@@ -33,10 +33,10 @@ export async function POST(request: NextRequest) {
   }
 
   // Rate limit per user (not org) to prevent abuse within a shared plan
-  const rl = await ratelimit(userId, 'costar_upload', 10, '1 h')
+  const rl = await rateLimitAPI(request.headers.get('x-forwarded-for') ?? userId)
   if (!rl.success) {
     return NextResponse.json(
-      { error: 'Rate limit exceeded. Max 10 CoStar uploads per hour.' },
+      { error: 'Rate limit exceeded. Please try again later.' },
       { status: 429 }
     )
   }
