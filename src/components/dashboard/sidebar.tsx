@@ -7,7 +7,7 @@ import { UserButton } from '@clerk/nextjs'
 import {
   House, Zap, LayoutDashboard, FolderOpen, Plus, Palette,
   CreditCard, Users, BarChart2, Settings, ChevronLeft, Gift,
-  ChevronRight, Menu, X, HelpCircle
+  ChevronRight, Menu, X, HelpCircle, Building2
 } from 'lucide-react'
 import { cn } from '@/lib/utils'
 
@@ -16,6 +16,7 @@ const NAV_ITEMS = [
   { label: 'New Campaign', href: '/dashboard/generate', icon: Plus, highlight: true },
   { label: 'My Campaigns', href: '/dashboard/campaigns', icon: FolderOpen },
   { label: 'Brand Kit', href: '/dashboard/brand', icon: Palette },
+  { label: 'Commercial', href: '/dashboard/commercial', icon: Building2 },
   { label: 'Analytics', href: '/dashboard/analytics', icon: BarChart2 },
 ]
 
