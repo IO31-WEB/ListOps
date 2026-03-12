@@ -161,7 +161,6 @@ const response = await anthropic.beta.messages.create({
     }
   ]
 });
-});
   const tokensUsed =
     (response.usage.input_tokens ?? 0) + (response.usage.output_tokens ?? 0)
 
