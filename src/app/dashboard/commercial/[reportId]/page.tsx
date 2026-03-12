@@ -216,7 +216,6 @@ export default function GradeCardPage({ params }: { params: Promise<{ reportId: 
   }
 
   async function handleEnrich() {
-    setEnriching(true)
     try {
       const res = await fetch('/api/commercial/enrich', {
         method: 'POST',
@@ -241,7 +240,6 @@ export default function GradeCardPage({ params }: { params: Promise<{ reportId: 
     } catch {
       toast.error('Enrichment failed — please try again')
     } finally {
-      setEnriching(false)
     }
   }
 
