@@ -24,7 +24,14 @@ export default async function TeamPage() {
   const canManageTeam = ['pro', 'brokerage', 'enterprise'].includes(planTier)
   const teamMembers = canManageTeam && user.orgId ? await getTeamMembers(user.orgId) : [user]
 
-  const maxAgents = { free: 1, starter: 1, pro: 3, brokerage: 25, enterprise: 999 }[planTier] ?? 1
+  const maxAgents = {
+  free: 1,
+  starter: 1,
+  pro: 3,
+  brokerage: 25,
+  enterprise: 999,
+  commercial: 50,  // ← Add this! Adjust the number to whatever limit you want for commercial tier (e.g., 50 agents, unlimited-ish, etc.)
+}[planTier] ?? 1;
   const canAddMore = teamMembers.length < maxAgents
 
   return (
