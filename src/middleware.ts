@@ -17,6 +17,7 @@ const isPublicRoute = createRouteMatcher([
   '/affiliates',
   '/l/(.*)',
   '/api/webhooks/(.*)',
+  '/api/commercial/costar-push',
 ])
 
 export default clerkMiddleware(async (auth, request) => {
