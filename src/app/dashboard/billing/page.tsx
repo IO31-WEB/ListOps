@@ -279,7 +279,7 @@ export default function BillingPage() {
       </div>
 
       {/* Plan Cards */}
-      <div className="grid sm:grid-cols-2 lg:grid-cols-4 gap-4">
+      <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-5 gap-4">
         {PLANS.map((plan) => {
           const isCurrent = plan.id === currentPlan
           const isDark = plan.highlighted || isCurrent   // dark bg card = white text
