@@ -17,6 +17,7 @@ import { canAccess } from '@/lib/plans'
 import { captureError } from '@/lib/monitoring'
 import { rateLimitAPI } from '@/lib/ratelimit'
 import { eq, and } from 'drizzle-orm'
+import { desc } from 'drizzle-orm';
 import { z } from 'zod'
 import {
   scoreTraffic,
