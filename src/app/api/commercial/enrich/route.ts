@@ -149,9 +149,7 @@ export async function POST(request: NextRequest) {
   )
 
   const overallGrade         = scoreToGrade(overallScore)
-  const anchorTenantGrade    = enrichment.retailers.length === 0
-    ? 'N/A'
-    : scoreToGrade(anchorScore)
+  const anchorTenantGrade    = scoreToGrade(anchorScore)
 
   let narrative = null
   try {
