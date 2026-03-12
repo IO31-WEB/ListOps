@@ -365,7 +365,7 @@ export default function GradeCardPage({ params }: { params: Promise<{ reportId: 
                 const catGrade = grade[gradeKey] as string
                 const catHex = GRADE_HEX[catGrade] ?? '#94a3b8'
 
-                const isNoData = catGrade === 'N/A'
+                const isNoData = cat === 'anchorTenant' && !(grade.anchorTenants?.length)
                 return (
                   <div key={cat} className="space-y-1.5 print-no-break">
                     <div className="flex items-center justify-between">
