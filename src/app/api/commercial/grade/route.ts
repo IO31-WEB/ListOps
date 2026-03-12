@@ -146,7 +146,7 @@ export async function POST(request: NextRequest) {
   const consumerSpendGrade = scoreToGrade(consumerSpendScore)
   const householdIncomeGrade = scoreToGrade(householdIncomeScore)
   const demographicsGrade = scoreToGrade(demographicsScore)
-  const anchorTenantGrade = anchorHasData ? scoreToGrade(anchorTenantScore) : 'N/A'
+  const anchorTenantGrade = anchorHasData ? scoreToGrade(anchorTenantScore) : 'F'
 
   // Generate AI narrative
   let narrative
