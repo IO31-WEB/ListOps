@@ -124,7 +124,7 @@ export async function syncPlanFromClerkMetadata(clerkId: string): Promise<PlanTi
     const meta = clerkUser.privateMetadata as Record<string, any>
 
     const rawTier = (meta?.planTier ?? meta?.plan) as string | undefined
-    const validTiers: PlanTier[] = ['free', 'starter', 'pro', 'brokerage', 'enterprise']
+    const validTiers: PlanTier[] = ['free', 'starter', 'pro', 'commercial', 'brokerage', 'enterprise']
     const clerkTier = (rawTier && validTiers.includes(rawTier as PlanTier))
       ? rawTier as PlanTier
       : null
