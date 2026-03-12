@@ -138,7 +138,7 @@ export default function PricingPage() {
           </div>
 
           {/* Plan Cards */}
-          <div className="grid sm:grid-cols-2 lg:grid-cols-4 gap-6 mb-20">
+          <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-5 gap-6 mb-20">
             {PLANS.map((plan) => {
               const price = annual ? Math.round((plan.yearlyPrice ?? 0) / 12) : (plan.monthlyPrice ?? 0)
               const billedAs = annual && (plan.yearlyPrice ?? 0) > 0 ? `${formatCurrency(plan.yearlyPrice ?? 0)}/yr` : null
