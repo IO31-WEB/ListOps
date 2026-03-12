@@ -68,7 +68,8 @@ export async function POST(request: NextRequest) {
     return NextResponse.json({ error: 'User or organization not found' }, { status: 404 })
   }
 
-  const plan = (dbUser.organization.plan ?? 'free') as PlanTier
+  const sub = dbUser.organization.subscriptions?.[0]
+  const plan = ((sub?.plan ?? dbUser.organization.plan) ?? 'free') as PlanTier
   if (!canAccess(plan, 'property_grading')) {
     return NextResponse.json(
       { error: 'Property grading requires the Commercial plan or higher.' },
