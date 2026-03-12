@@ -22,12 +22,14 @@ import type Stripe from 'stripe'
 
 export const runtime = 'nodejs'
 
-function getPlanFromPriceId(priceId: string): 'starter' | 'pro' | 'brokerage' | 'enterprise' | 'free' {
-  const map: Record<string, 'starter' | 'pro' | 'brokerage' | 'enterprise'> = {
+function getPlanFromPriceId(priceId: string): 'starter' | 'pro' | 'commercial' | 'brokerage' | 'enterprise' | 'free' {
+  const map: Record<string, 'starter' | 'pro' | 'commercial' | 'brokerage' | 'enterprise'> = {
     [process.env.STRIPE_STARTER_MONTHLY_PRICE_ID || '__unset__']: 'starter',
     [process.env.STRIPE_STARTER_YEARLY_PRICE_ID  || '__unset__']: 'starter',
     [process.env.STRIPE_PRO_MONTHLY_PRICE_ID     || '__unset__']: 'pro',
     [process.env.STRIPE_PRO_YEARLY_PRICE_ID      || '__unset__']: 'pro',
+    [process.env.STRIPE_COMMERCIAL_MONTHLY_PRICE_ID || '__unset__']: 'commercial',
+    [process.env.STRIPE_COMMERCIAL_YEARLY_PRICE_ID  || '__unset__']: 'commercial',
     [process.env.STRIPE_BROKERAGE_MONTHLY_PRICE_ID || '__unset__']: 'brokerage',
     [process.env.STRIPE_BROKERAGE_YEARLY_PRICE_ID  || '__unset__']: 'brokerage',
   }
@@ -236,3 +238,4 @@ export async function POST(request: NextRequest) {
     return NextResponse.json({ error: 'Webhook handler failed' }, { status: 500 })
   }
 }
+
