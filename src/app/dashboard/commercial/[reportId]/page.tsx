@@ -79,6 +79,7 @@ const GRADE_BG: Record<string, string> = {
 }
 
 const GRADE_HEX: Record<string, string> = {
+  'N/A': '#94a3b8',
   'A+': '#10b981', 'A': '#10b981', 'A-': '#34d399',
   'B+': '#3b82f6', 'B': '#3b82f6', 'B-': '#60a5fa',
   'C+': '#f59e0b', 'C': '#f59e0b', 'C-': '#fbbf24',
@@ -214,6 +215,36 @@ export default function GradeCardPage({ params }: { params: Promise<{ reportId: 
     }
   }
 
+  async function handleEnrich() {
+    setEnriching(true)
+    try {
+      const res = await fetch('/api/commercial/enrich', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ reportId }),
+      })
+      const data = await res.json()
+      if (!res.ok) {
+        if (res.status === 501) {
+          toast.error('Google Places API not configured — contact support')
+        } else {
+          toast.error(data.error ?? 'Enrichment failed')
+        }
+        return
+      }
+      const found = data.placesFound ?? 0
+      toast.success(found > 0
+        ? `Found ${found} nearby retailers — grade updated`
+        : 'No retailers found nearby — grade updated without anchor data'
+      )
+      await fetchData()
+    } catch {
+      toast.error('Enrichment failed — please try again')
+    } finally {
+      setEnriching(false)
+    }
+  }
+
   function handlePrint() {
     window.print()
   }
@@ -336,6 +367,7 @@ export default function GradeCardPage({ params }: { params: Promise<{ reportId: 
                 const catGrade = grade[gradeKey] as string
                 const catHex = GRADE_HEX[catGrade] ?? '#94a3b8'
 
+                const isNoData = catGrade === 'N/A'
                 return (
                   <div key={cat} className="space-y-1.5 print-no-break">
                     <div className="flex items-center justify-between">
@@ -348,24 +380,31 @@ export default function GradeCardPage({ params }: { params: Promise<{ reportId: 
                           <p className="text-xs text-slate-400 leading-none">{CATEGORY_DESCRIPTIONS[cat]}</p>
                         </div>
                       </div>
-                      {/* Inline style so print gets the color */}
                       <div
-                        className="w-8 h-8 rounded-xl flex items-center justify-center font-bold text-white text-sm flex-shrink-0"
+                        className="w-8 h-8 rounded-xl flex items-center justify-center font-bold text-white text-xs flex-shrink-0"
                         style={{ backgroundColor: catHex }}
                       >
-                        {catGrade}
+                        {isNoData ? '—' : catGrade}
                       </div>
                     </div>
-                    {/* Score bar with inline style for print */}
-                    <div className="flex items-center gap-3">
-                      <div className="flex-1 h-2.5 bg-slate-100 rounded-full overflow-hidden">
-                        <div
-                          className="h-full rounded-full"
-                          style={{ width: `${Math.round(score)}%`, backgroundColor: catHex }}
-                        />
+                    {isNoData ? (
+                      <div className="flex items-center gap-3">
+                        <div className="flex-1 h-2.5 bg-slate-100 rounded-full overflow-hidden">
+                          <div className="h-full rounded-full bg-slate-200" style={{ width: '100%' }} />
+                        </div>
+                        <span className="text-xs text-slate-400 w-8 text-right">N/A</span>
                       </div>
-                      <span className="text-sm font-bold text-slate-700 w-8 text-right">{Math.round(score)}</span>
-                    </div>
+                    ) : (
+                      <div className="flex items-center gap-3">
+                        <div className="flex-1 h-2.5 bg-slate-100 rounded-full overflow-hidden">
+                          <div
+                            className="h-full rounded-full"
+                            style={{ width: `${Math.round(score)}%`, backgroundColor: catHex }}
+                          />
+                        </div>
+                        <span className="text-sm font-bold text-slate-700 w-8 text-right">{Math.round(score)}</span>
+                      </div>
+                    )}
                   </div>
                 )
               })}
@@ -432,18 +471,27 @@ export default function GradeCardPage({ params }: { params: Promise<{ reportId: 
           )}
 
           {/* Anchor Tenants */}
-          {grade.anchorTenants?.length ? (
-            <div className="bg-white rounded-xl border border-slate-200 p-5 print-no-break">
-              <h3 className="text-sm font-semibold text-slate-700 mb-4 flex items-center gap-2">
+          <div className="bg-white rounded-xl border border-slate-200 p-5 print-no-break">
+            <div className="flex items-center justify-between mb-4">
+              <h3 className="text-sm font-semibold text-slate-700 flex items-center gap-2">
                 <Store className="w-4 h-4 text-slate-500" /> Nearby Anchors & Retailers
               </h3>
+              <button
+                onClick={handleEnrich}
+                className="no-print flex items-center gap-1.5 text-xs text-slate-400 hover:text-slate-600 transition-colors"
+                title="Re-enrich from Google Maps"
+              >
+                <RefreshCw className="w-3.5 h-3.5" /> Refresh
+              </button>
+            </div>
+
+            {/* Retailer list */}
+            {(grade.anchorTenants?.length ?? 0) > 0 && (
               <div className="space-y-2">
-                {grade.anchorTenants.map((a, i) => (
+                {grade.anchorTenants!.map((a, i) => (
                   <div key={i} className="flex items-center gap-3 py-2 border-b border-slate-50 last:border-0">
-                    <div className={`w-2 h-2 rounded-full flex-shrink-0 ${
-                      a.impact === 'positive' ? 'bg-emerald-500' :
-                      a.impact === 'negative' ? 'bg-red-400' : 'bg-slate-300'
-                    }`}
+                    <div
+                      className="w-2 h-2 rounded-full flex-shrink-0"
                       style={{
                         backgroundColor: a.impact === 'positive' ? '#10b981' :
                           a.impact === 'negative' ? '#f87171' : '#cbd5e1'
@@ -470,8 +518,8 @@ export default function GradeCardPage({ params }: { params: Promise<{ reportId: 
                   </div>
                 ))}
               </div>
-            </div>
-          ) : null}
+            )}
+          </div>
 
           {/* Demographics Snapshot */}
           {report.demographics?.threeMile && (
