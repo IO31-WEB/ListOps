@@ -23,7 +23,9 @@ export async function GET(request: NextRequest) {
     return NextResponse.json({ error: 'Organization not found' }, { status: 404 })
   }
 
-  const plan = (dbUser.organization.plan ?? 'free') as PlanTier
+  // Prefer subscription plan (source of truth) — organization.plan can lag behind
+  const sub = dbUser.organization.subscriptions?.[0]
+  const plan = ((sub?.plan ?? dbUser.organization.plan) ?? 'free') as PlanTier
   if (!canAccess(plan, 'costar_integration')) {
     return NextResponse.json({ error: 'Commercial plan required' }, { status: 403 })
   }
