@@ -18,7 +18,7 @@ import { db } from '@/lib/db'
 import { costarReports, gradeWeights, organizations, users } from '@/lib/db/schema'
 import { captureError } from '@/lib/monitoring'
 import { ratelimit } from '@/lib/ratelimit'
-import { eq } from 'drizzle-orm'
+import { eq, and } from 'drizzle-orm'
 import { z } from 'zod'
 import crypto from 'crypto'
 import type {
@@ -217,3 +217,4 @@ export async function POST(request: NextRequest) {
 
   return NextResponse.json({ reportId: report.id, status: 'received' }, { status: 201 })
 }
+
