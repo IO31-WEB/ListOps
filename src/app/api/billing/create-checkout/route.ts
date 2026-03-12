@@ -9,7 +9,7 @@ import { eq } from 'drizzle-orm'
 import { z } from 'zod'
 
 const RequestSchema = z.object({
-  planId: z.enum(['starter', 'pro', 'brokerage']),
+  planId: z.enum(['starter', 'pro', 'commercial', 'brokerage']),
   billing: z.enum(['monthly', 'annual']),
 })
 
