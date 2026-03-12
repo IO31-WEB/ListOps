@@ -123,34 +123,3 @@ export async function rateLimitAPI(ip: string): Promise<RateLimitResult> {
   return upstashRateLimit(key, 60, 60)
 }
 
-/**
- * Generic configurable rate limiter for custom endpoints.
- * @param identifier - unique string (userId, orgId, IP, etc.)
- * @param action - logical name for the action (used as key namespace)
- * @param limit - max requests per window
- * @param window - window string like '1 h', '10 m', '30 s'
- */
-export async function ratelimit(
-  identifier: string,
-  action: string,
-  limit: number,
-  window: string
-): Promise<RateLimitResult> {
-  const windowMs = parseWindow(window)
-  const windowSec = Math.ceil(windowMs / 1000)
-  const key = `rl:${action}:${identifier}`
-  if (!hasUpstash) return memRateLimit(key, limit, windowMs)
-  return upstashRateLimit(key, limit, windowSec)
-}
-
-function parseWindow(w: string): number {
-  const [num, unit] = w.trim().split(/\s+/)
-  const n = parseInt(num, 10)
-  switch (unit[0]?.toLowerCase()) {
-    case 's': return n * 1000
-    case 'm': return n * 60 * 1000
-    case 'h': return n * 60 * 60 * 1000
-    case 'd': return n * 24 * 60 * 60 * 1000
-    default: return n * 1000
-  }
-}
