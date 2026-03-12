@@ -17,7 +17,7 @@ import { NextRequest, NextResponse } from 'next/server'
 import { db } from '@/lib/db'
 import { costarReports, gradeWeights, organizations, users } from '@/lib/db/schema'
 import { captureError } from '@/lib/monitoring'
-import { ratelimit } from '@/lib/ratelimit'
+import { rateLimitAPI } from '@/lib/ratelimit'
 import { eq, and } from 'drizzle-orm'
 import { z } from 'zod'
 import crypto from 'crypto'
@@ -159,7 +159,7 @@ export async function POST(request: NextRequest) {
   const payload = validated.data
 
   // Rate limit per org
-  const rl = await ratelimit(payload.orgId, 'costar_push', 100, '1 h')
+  const rl = await rateLimitAPI(request.headers.get('x-forwarded-for') ?? payload.orgId)
   if (!rl.success) {
     return NextResponse.json({ error: 'Rate limit exceeded' }, { status: 429 })
   }
@@ -217,4 +217,3 @@ export async function POST(request: NextRequest) {
 
   return NextResponse.json({ reportId: report.id, status: 'received' }, { status: 201 })
 }
-
