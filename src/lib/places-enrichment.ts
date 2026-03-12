@@ -27,7 +27,6 @@ const TYPE_CATEGORY_MAP: Record<string, CostarRetailer['category']> = {
   electronics_store: 'big_box',
   // Grocery
   supermarket: 'grocery',
-  grocery_or_supermarket: 'grocery',
   // Pharmacy
   pharmacy: 'pharmacy',
   drugstore: 'pharmacy',
@@ -147,7 +146,7 @@ async function searchNearbyPlaces(
   const url = 'https://places.googleapis.com/v1/places:searchNearby'
   const body = {
     includedTypes: [
-      'supermarket', 'grocery_or_supermarket', 'department_store',
+      'supermarket', 'department_store',
       'hardware_store', 'home_goods_store', 'electronics_store',
       'pharmacy', 'drugstore', 'shopping_mall', 'furniture_store',
       'fast_food_restaurant', 'meal_takeaway',
