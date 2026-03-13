@@ -233,7 +233,7 @@ async function fetchCommunityData(
  * Normalize ATTOM community demographic data to our PropertyDemographic schema.
  */
 function normalizeDemographic(
-  raw: AttomCommunityResponse['community']
+  raw: AttomCommunityResponse['community'] | null
 ): PropertyDemographic | null {
   const d = raw?.demographic
   if (!d || d.population == null) return null
@@ -257,7 +257,7 @@ function normalizeDemographic(
  * schema convention used by the PDF parser and grading engine.
  */
 function normalizeConsumerSpend(
-  raw: AttomCommunityResponse['community']
+  raw: AttomCommunityResponse['community'] | null
 ): PropertyConsumerSpend | null {
   const e = raw?.expenditure
   if (!e || e.totalExpenditures == null) return null
@@ -276,7 +276,7 @@ function normalizeConsumerSpend(
 }
 
 function normalizeHousing(
-  raw: AttomCommunityResponse['community']
+  raw: AttomCommunityResponse['community'] | null
 ): PropertyHousingData | null {
   const h = raw?.housing
   if (!h || h.medianHomeValue == null) return null
