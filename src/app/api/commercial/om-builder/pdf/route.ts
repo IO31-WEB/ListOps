@@ -70,8 +70,6 @@ export async function POST(req: NextRequest) {
 
     const pdfBytes = await buildOM({ sections, propertyType, askingPrice, capRate })
 
-    const pdfBytes = await buildOM({ sections, propertyType, askingPrice, capRate });
-
 const pdfBlob = new Blob([pdfBytes], { type: 'application/pdf' });
 
 return new NextResponse(pdfBlob, {
