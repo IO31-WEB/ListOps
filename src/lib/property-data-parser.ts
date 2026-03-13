@@ -1,57 +1,58 @@
 /**
- * CoStar Report Parser
+ * Commercial Property Data Parser
  *
- * Extracts structured data from CoStar PDF reports using Claude's vision API.
- * Supports both manual PDF uploads and future CoStar API push integration.
+ * Extracts structured site analytics from commercial property PDF reports
+ * using Claude's vision API. Supports manual PDF uploads (any standard
+ * commercial real estate report) and direct API push integrations.
  *
  * The parser returns strongly-typed data matching the DB schema types.
- * All numeric values are in thousands ($000s) as CoStar reports them —
+ * All numeric values are in thousands ($000s) as commonly reported —
  * the grading engine normalizes units before scoring.
  */
 
 import Anthropic from '@anthropic-ai/sdk'
 import type {
-  CostarConsumerSpend,
-  CostarDemographic,
-  CostarTrafficCount,
-  CostarHousingData,
-  CostarRetailer,
+  PropertyConsumerSpend,
+  PropertyDemographic,
+  PropertyTrafficCount,
+  PropertyHousingData,
+  PropertyRetailer,
 } from '@/lib/db/schema'
 
 if (!process.env.ANTHROPIC_API_KEY) {
-  throw new Error('[costar-parser] ANTHROPIC_API_KEY is not set')
+  throw new Error('[property-data-parser] ANTHROPIC_API_KEY is not set')
 }
 
 const anthropic = new Anthropic({ apiKey: process.env.ANTHROPIC_API_KEY })
 
-export interface ParsedCostarReport {
+export interface ParsedPropertyReport {
   propertyAddress: string
   propertyCity: string | null
   propertyState: string | null
   propertyZip: string | null
   consumerSpend: {
-    oneMile: CostarConsumerSpend
-    threeMile: CostarConsumerSpend
-    fiveMile: CostarConsumerSpend
+    oneMile: PropertyConsumerSpend
+    threeMile: PropertyConsumerSpend
+    fiveMile: PropertyConsumerSpend
   } | null
   demographics: {
-    oneMile: CostarDemographic
-    threeMile: CostarDemographic
-    fiveMile: CostarDemographic
+    oneMile: PropertyDemographic
+    threeMile: PropertyDemographic
+    fiveMile: PropertyDemographic
   } | null
-  trafficCounts: CostarTrafficCount[]
-  housingData: CostarHousingData | null
-  nearbyRetailers: CostarRetailer[]
+  trafficCounts: PropertyTrafficCount[]
+  housingData: PropertyHousingData | null
+  nearbyRetailers: PropertyRetailer[]
   tokensUsed: number
 }
 
-const SYSTEM_PROMPT = `You are a commercial real estate data extraction specialist. 
-Extract structured data from CoStar property reports with perfect precision.
+const SYSTEM_PROMPT = `You are a commercial real estate data extraction specialist.
+Extract structured data from commercial property analytics reports with perfect precision.
 Return ONLY valid JSON — no markdown, no prose, no code fences.
-All dollar figures keep their original units ($000s as reported by CoStar).
+All dollar figures keep their original units ($000s as reported).
 Missing data fields should be null, not omitted.`
 
-const USER_PROMPT = `Extract all available data from this CoStar property report PDF into this exact JSON structure:
+const USER_PROMPT = `Extract all available data from this commercial property report PDF into this exact JSON structure:
 
 {
   "propertyAddress": "full street address",
@@ -128,19 +129,21 @@ For "category" in nearbyRetailers, classify as:
 - "pharmacy": CVS, Walgreens, Rite Aid
 - "other": everything else
 
-For populationGrowth5yr use the 2024-2029 projection percentage as a decimal (e.g., 15.32% = 15.32).
+For populationGrowth5yr use the 5-year forward projection percentage as a decimal (e.g., 15.32% = 15.32).
 For ownerOccupiedPct, bachelorsPlusPct, age65PlusPct, hispanicPct use percentage values (e.g., 74.67% = 74.67).
 All income/home values in actual dollars (not thousands).
 All consumer spend values in thousands ($000s) as reported.`
 
 /**
- * Parse a CoStar PDF from a base64-encoded buffer.
+ * Parse a commercial property analytics PDF from a base64-encoded buffer.
  * The PDF is sent to Claude's vision API which can read multi-page PDFs.
+ * Accepts reports from any commercial data provider — the extraction schema
+ * is format-agnostic and driven by Claude's understanding of the document.
  */
-export async function parseCostarPdf(
+export async function parsePropertyReportPdf(
   pdfBase64: string,
   filename: string
-): Promise<ParsedCostarReport> {
+): Promise<ParsedPropertyReport> {
   const response = await anthropic.beta.messages.create({
     model: 'claude-sonnet-4-5',
     max_tokens: 4096,
@@ -178,12 +181,12 @@ export async function parseCostarPdf(
     .replace(/\s*```$/i, '')
     .trim()
 
-  let parsed: Omit<ParsedCostarReport, 'tokensUsed'>
+  let parsed: Omit<ParsedPropertyReport, 'tokensUsed'>
   try {
     parsed = JSON.parse(jsonText)
   } catch {
     throw new Error(
-      `[costar-parser] Failed to parse Claude response as JSON from "${filename}": ${jsonText.slice(0, 200)}`
+      `[property-data-parser] Failed to parse Claude response as JSON from "${filename}": ${jsonText.slice(0, 200)}`
     )
   }
 
@@ -191,13 +194,13 @@ export async function parseCostarPdf(
 }
 
 /**
- * Validate and normalize parsed CoStar data.
- * Returns null for any section that is missing required fields,
- * so the grading engine can gracefully skip unavailable data.
+ * Validate and normalize parsed consumer spend data.
+ * Returns null for sections missing required fields so the grading engine
+ * can gracefully skip unavailable data rather than penalize it.
  */
 export function normalizeConsumerSpend(
-  raw: Partial<CostarConsumerSpend> | null | undefined
-): CostarConsumerSpend | null {
+  raw: Partial<PropertyConsumerSpend> | null | undefined
+): PropertyConsumerSpend | null {
   if (!raw || raw.totalSpecified == null) return null
   return {
     totalSpecified: Number(raw.totalSpecified) || 0,
@@ -212,8 +215,8 @@ export function normalizeConsumerSpend(
 }
 
 export function normalizeDemographic(
-  raw: Partial<CostarDemographic> | null | undefined
-): CostarDemographic | null {
+  raw: Partial<PropertyDemographic> | null | undefined
+): PropertyDemographic | null {
   if (!raw || raw.population2024 == null) return null
   return {
     population2024: Number(raw.population2024) || 0,
