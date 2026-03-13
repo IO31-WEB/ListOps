@@ -1,12 +1,12 @@
 /**
- * GET /api/commercial/reports          — list org's CoStar reports
+ * GET /api/commercial/reports          — list org's site analysis reports
  * GET /api/commercial/reports?id=...   — fetch single report + grade
  */
 
 import { NextRequest, NextResponse } from 'next/server'
 import { auth } from '@clerk/nextjs/server'
 import { db } from '@/lib/db'
-import { costarReports, propertyGrades } from '@/lib/db/schema'
+import { siteReports, propertyGrades } from '@/lib/db/schema'
 import { getUserWithDetails } from '@/lib/user-service'
 import { canAccess } from '@/lib/plans'
 import { eq, and, desc, inArray } from 'drizzle-orm'
@@ -23,21 +23,19 @@ export async function GET(request: NextRequest) {
     return NextResponse.json({ error: 'Organization not found' }, { status: 404 })
   }
 
-  // Prefer subscription plan (source of truth) — organization.plan can lag behind
   const sub = dbUser.organization.subscriptions?.[0]
   const plan = ((sub?.plan ?? dbUser.organization.plan) ?? 'free') as PlanTier
-  if (!canAccess(plan, 'costar_integration')) {
+  if (!canAccess(plan, 'site_analysis')) {
     return NextResponse.json({ error: 'Commercial plan required' }, { status: 403 })
   }
 
   const reportId = request.nextUrl.searchParams.get('id')
 
   if (reportId) {
-    // Single report with its latest grade
-    const report = await db.query.costarReports.findFirst({
+    const report = await db.query.siteReports.findFirst({
       where: and(
-        eq(costarReports.id, reportId),
-        eq(costarReports.orgId, dbUser.organization.id)
+        eq(siteReports.id, reportId),
+        eq(siteReports.orgId, dbUser.organization.id)
       ),
     })
 
@@ -46,7 +44,7 @@ export async function GET(request: NextRequest) {
     }
 
     const grade = await db.query.propertyGrades.findFirst({
-      where: eq(propertyGrades.costarReportId, reportId),
+      where: eq(propertyGrades.siteReportId, reportId),
       orderBy: [desc(propertyGrades.createdAt)],
     })
 
@@ -54,27 +52,25 @@ export async function GET(request: NextRequest) {
   }
 
   // List view — return reports with their latest grade summary (no raw data)
-  const reports = await db.query.costarReports.findMany({
-    where: eq(costarReports.orgId, dbUser.organization.id),
-    orderBy: [desc(costarReports.createdAt)],
+  const reports = await db.query.siteReports.findMany({
+    where: eq(siteReports.orgId, dbUser.organization.id),
+    orderBy: [desc(siteReports.createdAt)],
     limit: 50,
   })
 
-  // Batch fetch latest grades for all reports
   const reportIds = reports.map((r) => r.id)
   const grades =
     reportIds.length > 0
       ? await db.query.propertyGrades.findMany({
-          where: inArray(propertyGrades.costarReportId, reportIds),
+          where: inArray(propertyGrades.siteReportId, reportIds),
           orderBy: [desc(propertyGrades.createdAt)],
         })
       : []
 
-  // Map latest grade per report
   const gradeMap = new Map<string, (typeof grades)[0]>()
   for (const g of grades) {
-    if (!gradeMap.has(g.costarReportId)) {
-      gradeMap.set(g.costarReportId, g)
+    if (!gradeMap.has(g.siteReportId)) {
+      gradeMap.set(g.siteReportId, g)
     }
   }
 
