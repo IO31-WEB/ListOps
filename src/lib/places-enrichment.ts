@@ -1,15 +1,15 @@
 /**
  * Google Places API enrichment for anchor tenant data.
  *
- * When a CoStar report lacks nearby retailer data (e.g. consumer spend-only
+ * When a property report lacks nearby retailer data (e.g. consumer spend-only
  * PDFs), this module geocodes the property address and queries the Places API
  * for nearby retail establishments within a 1-mile radius.
  *
- * Results are normalized to CostarRetailer[] so they slot directly into the
+ * Results are normalized to PropertyRetailer[] so they slot directly into the
  * existing grading engine without any changes to scoring logic.
  */
 
-import type { CostarRetailer } from '@/lib/db/schema'
+import type { PropertyRetailer } from '@/lib/db/schema'
 
 const PLACES_API_KEY = process.env.GOOGLE_PLACES_API_KEY
 const GEOCODING_API_KEY = process.env.GOOGLE_PLACES_API_KEY // same key
@@ -18,7 +18,7 @@ const GEOCODING_API_KEY = process.env.GOOGLE_PLACES_API_KEY // same key
 const SEARCH_RADIUS_METERS = 2414 // 1.5 miles
 
 // Google place types → our retailer categories
-const TYPE_CATEGORY_MAP: Record<string, CostarRetailer['category']> = {
+const TYPE_CATEGORY_MAP: Record<string, PropertyRetailer['category']> = {
   // Big box / department
   department_store: 'big_box',
   furniture_store: 'big_box',
@@ -66,7 +66,7 @@ const FAST_FOOD_NAMES = [
   "arby's", 'jack in the box', 'whataburger', "hardee's", "carl's jr",
 ]
 
-function classifyByName(name: string): CostarRetailer['category'] | null {
+function classifyByName(name: string): PropertyRetailer['category'] | null {
   const lower = name.toLowerCase()
   if (BIG_BOX_NAMES.some((n) => lower.includes(n))) return 'big_box'
   if (GROCERY_NAMES.some((n) => lower.includes(n))) return 'grocery'
@@ -80,7 +80,7 @@ function metersToMiles(meters: number): number {
 }
 
 export interface EnrichmentResult {
-  retailers: CostarRetailer[]
+  retailers: PropertyRetailer[]
   lat: number
   lng: number
   source: 'google_places'
@@ -199,13 +199,13 @@ function haversineMeters(
 }
 
 /**
- * Normalize a Places API result to CostarRetailer format.
+ * Normalize a Places API result to PropertyRetailer format.
  */
 function normalizePlaceToRetailer(
   place: any,
   subjectLat: number,
   subjectLng: number
-): CostarRetailer | null {
+): PropertyRetailer | null {
   const name: string = place.displayName?.text ?? place.name
   if (!name) return null
 
@@ -220,7 +220,7 @@ function normalizePlaceToRetailer(
   const nameCategory = classifyByName(name)
   const typeCategory = place.types
     ?.map((t: string) => TYPE_CATEGORY_MAP[t])
-    .find(Boolean) as CostarRetailer['category'] | undefined
+    .find(Boolean) as PropertyRetailer['category'] | undefined
 
   const category = nameCategory ?? typeCategory ?? 'other'
 
@@ -240,7 +240,7 @@ function normalizePlaceToRetailer(
 /**
  * Main enrichment entry point.
  * Geocodes the address (or uses existing lat/lng), queries Places, returns
- * normalized retailers ready to be stored in costar_reports.nearby_retailers.
+ * normalized retailers ready to be stored in site_reports.nearby_retailers.
  */
 export async function enrichWithPlacesData(opts: {
   address: string
@@ -269,9 +269,9 @@ export async function enrichWithPlacesData(opts: {
 
   const places = await searchNearbyPlaces(lat, lng)
 
-  const retailers: CostarRetailer[] = places
+  const retailers: PropertyRetailer[] = places
     .map((p) => normalizePlaceToRetailer(p, lat, lng))
-    .filter((r): r is CostarRetailer => r !== null)
+    .filter((r): r is PropertyRetailer => r !== null)
     // Deduplicate by name (Places can return same chain multiple times)
     .filter((r, i, arr) => arr.findIndex((x) => x.name.toLowerCase() === r.name.toLowerCase()) === i)
     .sort((a, b) => a.distanceMiles - b.distanceMiles)
