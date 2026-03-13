@@ -35,8 +35,8 @@ export const FEATURE_GATES = {
   sso:                  ['enterprise'],
   api_access:           ['enterprise'],
   // Content module gates
-  listing_copy:         ['free', 'starter', 'pro', 'brokerage', 'enterprise'],  // all plans
-  print_materials:      ['free', 'starter', 'pro', 'brokerage', 'enterprise'],  // all plans
+  listing_copy:         ['free', 'starter', 'pro', 'commercial', 'brokerage', 'enterprise'],  // all plans
+  print_materials:      ['free', 'starter', 'pro', 'commercial', 'brokerage', 'enterprise'],  // all plans
   photo_captions:       ['starter', 'pro', 'commercial', 'brokerage', 'enterprise'],
   email_drip:           ['starter', 'pro', 'commercial', 'brokerage', 'enterprise'],
   microsite_copy:       ['starter', 'pro', 'commercial', 'brokerage', 'enterprise'],
