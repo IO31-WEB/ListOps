@@ -2,12 +2,11 @@ import { auth } from '@clerk/nextjs/server'
 import { NextRequest, NextResponse } from 'next/server'
 import Anthropic from '@anthropic-ai/sdk'
 import { db } from '@/lib/db'
-import { siteReports, propertyGrades, microsites } from '@/lib/db/schema'
+import { siteReports, propertyGrades, campaigns } from '@/lib/db/schema'
 import { eq, and } from 'drizzle-orm'
 import { getUserWithDetails } from '@/lib/user-service'
 import { canAccess } from '@/lib/plans'
 import type { PlanTier } from '@/lib/plans'
-import { nanoid } from 'nanoid'
 
 const anthropic = new Anthropic()
 
@@ -45,7 +44,6 @@ export async function POST(req: NextRequest) {
 
     if (!grade) return NextResponse.json({ error: 'Grade this report first' }, { status: 400 })
 
-    // Generate CRE-specific microsite copy
     const context = buildContext(report, grade)
 
     const msg = await anthropic.messages.create({
@@ -69,12 +67,12 @@ Output ONLY valid JSON (no markdown), matching this exact shape:
 }
 
 Rules:
-- headline: 6–10 words, specific to this market, investment angle
-- tagline: 4–8 words, benefit-focused, punchy
-- description: 3–4 sentences. Professional, investment-grade. Specific to this property's data.
-- investmentHighlights: exactly 5 bullet strings, each starting with a strong keyword followed by a colon (e.g., "Prime Traffic Exposure: ...")
+- headline: 6-10 words, specific to this market, investment angle
+- tagline: 4-8 words, benefit-focused, punchy
+- description: 3-4 sentences. Professional, investment-grade. Specific to this property data.
+- investmentHighlights: exactly 5 bullet strings, each starting with a strong keyword followed by a colon
 - demographicsNarrative: 2 sentences summarizing the trade area consumer profile
-- trafficNarrative: 1–2 sentences on traffic/visibility as a business driver`,
+- trafficNarrative: 1-2 sentences on traffic/visibility as a business driver`,
       }],
     })
 
@@ -82,42 +80,42 @@ Rules:
     const clean = raw.replace(/^```json\s*/i, '').replace(/```\s*$/i, '').trim()
     const copy = JSON.parse(clean)
 
-    // Create the microsite record
-    // NOTE: This assumes a 'microsites' table with a type/variant column for 'commercial'
-    // Adapt the insert columns to match your actual schema.
-    const slug = `cre-${nanoid(8)}`
+    // Store as a campaign row so the existing /l/[slug] route renders it.
+    // CRE content lives in analytics.micrositeCopy.
+    const slug = `cre-${reportId.slice(0, 8)}-${Date.now().toString(36)}`
 
-    await db.insert(microsites).values({
-      id: nanoid(),
-      userId: dbUser.id,
-      siteReportId: reportId,         // FK to siteReports
-      slug,
-      type: 'commercial',              // flag for the /l/[slug] page to render CRE template
-      published: true,
-      content: JSON.stringify({
-        ...copy,
-        grade: {
-          overallGrade: grade.overallGrade,
-          overallScore: grade.overallScore,
-          trafficGrade: grade.trafficGrade,
-          consumerSpendGrade: grade.consumerSpendGrade,
-          householdIncomeGrade: grade.householdIncomeGrade,
-          demographicsGrade: grade.demographicsGrade,
-          aiSummary: grade.aiSummary,
-          aiStrengths: grade.aiStrengths,
-          aiRisks: grade.aiRisks,
+    await db.insert(campaigns).values({
+      agentId: dbUser.id,
+      orgId: dbUser.organization.id,
+      status: 'complete',
+      micrositeSlug: slug,
+      micrositePublished: true,
+      analytics: {
+        micrositeCopy: {
+          ...copy,
+          _type: 'commercial',
+          grade: {
+            overallGrade: grade.overallGrade,
+            overallScore: grade.overallScore,
+            trafficGrade: grade.trafficGrade,
+            consumerSpendGrade: grade.consumerSpendGrade,
+            householdIncomeGrade: grade.householdIncomeGrade,
+            demographicsGrade: grade.demographicsGrade,
+            aiSummary: grade.aiSummary,
+            aiStrengths: grade.aiStrengths,
+            aiRisks: grade.aiRisks,
+          },
+          property: {
+            address: report.propertyAddress,
+            city: report.propertyCity,
+            state: report.propertyState,
+            zip: report.propertyZip,
+          },
+          demographics: report.demographics,
+          trafficCounts: report.trafficCounts,
+          consumerSpend: report.consumerSpend,
         },
-        property: {
-          address: report.propertyAddress,
-          city: report.propertyCity,
-          state: report.propertyState,
-          zip: report.propertyZip,
-        },
-        demographics: report.demographics,
-        trafficCounts: report.trafficCounts,
-        consumerSpend: report.consumerSpend,
-      }),
-      createdAt: new Date(),
+      } as any,
     })
 
     return NextResponse.json({ slug })
