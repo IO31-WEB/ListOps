@@ -1,12 +1,15 @@
 /**
  * POST /api/commercial/upload
  *
- * Accepts a CoStar PDF, uploads it to R2, parses it with Claude,
- * enriches nearby retailer data via Google Places (always — CoStar PDFs
- * often omit anchor tenant data), and stores everything in costar_reports.
+ * Accepts a commercial property analytics PDF, uploads it to R2, parses it
+ * with Claude's vision API, enriches nearby retailer data via Google Places,
+ * * and stores everything in site_reports.
  *
- * Enrichment is non-blocking on failure: if Places is unconfigured or errors,
- * the report saves with whatever CoStar provided and a warning is logged.
+ * Accepts PDFs from any standard commercial real estate data provider.
+ * The AI extraction is format-agnostic — it reads whatever the document contains.
+ *
+ * Enrichment is non-blocking: if Places is unconfigured or errors, the report
+ * saves with whatever was in the PDF and a warning is logged.
  *
  * Requires: commercial | brokerage | enterprise plan
  */
@@ -14,17 +17,17 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { auth } from '@clerk/nextjs/server'
 import { db } from '@/lib/db'
-import { costarReports, gradeWeights } from '@/lib/db/schema'
+import { siteReports, gradeWeights } from '@/lib/db/schema'
 import { getUserWithDetails } from '@/lib/user-service'
 import { canAccess } from '@/lib/plans'
 import { uploadToR2 } from '@/lib/r2'
-import { parseCostarPdf, normalizeConsumerSpend, normalizeDemographic } from '@/lib/costar-parser'
+import { parsePropertyReportPdf, normalizeConsumerSpend, normalizeDemographic } from '@/lib/property-data-parser'
 import { enrichWithPlacesData } from '@/lib/places-enrichment'
 import { captureError } from '@/lib/monitoring'
 import { rateLimitAPI } from '@/lib/ratelimit'
 import { eq } from 'drizzle-orm'
 import type { PlanTier } from '@/lib/plans'
-import type { CostarRetailer } from '@/lib/db/schema'
+import type { PropertyRetailer } from '@/lib/db/schema'
 
 export const runtime = 'nodejs'
 export const maxDuration = 180 // parse (up to 2min) + geocode + places
@@ -52,9 +55,9 @@ export async function POST(request: NextRequest) {
 
   const sub = dbUser.organization.subscriptions?.[0]
   const plan = ((sub?.plan ?? dbUser.organization.plan) ?? 'free') as PlanTier
-  if (!canAccess(plan, 'costar_integration')) {
+  if (!canAccess(plan, 'site_analysis')) {
     return NextResponse.json(
-      { error: 'CoStar integration requires the Commercial plan or higher.' },
+      { error: 'Site Analysis requires the Commercial plan or higher.' },
       { status: 403 }
     )
   }
@@ -80,14 +83,14 @@ export async function POST(request: NextRequest) {
   const base64 = buffer.toString('base64')
 
   // ── Upload raw PDF to R2 ──────────────────────────────────────
-  const r2Key = `costar-reports/${dbUser.organization.id}/${Date.now()}-${file.name.replace(/[^a-z0-9.-]/gi, '_')}`
+  const r2Key = `site-reports/${dbUser.organization.id}/${Date.now()}-${file.name.replace(/[^a-z0-9.-]/gi, '_')}`
   const pdfUrl = await uploadToR2({ key: r2Key, body: buffer, contentType: 'application/pdf' })
 
   // ── Parse with Claude ─────────────────────────────────────────
   let parsed
   let parseError: string | null = null
   try {
-    parsed = await parseCostarPdf(base64, file.name)
+    parsed = await parsePropertyReportPdf(base64, file.name)
   } catch (err) {
     parseError = err instanceof Error ? err.message : String(err)
     captureError(err instanceof Error ? err : new Error(parseError), {
@@ -114,11 +117,10 @@ export async function POST(request: NextRequest) {
     : null
 
   // ── Places enrichment ─────────────────────────────────────────
-  // Always run — CoStar PDFs frequently omit nearby retailer data.
-  // If CoStar already provided retailers, we still enrich from Places and
-  // merge (CoStar data wins on duplicates since it has sales volume).
-  // Failures are non-fatal: the report saves with whatever data we have.
-  let placesRetailers: CostarRetailer[] = []
+  // Always run to supplement data the PDF may not include.
+  // If the PDF already has retailers, we still enrich and merge.
+  // Failures are non-fatal — report saves with whatever data we have.
+  let placesRetailers: PropertyRetailer[] = []
   let placesLat: number | null = null
   let placesLng: number | null = null
   let placesEnrichmentSource: 'google_places' | null = null
@@ -128,7 +130,6 @@ export async function POST(request: NextRequest) {
   const state = parsed?.propertyState ?? null
   const zip = parsed?.propertyZip ?? null
 
-  // Only enrich if we have a real address (not just filename fallback)
   if (parsed?.propertyAddress) {
     try {
       const enrichment = await enrichWithPlacesData({ address, city, state, zip })
@@ -137,7 +138,6 @@ export async function POST(request: NextRequest) {
       placesLng = enrichment.lng
       placesEnrichmentSource = 'google_places'
     } catch (err) {
-      // Non-fatal — log and continue. Report saves without enrichment.
       captureError(err instanceof Error ? err : new Error(String(err)), {
         context: 'places_enrichment',
         reportAddress: address,
@@ -145,16 +145,16 @@ export async function POST(request: NextRequest) {
     }
   }
 
-  // Merge retailers: CoStar data takes precedence (has sales volume),
-  // Places fills in anything CoStar missed.
-  const costarRetailers: CostarRetailer[] = parsed?.nearbyRetailers ?? []
-  const costarNames = new Set(costarRetailers.map((r) => r.name.toLowerCase()))
-  const placesOnly = placesRetailers.filter((r) => !costarNames.has(r.name.toLowerCase()))
-  const mergedRetailers: CostarRetailer[] = [...costarRetailers, ...placesOnly]
+  // Merge retailers: PDF-extracted data takes precedence (may have sales volume),
+  // Places fills in anything the PDF missed.
+  const pdfRetailers: PropertyRetailer[] = parsed?.nearbyRetailers ?? []
+  const pdfNames = new Set(pdfRetailers.map((r) => r.name.toLowerCase()))
+  const placesOnly = placesRetailers.filter((r) => !pdfNames.has(r.name.toLowerCase()))
+  const mergedRetailers: PropertyRetailer[] = [...pdfRetailers, ...placesOnly]
 
   // ── Save report ───────────────────────────────────────────────
   const [report] = await db
-    .insert(costarReports)
+    .insert(siteReports)
     .values({
       orgId: dbUser.organization.id,
       userId: dbUser.id,
@@ -193,7 +193,7 @@ export async function POST(request: NextRequest) {
     enrichment: {
       source: placesEnrichmentSource,
       retailersFound: mergedRetailers.length,
-      fromCostar: costarRetailers.length,
+      fromPdf: pdfRetailers.length,
       fromPlaces: placesOnly.length,
     },
   })
