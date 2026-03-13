@@ -1,13 +1,13 @@
 /**
  * POST /api/commercial/enrich
  *
- * Enriches a CoStar report's anchor tenant data using Google Places API
- * when the original PDF lacked nearby retailer information.
+ * Enriches a site analysis report's anchor tenant data using Google Places API
+ * when the uploaded PDF lacked nearby retailer information.
  *
  * Flow:
  *   1. Geocode address (or use stored lat/lng)
  *   2. Query Google Places Nearby Search for retail establishments
- *   3. Patch nearbyRetailers + lat/lng on the costar_report
+ *   3. Patch nearbyRetailers + lat/lng on the site_report
  *   4. Re-grade with the enriched retailer data
  *
  * Requires: commercial | brokerage | enterprise plan
@@ -16,7 +16,7 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { auth } from '@clerk/nextjs/server'
 import { db } from '@/lib/db'
-import { costarReports, propertyGrades, gradeWeights } from '@/lib/db/schema'
+import { siteReports, propertyGrades, gradeWeights } from '@/lib/db/schema'
 import { getUserWithDetails } from '@/lib/user-service'
 import { canAccess } from '@/lib/plans'
 import { captureError } from '@/lib/monitoring'
@@ -31,7 +31,7 @@ import {
   redistributeWeightsExcluding,
 } from '@/lib/property-grader'
 import type { PlanTier } from '@/lib/plans'
-import type { CostarGradeWeights } from '@/lib/db/schema'
+import type { PropertyGradeWeights } from '@/lib/db/schema'
 
 export const runtime = 'nodejs'
 export const maxDuration = 60
@@ -66,14 +66,14 @@ export async function POST(request: NextRequest) {
 
   const sub = dbUser.organization.subscriptions?.[0]
   const plan = ((sub?.plan ?? dbUser.organization.plan) ?? 'free') as PlanTier
-  if (!canAccess(plan, 'costar_integration')) {
+  if (!canAccess(plan, 'site_analysis')) {
     return NextResponse.json({ error: 'Commercial plan required' }, { status: 403 })
   }
 
-  const report = await db.query.costarReports.findFirst({
+  const report = await db.query.siteReports.findFirst({
     where: and(
-      eq(costarReports.id, reportId),
-      eq(costarReports.orgId, dbUser.organization.id)
+      eq(siteReports.id, reportId),
+      eq(siteReports.orgId, dbUser.organization.id)
     ),
   })
 
@@ -107,20 +107,20 @@ export async function POST(request: NextRequest) {
   }
 
   // ── Step 2: Patch the report with enriched retailer data ──────
-  await db.update(costarReports)
+  await db.update(siteReports)
     .set({
       nearbyRetailers: enrichment.retailers as any,
       propertyLat: enrichment.lat.toFixed(7) as any,
       propertyLng: enrichment.lng.toFixed(7) as any,
       updatedAt: new Date(),
     })
-    .where(eq(costarReports.id, reportId))
+    .where(eq(siteReports.id, reportId))
 
   // ── Step 3: Re-grade with enriched data ───────────────────────
   const weightsRow = await db.query.gradeWeights.findFirst({
     where: eq(gradeWeights.orgId, dbUser.organization.id),
   })
-  const baseWeights: CostarGradeWeights = weightsRow
+  const baseWeights: PropertyGradeWeights = weightsRow
     ? {
         traffic: Number(weightsRow.traffic),
         consumerSpend: Number(weightsRow.consumerSpend),
@@ -173,7 +173,7 @@ export async function POST(request: NextRequest) {
   const [grade] = await db.insert(propertyGrades).values({
     orgId: dbUser.organization.id,
     userId: dbUser.id,
-    costarReportId: reportId,
+    siteReportId: reportId,
     overallGrade: overallGrade as any,
     overallScore: overallScore.toFixed(2),
     trafficScore: trafficScore.toFixed(2),
