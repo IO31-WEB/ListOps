@@ -68,18 +68,18 @@ export async function POST(req: NextRequest) {
       return NextResponse.json({ error: 'sections required' }, { status: 400 })
     }
 
-    const pdfBytes = await buildOM({ sections, propertyType, askingPrice, capRate })
+    const pdfBytes = await buildOM({ sections, propertyType, askingPrice, capRate });
 
-const pdfBlob = new Blob([pdfBytes], { type: 'application/pdf' });
+    const pdfBlob = new Blob([new Uint8Array(pdfBytes)], { type: 'application/pdf' });
 
 return new NextResponse(pdfBlob, {
   status: 200,
   headers: {
     'Content-Type': 'application/pdf',
-    // Optional but good for downloads:
     'Content-Disposition': 'attachment; filename="offering-memorandum.pdf"',
-    'Content-Length': pdfBytes.length.toString(),
+    'Content-Length': pdfBytes.length.toString(),  // still safe on original
   },
+});
 });
   } catch (err) {
     console.error('[om-builder/pdf]', err)
