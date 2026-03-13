@@ -1,4 +1,16 @@
-export async function POST_COMPS(req: NextRequest) {
+import { auth } from '@clerk/nextjs/server'
+import { NextRequest, NextResponse } from 'next/server'
+import Anthropic from '@anthropic-ai/sdk'
+import { db } from '@/lib/db'
+import { siteReports, propertyGrades } from '@/lib/db/schema'
+import { eq, and } from 'drizzle-orm'
+import { getUserWithDetails } from '@/lib/user-service'
+import { canAccess } from '@/lib/plans'
+import type { PlanTier } from '@/lib/plans'
+
+const anthropic = new Anthropic()
+
+export async function POST(req: NextRequest) {
   try {
     const { userId } = await auth()
     if (!userId) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
@@ -71,10 +83,10 @@ Output ONLY valid JSON (no markdown), matching this exact shape:
 }
 
 Rules:
-- summary: 2–3 sentence market overview characterizing $/SF trends and cap rate ranges in this trade area
-- comps: 3–5 entries. Use null for unknown fields (not "N/A"). If estimated, add "(Est.)" to the value.
-- positioning: 1–2 sentences comparing the subject property to the comps using the grade data
-- recommendation: 1–2 sentences with a specific pricing/positioning recommendation based on grade vs comps`,
+- summary: 2-3 sentence market overview characterizing $/SF trends and cap rate ranges in this trade area
+- comps: 3-5 entries. Use null for unknown fields. If estimated, add "(Est.)" to the value.
+- positioning: 1-2 sentences comparing the subject property to the comps using the grade data
+- recommendation: 1-2 sentences with a specific pricing/positioning recommendation`,
       }],
     })
 
