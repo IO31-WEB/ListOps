@@ -10,8 +10,8 @@ const TEMPLATES = [
 
 export function PrintButton({ backUrl, planTier, initialTemplate }: { backUrl: string; planTier: string; initialTemplate: string }) {
   const [template, setTemplate] = useState(initialTemplate || 'classic')
-  const hasMultipleTemplates = ['starter', 'pro', 'brokerage', 'enterprise'].includes(planTier)
-  const hasAllTemplates = ['pro', 'brokerage', 'enterprise'].includes(planTier)
+  const hasMultipleTemplates = ['starter', 'pro', 'commercial', 'brokerage', 'enterprise'].includes(planTier)
+  const hasAllTemplates = ['pro', 'commercial', 'brokerage', 'enterprise'].includes(planTier)
 
   const switchTemplate = (newTemplate: string) => {
     setTemplate(newTemplate)
