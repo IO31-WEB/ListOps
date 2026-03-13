@@ -1,7 +1,7 @@
 /**
  * Property Grading Engine
  *
- * Converts parsed CoStar data into weighted A–F letter grades.
+ * Converts parsed commercial property data into weighted A–F letter grades.
  * Benchmarks are calibrated against national commercial RE averages.
  *
  * Each category produces a 0–100 score. The weighted composite determines
@@ -13,12 +13,12 @@
 
 import Anthropic from '@anthropic-ai/sdk'
 import type {
-  CostarConsumerSpend,
-  CostarDemographic,
-  CostarTrafficCount,
-  CostarRetailer,
-  CostarAnchorTenant,
-  CostarGradeWeights,
+  PropertyConsumerSpend,
+  PropertyDemographic,
+  PropertyTrafficCount,
+  PropertyRetailer,
+  PropertyAnchorTenant,
+  PropertyGradeWeights,
 } from '@/lib/db/schema'
 
 const anthropic = new Anthropic({ apiKey: process.env.ANTHROPIC_API_KEY! })
@@ -48,7 +48,7 @@ export function scoreToGrade(score: number): string {
 // ── Traffic Score ─────────────────────────────────────────────
 // Benchmarks: <5k = poor strip/secondary; 20k+ = strong arterial; 45k+ = highway corridor
 
-export function scoreTraffic(counts: CostarTrafficCount[]): number {
+export function scoreTraffic(counts: PropertyTrafficCount[]): number {
   if (!counts.length) return 40 // missing data penalty
 
   // Use the highest-volume count at the closest location (primary arterial)
@@ -77,7 +77,7 @@ export function scoreTraffic(counts: CostarTrafficCount[]): number {
 // 3-mile total spend in $000s. National retail median ~$500M; top quartile $1B+
 
 export function scoreConsumerSpend(
-  threeMile: CostarConsumerSpend | null | undefined
+  threeMile: PropertyConsumerSpend | null | undefined
 ): number {
   if (!threeMile?.totalSpecified) return 40
 
@@ -98,7 +98,7 @@ export function scoreConsumerSpend(
 // 3-mile median HH income. National median ~$70k; affluent markets $100k+
 
 export function scoreHouseholdIncome(
-  threeMile: CostarDemographic | null | undefined
+  threeMile: PropertyDemographic | null | undefined
 ): number {
   if (!threeMile?.medianHouseholdIncome) return 40
 
@@ -119,7 +119,7 @@ export function scoreHouseholdIncome(
 // Composite: population size, growth trajectory, age profile, education
 
 export function scoreDemographics(
-  threeMile: CostarDemographic | null | undefined
+  threeMile: PropertyDemographic | null | undefined
 ): number {
   if (!threeMile) return 40
 
@@ -186,13 +186,13 @@ const HIGH_VALUE_FAST_CASUAL = new Set([
 ])
 
 export function scoreAnchorTenants(
-  retailers: CostarRetailer[]
-): { score: number; hasData: boolean; anchors: CostarAnchorTenant[] } {
+  retailers: PropertyRetailer[]
+): { score: number; hasData: boolean; anchors: PropertyAnchorTenant[] } {
   // No data — flag hasData=false so callers can exclude from weighted average
   if (!retailers.length) return { score: 50, hasData: false, anchors: [] }
 
   let score = 50 // baseline
-  const anchors: CostarAnchorTenant[] = []
+  const anchors: PropertyAnchorTenant[] = []
 
   for (const r of retailers) {
     const nameLower = r.name.toLowerCase()
@@ -254,9 +254,9 @@ export function scoreAnchorTenants(
 // so the overall score isn't penalized for missing data.
 
 export function redistributeWeightsExcluding(
-  exclude: keyof CostarGradeWeights,
-  weights: CostarGradeWeights
-): CostarGradeWeights {
+  exclude: keyof PropertyGradeWeights,
+  weights: PropertyGradeWeights
+): PropertyGradeWeights {
   const excludedWeight = weights[exclude]
   const remaining = 1 - excludedWeight
   const factor = remaining > 0 ? 1 / remaining : 1
@@ -279,7 +279,7 @@ export function computeOverallScore(
     demographics: number
     anchorTenant: number
   },
-  weights: CostarGradeWeights
+  weights: PropertyGradeWeights
 ): number {
   return (
     scores.traffic * weights.traffic +
@@ -309,9 +309,9 @@ export async function generateGradeNarrative(opts: {
   householdIncomeScore: number
   demographicsScore: number
   anchorTenantScore: number
-  anchors: CostarAnchorTenant[]
-  demographics: CostarDemographic | null | undefined
-  trafficCounts: CostarTrafficCount[]
+  anchors: PropertyAnchorTenant[]
+  demographics: PropertyDemographic | null | undefined
+  trafficCounts: PropertyTrafficCount[]
 }): Promise<GradeNarrative> {
   const topTraffic = opts.trafficCounts
     .sort((a, b) => b.avgDailyVolume - a.avgDailyVolume)
@@ -376,7 +376,7 @@ Respond in this exact JSON format (no markdown, no prose outside JSON):
 
 // ── Default weights ───────────────────────────────────────────
 
-export const DEFAULT_GRADE_WEIGHTS: CostarGradeWeights = {
+export const DEFAULT_GRADE_WEIGHTS: PropertyGradeWeights = {
   traffic: 0.25,
   consumerSpend: 0.25,
   householdIncome: 0.20,
