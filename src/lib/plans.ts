@@ -43,8 +43,9 @@ export const FEATURE_GATES = {
   expanded_social:      ['pro', 'commercial', 'brokerage', 'enterprise'],   // TikTok, LinkedIn, X, Stories
   virtual_tour_scripts: ['pro', 'commercial', 'brokerage', 'enterprise'],
   // Commercial plan gates
-  costar_integration:   ['commercial', 'brokerage', 'enterprise'],
+  site_analysis:        ['commercial', 'brokerage', 'enterprise'],
   property_grading:     ['commercial', 'brokerage', 'enterprise'],
+  attom_enrichment:     ['commercial', 'brokerage', 'enterprise'],
 } as const satisfies Record<string, readonly PlanTier[]>
 
 export type Feature = keyof typeof FEATURE_GATES
@@ -254,13 +255,14 @@ export const ENTERPRISE_PLAN = {
     maxAgents: 3,
     features: [
       { text: 'Everything in Pro', included: true, highlight: true },
-      { text: 'CoStar report upload & parsing', included: true, highlight: true },
+      { text: 'AI-powered commercial site analysis & PDF parsing', included: true, highlight: true },
       { text: 'AI property grading card (A–F)', included: true, highlight: true },
       { text: 'Traffic count scoring', included: true },
       { text: 'Consumer spend analysis (1/3/5 mi)', included: true },
       { text: 'Household income grading', included: true },
       { text: 'Big-box & anchor tenant detection', included: true },
-      { text: 'CoStar API push integration', included: true },
+      { text: 'ATTOM Data enrichment (demographics, spend)', included: true, highlight: true },
+      { text: 'Direct API data push integration', included: true },
       { text: 'Demographic scoring', included: true },
       { text: 'AI site narrative & risk flags', included: true },
       { text: 'PDF grade card export', included: true },
