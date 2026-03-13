@@ -286,7 +286,7 @@ function drawCover(page: PDFPage, opts: {
 
   // Confidentiality notice in body
   const notice = 'This Offering Memorandum has been prepared by ListOps Commercial for use by a limited number of parties. The information contained herein has been obtained from sources believed reliable. This document is intended solely for the use of the party to whom it is addressed and is not to be reproduced or distributed without the prior written consent of the issuing party.'
-  const noticeLines = wrapText(notice, page.doc?.embedFont ? fontRegular : fontRegular, 9, CONTENT_W)
+  const noticeLines = wrapText(notice, fontRegular, 9, CONTENT_W)
 
   let y = PAGE_H - 330
   page.drawText('Confidentiality Notice', {
