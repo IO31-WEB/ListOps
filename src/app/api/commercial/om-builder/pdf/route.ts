@@ -70,13 +70,19 @@ export async function POST(req: NextRequest) {
 
     const pdfBytes = await buildOM({ sections, propertyType, askingPrice, capRate })
 
-    return new NextResponse(pdfBytes, {
-      status: 200,
-      headers: {
-        'Content-Type': 'application/pdf',
-        'Content-Disposition': 'attachment; filename="Offering-Memorandum.pdf"',
-        'Content-Length': pdfBytes.byteLength.toString(),
-      },
+    const pdfBytes = await buildOM({ sections, propertyType, askingPrice, capRate });
+
+const pdfBlob = new Blob([pdfBytes], { type: 'application/pdf' });
+
+return new NextResponse(pdfBlob, {
+  status: 200,
+  headers: {
+    'Content-Type': 'application/pdf',
+    // Optional but good for downloads:
+    'Content-Disposition': 'attachment; filename="offering-memorandum.pdf"',
+    'Content-Length': pdfBytes.length.toString(),
+  },
+});
     })
   } catch (err) {
     console.error('[om-builder/pdf]', err)
