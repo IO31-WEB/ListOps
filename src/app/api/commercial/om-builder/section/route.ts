@@ -1,12 +1,12 @@
-// Regenerates a single OM section without rebuilding the entire document.
-
 import { auth } from '@clerk/nextjs/server'
 import { NextRequest, NextResponse } from 'next/server'
 import Anthropic from '@anthropic-ai/sdk'
 import { db } from '@/lib/db'
 import { siteReports, propertyGrades } from '@/lib/db/schema'
 import { eq, and } from 'drizzle-orm'
-import { getUserPlan } from '@/lib/user-service'
+import { getUserWithDetails } from '@/lib/user-service'
+import { canAccess } from '@/lib/plans'
+import type { PlanTier } from '@/lib/plans'
 
 const anthropic = new Anthropic()
 
@@ -24,8 +24,13 @@ export async function POST(req: NextRequest) {
     const { userId } = await auth()
     if (!userId) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
 
-    const plan = await getUserPlan(userId)
-    if (plan.tier !== 'commercial') {
+    const dbUser = await getUserWithDetails(userId)
+    if (!dbUser?.organization) {
+      return NextResponse.json({ error: 'Organization not found' }, { status: 404 })
+    }
+    const sub = dbUser.organization.subscriptions?.[0]
+    const plan = ((sub?.plan ?? dbUser.organization.plan) ?? 'free') as PlanTier
+    if (!canAccess(plan, 'site_analysis')) {
       return NextResponse.json({ error: 'Commercial plan required' }, { status: 403 })
     }
 
@@ -43,7 +48,7 @@ export async function POST(req: NextRequest) {
     const [report] = await db
       .select()
       .from(siteReports)
-      .where(and(eq(siteReports.id, reportId), eq(siteReports.userId, userId)))
+      .where(and(eq(siteReports.id, reportId), eq(siteReports.userId, dbUser.id)))
       .limit(1)
 
     if (!report) return NextResponse.json({ error: 'Report not found' }, { status: 404 })
@@ -51,7 +56,7 @@ export async function POST(req: NextRequest) {
     const [grade] = await db
       .select()
       .from(propertyGrades)
-      .where(eq(propertyGrades.reportId, reportId))
+      .where(eq(propertyGrades.siteReportId, reportId))
       .limit(1)
 
     if (!grade) return NextResponse.json({ error: 'Grade required' }, { status: 400 })
@@ -90,41 +95,3 @@ Output ONLY the section text — no labels, no markdown headers, no preamble.`,
     return NextResponse.json({ error: 'Internal error' }, { status: 500 })
   }
 }
-
-
-// ═════════════════════════════════════════════════════════════════════════════
-//  FILE PLACEMENT GUIDE
-//  Drop these files into your Next.js src/app directory:
-// ═════════════════════════════════════════════════════════════════════════════
-//
-//  PAGES (replace existing):
-//  ┌─────────────────────────────────────────────────────────────────────────┐
-//  │  src/app/dashboard/commercial/page.tsx          ← commercial-page.tsx   │
-//  └─────────────────────────────────────────────────────────────────────────┘
-//
-//  NEW API ROUTES (create directories + drop in route.ts):
-//  ┌─────────────────────────────────────────────────────────────────────────┐
-//  │  src/app/api/commercial/om-builder/route.ts     ← api-om-builder-route  │
-//  │  src/app/api/commercial/om-builder/section/     ← (this file)           │
-//  │    └── route.ts                                                          │
-//  │  src/app/api/commercial/om-builder/pdf/         ← wire to existing PDF  │
-//  │    └── route.ts                                   generation util        │
-//  │  src/app/api/commercial/email-campaign/route.ts ← api-email-campaign    │
-//  │  src/app/api/commercial/email-campaign/send/    ← api-email-send-route  │
-//  │    └── route.ts                                                          │
-//  │  src/app/api/commercial/teaser/route.ts         ← api-teaser-comps      │
-//  │  src/app/api/commercial/comps/route.ts          ← api-teaser-comps      │
-//  │    (POST_COMPS export → rename to POST)                                  │
-//  │  src/app/api/commercial/microsite/route.ts      ← api-microsite-route   │
-//  └─────────────────────────────────────────────────────────────────────────┘
-//
-//  SCHEMA NOTE:
-//  The microsite route references a `siteReportId` FK and `type` column on
-//  your microsites table. Add a migration if those columns don't exist yet:
-//
-//    ALTER TABLE microsites ADD COLUMN site_report_id TEXT REFERENCES site_reports(id);
-//    ALTER TABLE microsites ADD COLUMN type TEXT NOT NULL DEFAULT 'residential';
-//
-//  ENV VARS NEEDED (add to .env.local):
-//    RESEND_API_KEY=re_...
-//    RESEND_FROM_EMAIL=campaigns@yourdomain.com   (must be verified in Resend)
