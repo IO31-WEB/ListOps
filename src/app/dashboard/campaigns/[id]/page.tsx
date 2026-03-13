@@ -676,8 +676,8 @@ export default function CampaignDetailPage() {
 
   const address = [campaign.listing?.address, campaign.listing?.city, campaign.listing?.state].filter(Boolean).join(', ')
   const photos = (campaign.listing?.photos ?? []) as string[]
-  const isPro = ['pro', 'brokerage', 'enterprise'].includes(planTier)
-  const isStarter = ['starter', 'pro', 'brokerage', 'enterprise'].includes(planTier)
+  const isPro = ['pro', 'commercial', 'brokerage', 'enterprise'].includes(planTier)
+  const isStarter = ['starter', 'pro', 'commercial', 'brokerage', 'enterprise'].includes(planTier)
 
   let reelScripts: ReelScript[] = []
   let virtualTourScripts: VirtualTourScript[] = []
