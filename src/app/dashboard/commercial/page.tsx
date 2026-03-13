@@ -132,7 +132,7 @@ export default function CommercialDashboardPage() {
           </div>
           <h2 className="text-2xl font-bold text-slate-900">Commercial Plan Required</h2>
           <p className="text-slate-600">
-            CoStar data integration and property grading are available on the Commercial plan ($179/mo),
+            Commercial site analysis and AI property grading are available on the Commercial plan ($179/mo),
             which includes everything in Pro plus AI-powered site analysis.
           </p>
           <Link
@@ -158,7 +158,7 @@ export default function CommercialDashboardPage() {
               Commercial Site Analysis
             </h1>
             <p className="mt-1 text-slate-500 text-sm">
-              Upload CoStar reports to generate AI-powered property grade cards
+              Upload property analytics reports to generate AI-powered site grade cards
             </p>
           </div>
         </div>
@@ -180,15 +180,15 @@ export default function CommercialDashboardPage() {
           {uploading ? (
             <div className="space-y-3">
               <RefreshCw className="w-10 h-10 text-amber-500 animate-spin mx-auto" />
-              <p className="font-medium text-slate-700">Parsing CoStar report with AI…</p>
+              <p className="font-medium text-slate-700">Parsing property report with AI…</p>
               <p className="text-sm text-slate-500">This can take 20–60 seconds for multi-page reports</p>
             </div>
           ) : (
             <div className="space-y-3">
               <Upload className="w-10 h-10 text-amber-400 mx-auto" />
-              <p className="font-semibold text-slate-700">Drop a CoStar PDF here or click to browse</p>
+              <p className="font-semibold text-slate-700">Drop a property analytics PDF here or click to browse</p>
               <p className="text-sm text-slate-500">
-                Supports CoStar Consumer Spending, Demographic Detail, and Traffic Count reports
+                Supports Consumer Spending, Demographic Detail, and Traffic Count reports from any commercial data provider
               </p>
               <p className="text-xs text-slate-400">Max 20 MB · PDF only</p>
             </div>
@@ -210,7 +210,7 @@ export default function CommercialDashboardPage() {
           {!loading && reports.length === 0 && (
             <div className="text-center py-16 text-slate-400">
               <FileText className="w-10 h-10 mx-auto mb-3 opacity-40" />
-              <p>No CoStar reports yet — upload your first PDF above</p>
+              <p>No reports yet — upload your first property analytics PDF above</p>
             </div>
           )}
 
@@ -280,21 +280,37 @@ export default function CommercialDashboardPage() {
           ))}
         </div>
 
-        {/* CoStar API Integration Info */}
-        <div className="bg-slate-900 rounded-2xl p-6 text-white">
-          <h3 className="font-semibold text-amber-400 mb-2">Direct CoStar Integration</h3>
-          <p className="text-slate-400 text-sm leading-relaxed">
-            Send CoStar data directly to ListOps via our API push endpoint. Configure your CoStar
-            account or use Zapier/Make to forward property analytics to:
-          </p>
-          <code className="mt-3 block bg-slate-800 rounded-lg px-4 py-3 text-sm text-amber-300 font-mono">
-            POST https://listops.io/api/commercial/costar-push
-          </code>
-          <p className="text-slate-500 text-xs mt-3">
-            Contact support for your org's webhook secret and integration docs.
-          </p>
+        {/* Data Sources Panel */}
+        <div className="bg-slate-900 rounded-2xl p-6 text-white space-y-5">
+          <div>
+            <h3 className="font-semibold text-amber-400 mb-1">Supported Data Sources</h3>
+            <p className="text-slate-400 text-sm leading-relaxed">
+              Upload PDFs from any commercial real estate analytics provider — our AI reads and
+              normalizes the data automatically. You can also push structured data directly via API.
+            </p>
+          </div>
+          <div className="flex flex-wrap gap-2">
+            {['ATTOM Data', 'Site To Do Business', 'Buxton', 'Demographics Now', 'Esri Business Analyst', 'Any CRE Report'].map((src) => (
+              <span key={src} className="px-3 py-1 bg-slate-800 border border-slate-700 rounded-full text-xs text-slate-300 font-medium">
+                {src}
+              </span>
+            ))}
+          </div>
+          <div className="border-t border-slate-800 pt-4">
+            <p className="text-slate-400 text-xs mb-2 font-medium uppercase tracking-wide">Direct API Push</p>
+            <p className="text-slate-500 text-xs mb-2">
+              Automate data delivery from any source via Zapier, Make, or your own ETL pipeline:
+            </p>
+            <code className="block bg-slate-800 rounded-lg px-4 py-2.5 text-sm text-amber-300 font-mono">
+              POST https://listops.io/api/commercial/data-push
+            </code>
+            <p className="text-slate-600 text-xs mt-2">
+              Contact support for your webhook secret and integration docs.
+            </p>
+          </div>
         </div>
       </div>
     </div>
   )
 }
+
