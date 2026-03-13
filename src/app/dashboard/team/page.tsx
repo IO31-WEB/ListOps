@@ -21,7 +21,7 @@ export default async function TeamPage() {
   if (!stats) redirect('/onboarding')
 
   const { planTier, user } = stats
-  const canManageTeam = ['pro', 'brokerage', 'enterprise'].includes(planTier)
+  const canManageTeam = ['pro', 'commercial', 'brokerage', 'enterprise'].includes(planTier)
   const teamMembers = canManageTeam && user.orgId ? await getTeamMembers(user.orgId) : [user]
 
   const maxAgents = {
