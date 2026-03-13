@@ -1,9 +1,8 @@
 /**
  * POST /api/commercial/grade
  *
- * Runs the grading engine on a parsed CoStar report and persists the grade.
- * Accepts either a reportId (use existing parsed data) or inline data payload
- * (for CoStar API push path).
+ * Runs the grading engine on a parsed site analysis report and persists
+ * the grade. Accepts a reportId (use existing parsed data).
  *
  * Requires: commercial | brokerage | enterprise plan
  */
@@ -11,13 +10,12 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { auth } from '@clerk/nextjs/server'
 import { db } from '@/lib/db'
-import { costarReports, propertyGrades, gradeWeights } from '@/lib/db/schema'
+import { siteReports, propertyGrades, gradeWeights } from '@/lib/db/schema'
 import { getUserWithDetails } from '@/lib/user-service'
 import { canAccess } from '@/lib/plans'
 import { captureError } from '@/lib/monitoring'
 import { rateLimitAPI } from '@/lib/ratelimit'
-import { eq, and } from 'drizzle-orm'
-import { desc } from 'drizzle-orm';
+import { eq, and, desc } from 'drizzle-orm'
 import { z } from 'zod'
 import {
   scoreTraffic,
@@ -31,8 +29,8 @@ import {
   DEFAULT_GRADE_WEIGHTS,
   redistributeWeightsExcluding,
 } from '@/lib/property-grader'
-import type { PlanTier, } from '@/lib/plans'
-import type { CostarGradeWeights } from '@/lib/db/schema'
+import type { PlanTier } from '@/lib/plans'
+import type { PropertyGradeWeights } from '@/lib/db/schema'
 
 export const runtime = 'nodejs'
 export const maxDuration = 60
@@ -78,16 +76,16 @@ export async function POST(request: NextRequest) {
     )
   }
 
-  // Fetch the CoStar report — scoped to org for security
-  const report = await db.query.costarReports.findFirst({
+  // Fetch report — scoped to org for row-level security
+  const report = await db.query.siteReports.findFirst({
     where: and(
-      eq(costarReports.id, reportId),
-      eq(costarReports.orgId, dbUser.organization.id)
+      eq(siteReports.id, reportId),
+      eq(siteReports.orgId, dbUser.organization.id)
     ),
   })
 
   if (!report) {
-    return NextResponse.json({ error: 'CoStar report not found' }, { status: 404 })
+    return NextResponse.json({ error: 'Site analysis report not found' }, { status: 404 })
   }
 
   if (report.parseError) {
@@ -97,10 +95,9 @@ export async function POST(request: NextRequest) {
     )
   }
 
-  // Return existing grade unless regenerate=true
   if (!regenerate) {
     const existing = await db.query.propertyGrades.findFirst({
-      where: eq(propertyGrades.costarReportId, reportId),
+      where: eq(propertyGrades.siteReportId, reportId),
       orderBy: [desc(propertyGrades.createdAt)],
     })
     if (existing) {
@@ -108,12 +105,11 @@ export async function POST(request: NextRequest) {
     }
   }
 
-  // Load org-specific weights or use defaults
   const weightsRow = await db.query.gradeWeights.findFirst({
     where: eq(gradeWeights.orgId, dbUser.organization.id),
   })
 
-  const weights: CostarGradeWeights = weightsRow
+  const weights: PropertyGradeWeights = weightsRow
     ? {
         traffic: Number(weightsRow.traffic),
         consumerSpend: Number(weightsRow.consumerSpend),
@@ -123,7 +119,6 @@ export async function POST(request: NextRequest) {
       }
     : DEFAULT_GRADE_WEIGHTS
 
-  // Run scoring
   const trafficScore = scoreTraffic(report.trafficCounts ?? [])
   const consumerSpendScore = scoreConsumerSpend(report.consumerSpend?.threeMile)
   const householdIncomeScore = scoreHouseholdIncome(report.demographics?.threeMile)
@@ -148,7 +143,6 @@ export async function POST(request: NextRequest) {
   const demographicsGrade = scoreToGrade(demographicsScore)
   const anchorTenantGrade = anchorHasData ? scoreToGrade(anchorTenantScore) : 'F'
 
-  // Generate AI narrative
   let narrative
   try {
     narrative = await generateGradeNarrative({
@@ -174,7 +168,7 @@ export async function POST(request: NextRequest) {
     .values({
       orgId: dbUser.organization.id,
       userId: dbUser.id,
-      costarReportId: reportId,
+      siteReportId: reportId,
       overallGrade: overallGrade as any,
       overallScore: overallScore.toFixed(2),
       trafficScore: trafficScore.toFixed(2),
@@ -198,3 +192,4 @@ export async function POST(request: NextRequest) {
 
   return NextResponse.json({ gradeId: grade.id, cached: false })
 }
+
