@@ -5,11 +5,11 @@ import { use } from 'react'
 import Link from 'next/link'
 import {
   ArrowLeft, Printer, RefreshCw, Car, DollarSign, Home, Users, Store,
-  TrendingUp, TrendingDown, Minus, AlertTriangle, CheckCircle, Building2, MapPin,
+  TrendingUp, TrendingDown, Minus, AlertTriangle, CheckCircle, Building2, MapPin, Database, MapPin as MapPinIcon,
 } from 'lucide-react'
 import toast from 'react-hot-toast'
 
-interface CostarReport {
+interface SiteReport {
   id: string
   propertyAddress: string
   propertyCity: string | null
@@ -175,10 +175,12 @@ const PRINT_STYLES = `
 
 export default function GradeCardPage({ params }: { params: Promise<{ reportId: string }> }) {
   const { reportId } = use(params)
-  const [report, setReport] = useState<CostarReport | null>(null)
+  const [report, setReport] = useState<SiteReport | null>(null)
   const [grade, setGrade] = useState<PropertyGrade | null>(null)
   const [loading, setLoading] = useState(true)
   const [regenerating, setRegenerating] = useState(false)
+  const [enrichingPlaces, setEnrichingPlaces] = useState(false)
+  const [enrichingAttom, setEnrichingAttom] = useState(false)
 
   async function fetchData() {
     try {
@@ -216,6 +218,7 @@ export default function GradeCardPage({ params }: { params: Promise<{ reportId: 
   }
 
   async function handleEnrich() {
+    setEnrichingPlaces(true)
     try {
       const res = await fetch('/api/commercial/enrich', {
         method: 'POST',
@@ -240,6 +243,40 @@ export default function GradeCardPage({ params }: { params: Promise<{ reportId: 
     } catch {
       toast.error('Enrichment failed — please try again')
     } finally {
+      setEnrichingPlaces(false)
+    }
+  }
+
+  async function handleAttomEnrich() {
+    setEnrichingAttom(true)
+    try {
+      const res = await fetch('/api/commercial/attom-enrich', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ reportId }),
+      })
+      const data = await res.json()
+      if (!res.ok) {
+        if (res.status === 501) {
+          toast.error('ATTOM Data is not configured on this instance — contact support')
+        } else if (res.status === 422) {
+          toast.error(data.error ?? 'ATTOM could not locate this address')
+        } else {
+          toast.error(data.error ?? 'ATTOM enrichment failed')
+        }
+        return
+      }
+      const added = data.dataAdded ?? {}
+      const rings = added.demographics?.threeMile || added.consumerSpend?.threeMile
+      toast.success(rings
+        ? 'ATTOM demographics & spend data added — grade updated'
+        : 'ATTOM enrichment complete — grade updated'
+      )
+      await fetchData()
+    } catch {
+      toast.error('ATTOM enrichment failed — please try again')
+    } finally {
+      setEnrichingAttom(false)
     }
   }
 
@@ -292,7 +329,16 @@ export default function GradeCardPage({ params }: { params: Promise<{ reportId: 
             >
               <ArrowLeft className="w-4 h-4" /> Back to Reports
             </Link>
-            <div className="flex items-center gap-3">
+            <div className="flex items-center gap-2">
+              <button
+                onClick={handleAttomEnrich}
+                disabled={enrichingAttom}
+                title="Enrich with ATTOM Data — adds demographics, consumer spend, and housing data"
+                className="flex items-center gap-1.5 text-xs font-medium text-indigo-700 bg-indigo-50 border border-indigo-200 px-3 py-1.5 rounded-lg hover:bg-indigo-100 disabled:opacity-50 transition-colors"
+              >
+                <Database className={`w-3.5 h-3.5 ${enrichingAttom ? 'animate-pulse' : ''}`} />
+                {enrichingAttom ? 'Fetching ATTOM…' : 'Enrich with ATTOM'}
+              </button>
               <button
                 onClick={handlePrint}
                 className="flex items-center gap-1.5 text-sm font-medium text-slate-600 hover:text-slate-900 border border-slate-200 bg-white px-3 py-1.5 rounded-lg hover:border-slate-300 transition-colors"
@@ -476,10 +522,12 @@ export default function GradeCardPage({ params }: { params: Promise<{ reportId: 
               </h3>
               <button
                 onClick={handleEnrich}
-                className="no-print flex items-center gap-1.5 text-xs text-slate-400 hover:text-slate-600 transition-colors"
-                title="Re-enrich from Google Maps"
+                disabled={enrichingPlaces}
+                className="no-print flex items-center gap-1.5 text-xs text-slate-400 hover:text-slate-600 disabled:opacity-40 transition-colors"
+                title="Refresh nearby retailers from Google Places"
               >
-                <RefreshCw className="w-3.5 h-3.5" /> Refresh
+                <RefreshCw className={`w-3.5 h-3.5 ${enrichingPlaces ? 'animate-spin' : ''}`} />
+                {enrichingPlaces ? 'Refreshing…' : 'Refresh from Places'}
               </button>
             </div>
 
@@ -546,15 +594,20 @@ export default function GradeCardPage({ params }: { params: Promise<{ reportId: 
           )}
 
           {/* Grade weights footnote */}
-          <div className="text-xs text-slate-400 px-1">
-            <span className="font-medium">Grading weights: </span>
-            {Object.entries(grade.weightsSnapshot).map(([k, v], i, arr) => (
-              <span key={k}>
-                {CATEGORY_LABELS[k as keyof typeof CATEGORY_LABELS] ?? k} {(Number(v) * 100).toFixed(0)}%
-                {i < arr.length - 1 ? ' · ' : ''}
-              </span>
-            ))}
-            <span className="ml-3 text-slate-300">· Generated by ListOps Commercial</span>
+          <div className="text-xs text-slate-400 px-1 space-y-1">
+            <div>
+              <span className="font-medium">Grading weights: </span>
+              {Object.entries(grade.weightsSnapshot).map(([k, v], i, arr) => (
+                <span key={k}>
+                  {CATEGORY_LABELS[k as keyof typeof CATEGORY_LABELS] ?? k} {(Number(v) * 100).toFixed(0)}%
+                  {i < arr.length - 1 ? ' · ' : ''}
+                </span>
+              ))}
+            </div>
+            <div className="text-slate-300">
+              AI-powered site analysis by ListOps Commercial · Data sourced from uploaded property reports and public enrichment APIs ·{' '}
+              <span>Generated {new Date(grade.generatedAt).toLocaleDateString('en-US', { month: 'long', day: 'numeric', year: 'numeric' })}</span>
+            </div>
           </div>
 
         </div>
@@ -562,3 +615,4 @@ export default function GradeCardPage({ params }: { params: Promise<{ reportId: 
     </>
   )
 }
+
