@@ -69,10 +69,10 @@ Output ONLY valid JSON (no markdown fences), matching this exact shape:
 }
 
 Rules:
-- headline: 8–12 words, benefit-led, city/market specific, investment angle
-- keyStats: exactly 3 items using the most impactful numbers from the data (traffic ADT, income, pop growth, grade score, spend, etc.)
-- description: 2–3 sentences. Punchy, professional, specific to this property's trade area strengths
-- cta: 1 sentence action prompt. Example: "Contact listing broker for grade card and full OM."`,
+- headline: 8-12 words, benefit-led, city/market specific, investment angle
+- keyStats: exactly 3 items using the most impactful numbers from the data
+- description: 2-3 sentences. Punchy, professional, specific to this property's trade area strengths
+- cta: 1 sentence action prompt`,
       }],
     })
 
