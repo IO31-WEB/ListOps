@@ -1,24 +1,3 @@
-/**
- * ATTOM Data Solutions — Property & Neighborhood Enrichment
- *
- * ATTOM provides a licensed, redistribution-safe REST API covering:
- *   - Demographics (population, income, age, education) by address/radius
- *   - Traffic volume data via their Transportation dataset
- *   - Consumer expenditure data via their Neighborhood dataset
- *   - School ratings, crime index, and property details
- *
- * Terms: ATTOM's API license explicitly permits use in SaaS applications
- * and derivative data products (confirm your tier's redistribution rights).
- * API docs: https://api.developer.attomdata.com/docs
- *
- * This module normalizes ATTOM responses into the same PropertyConsumerSpend /
- * PropertyDemographic / PropertyTrafficCount schema used by the PDF parser,
- * so the grading engine operates identically regardless of data source.
- *
- * Environment variables required:
- *   ATTOM_API_KEY  — from https://developer.attomdata.com/
- */
-
 import type {
   PropertyConsumerSpend,
   PropertyDemographic,
