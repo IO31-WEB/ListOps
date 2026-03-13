@@ -83,7 +83,6 @@ return new NextResponse(pdfBlob, {
     'Content-Length': pdfBytes.length.toString(),
   },
 });
-    })
   } catch (err) {
     console.error('[om-builder/pdf]', err)
     return NextResponse.json({ error: 'PDF generation failed' }, { status: 500 })
