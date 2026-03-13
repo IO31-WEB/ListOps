@@ -133,13 +133,13 @@ async function buildOM(opts: {
         y -= 18
 
         // Section title
-        page.drawText(label.toUpperCase(), {
+        drawSpacedText(page, label.toUpperCase(), {
           x: MARGIN,
           y,
           size: 8,
           font: fontBold,
           color: COLORS.amber,
-          characterSpacing: 1.5,
+          spacing: 1.5,
         })
         y -= 20
 
@@ -227,11 +227,11 @@ function drawCover(page: PDFPage, opts: {
   })
 
   // "CONFIDENTIAL OFFERING MEMORANDUM"
-  page.drawText('CONFIDENTIAL', {
+  drawSpacedText(page, 'CONFIDENTIAL', {
     x: MARGIN, y: PAGE_H - 72,
     size: 9, font: fontBold,
     color: COLORS.amber,
-    characterSpacing: 3,
+    spacing: 3,
   })
 
   page.drawText('OFFERING MEMORANDUM', {
@@ -242,11 +242,11 @@ function drawCover(page: PDFPage, opts: {
 
   // Property type
   if (propertyType) {
-    page.drawText(propertyType.toUpperCase(), {
+    drawSpacedText(page, propertyType.toUpperCase(), {
       x: MARGIN, y: PAGE_H - 148,
       size: 11, font: fontRegular,
-      color: rgb(0.71, 0.769, 0.859), // slate-400
-      characterSpacing: 1,
+      color: rgb(0.71, 0.769, 0.859),
+      spacing: 1,
     })
   }
 
@@ -255,13 +255,13 @@ function drawCover(page: PDFPage, opts: {
   const metricY = PAGE_H - 230
 
   if (askingPrice) {
-    page.drawText('ASKING PRICE', { x: metricX, y: metricY + 18, size: 7, font: fontBold, color: COLORS.slate400, characterSpacing: 1 })
+    drawSpacedText(page, 'ASKING PRICE', { x: metricX, y: metricY + 18, size: 7, font: fontBold, color: COLORS.slate400, spacing: 1 })
     page.drawText(askingPrice, { x: metricX, y: metricY, size: 14, font: fontBold, color: COLORS.white })
     metricX += 160
   }
 
   if (capRate) {
-    page.drawText('CAP RATE', { x: metricX, y: metricY + 18, size: 7, font: fontBold, color: COLORS.slate400, characterSpacing: 1 })
+    drawSpacedText(page, 'CAP RATE', { x: metricX, y: metricY + 18, size: 7, font: fontBold, color: COLORS.slate400, spacing: 1 })
     page.drawText(capRate, { x: metricX, y: metricY, size: 14, font: fontBold, color: COLORS.white })
   }
 
@@ -362,6 +362,23 @@ This Offering Memorandum is a solicitation of interest only and is not an offer 
   }
 
   drawFooter(page, { fontRegular, pageNum })
+}
+
+
+// ── Spaced text helper ───────────────────────────────────────────
+// Achieves letter-spacing effect on any pdf-lib version by advancing
+// x manually per character.
+function drawSpacedText(
+  page: PDFPage,
+  text: string,
+  opts: { x: number; y: number; size: number; font: PDFFont; color: ReturnType<typeof rgb>; spacing: number }
+) {
+  const { x, y, size, font, color, spacing } = opts
+  let curX = x
+  for (const char of text) {
+    page.drawText(char, { x: curX, y, size, font, color })
+    curX += font.widthOfTextAtSize(char, size) + spacing
+  }
 }
 
 // ── Text wrapping utility ────────────────────────────────────────
