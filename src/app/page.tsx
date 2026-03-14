@@ -182,36 +182,36 @@ export default function HomePage() {
             <p className="text-slate-400 mt-4 max-w-xl mx-auto">Start free. Upgrade when you need more. No contracts, cancel anytime.</p>
           </div>
 
-          <div className="grid sm:grid-cols-2 lg:grid-cols-4 gap-4">
+          <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-5 gap-3 mb-8">
             {PLANS.map((plan) => (
-              <div key={plan.id} className={`rounded-2xl p-6 flex flex-col ${plan.highlighted ? 'bg-amber-500 text-slate-900' : 'bg-slate-800 text-white border border-slate-700'}`}>
+              <div key={plan.id} className={`rounded-2xl p-4 lg:p-5 flex flex-col ${plan.highlighted ? 'bg-amber-500 text-slate-900' : 'bg-slate-800 text-white border border-slate-700'}`}>
                 {plan.badge && (
-                  <span className="inline-block text-xs font-semibold bg-slate-900 text-amber-400 px-2.5 py-1 rounded-full mb-4 w-fit">
+                  <span className="inline-block text-xs font-semibold bg-slate-900 text-amber-400 px-2 py-0.5 rounded-full mb-3 w-fit">
                     {plan.badge}
                   </span>
                 )}
-                <div className="font-display text-xl font-semibold mb-1">{plan.name}</div>
-                <div className={`text-sm mb-4 ${plan.highlighted ? 'text-slate-700' : 'text-slate-400'}`}>{plan.tagline}</div>
-                <div className="mb-6">
+                <div className="font-display text-lg font-semibold mb-0.5">{plan.name}</div>
+                <div className={`text-xs mb-3 ${plan.highlighted ? 'text-slate-700' : 'text-slate-400'}`}>{plan.tagline}</div>
+                <div className="mb-4">
                   {plan.monthlyPrice === 0 ? (
-                    <span className="font-display text-3xl font-bold">Free</span>
+                    <span className="font-display text-2xl font-bold">Free</span>
                   ) : (
                     <>
-                      <span className="font-display text-3xl font-bold">{formatCurrency(plan.monthlyPrice ?? 0)}</span>
-                      <span className={`text-sm ${plan.highlighted ? 'text-slate-700' : 'text-slate-400'}`}>/mo</span>
+                      <span className="font-display text-2xl font-bold">{formatCurrency(plan.monthlyPrice ?? 0)}</span>
+                      <span className={`text-xs ${plan.highlighted ? 'text-slate-700' : 'text-slate-400'}`}>/mo</span>
                     </>
                   )}
                 </div>
-                <ul className="space-y-2 mb-8 flex-1">
-                  {plan.features.filter(f => f.included).slice(0, 5).map((f) => (
-                    <li key={f.text} className={`flex items-start gap-2 text-xs ${plan.highlighted ? 'text-slate-800' : 'text-slate-300'}`}>
-                      <CheckCircle className={`w-3.5 h-3.5 mt-0.5 flex-shrink-0 ${plan.highlighted ? 'text-slate-900' : 'text-amber-500'}`} />
-                      {f.text}
+                <ul className="space-y-1.5 mb-5 flex-1">
+                  {plan.features.filter(f => f.included).slice(0, 4).map((f) => (
+                    <li key={f.text} className={`flex items-start gap-1.5 text-xs ${plan.highlighted ? 'text-slate-800' : 'text-slate-300'}`}>
+                      <CheckCircle className={`w-3 h-3 mt-0.5 flex-shrink-0 ${plan.highlighted ? 'text-slate-900' : 'text-amber-500'}`} />
+                      <span className="leading-tight">{f.text}</span>
                     </li>
                   ))}
                 </ul>
                 <Link href={plan.id === 'free' ? '/sign-up' : `/sign-up?plan=${plan.id}`}
-                  className={`w-full text-center text-sm font-semibold py-3 rounded-xl transition-all ${plan.highlighted ? 'bg-slate-900 text-amber-50 hover:bg-slate-800' : 'bg-slate-700 text-white hover:bg-slate-600'}`}>
+                  className={`w-full text-center text-xs font-semibold py-2.5 rounded-xl transition-all ${plan.highlighted ? 'bg-slate-900 text-amber-50 hover:bg-slate-800' : 'bg-slate-700 text-white hover:bg-slate-600'}`}>
                   {plan.cta}
                 </Link>
               </div>
