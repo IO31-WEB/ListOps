@@ -81,8 +81,8 @@ const FEATURE_CATEGORIES = [
 ]
 
 function FeatureValue({ value }: { value: boolean | string }) {
-  if (value === true) return <Check className="w-4 h-4 text-amber-500 mx-auto" />
-  if (value === false) return <X className="w-4 h-4 text-slate-300 mx-auto" />
+  if (value === true) return <Check className="w-5 h-5 text-amber-500 mx-auto" strokeWidth={2.5} />
+  if (value === false) return <X className="w-4 h-4 text-slate-300 mx-auto" strokeWidth={2} />
   return <span className="text-xs font-medium text-slate-700">{value}</span>
 }
 
@@ -138,7 +138,7 @@ export default function PricingPage() {
           </div>
 
           {/* Plan Cards */}
-          <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-5 gap-6 mb-20">
+          <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-5 gap-4 mb-20 items-stretch">
             {PLANS.map((plan) => {
               const price = annual ? Math.round((plan.yearlyPrice ?? 0) / 12) : (plan.monthlyPrice ?? 0)
               const billedAs = annual && (plan.yearlyPrice ?? 0) > 0 ? `${formatCurrency(plan.yearlyPrice ?? 0)}/yr` : null
@@ -200,8 +200,8 @@ export default function PricingPage() {
             <h2 className="font-display text-3xl font-semibold text-slate-900 text-center mb-10">Full Feature Comparison</h2>
 
             <div className="bg-white rounded-2xl border border-slate-200 overflow-hidden">
-              {/* Table header */}
-              <div className="grid grid-cols-5 bg-slate-50 border-b border-slate-200">
+              {/* Table header - sticky so plan names stay visible while scrolling */}
+              <div className="grid grid-cols-5 bg-slate-50 border-b border-slate-200 sticky top-[64px] z-10 shadow-sm">
                 <div className="p-4 text-sm font-semibold text-slate-600">Feature</div>
                 {['Free', 'Starter', 'Pro', 'Brokerage'].map((name) => (
                   <div key={name} className="p-4 text-center">
