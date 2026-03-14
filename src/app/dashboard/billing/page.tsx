@@ -59,8 +59,8 @@ const FEATURE_COMPARISON = [
 ]
 
 function FeatureValue({ value }: { value: boolean | string }) {
-  if (value === true) return <Check className="w-4 h-4 text-green-600 mx-auto" />
-  if (value === false) return <X className="w-4 h-4 text-slate-300 mx-auto" />
+  if (value === true) return <Check className="w-5 h-5 text-green-600 mx-auto" strokeWidth={2.5} />
+  if (value === false) return <X className="w-4 h-4 text-slate-300 mx-auto" strokeWidth={2} />
   return <span className="text-xs text-center text-slate-700">{value}</span>
 }
 
@@ -433,8 +433,8 @@ export default function BillingPage() {
         {showComparison && (
           <div className="overflow-x-auto border-t border-slate-100">
             <table className="w-full min-w-[600px]">
-              <thead>
-                <tr className="border-b border-slate-100 bg-slate-50">
+              <thead className="sticky top-0 z-10">
+                <tr className="border-b border-slate-100 bg-slate-50 shadow-sm">
                   <th className="text-left text-xs font-semibold text-slate-500 uppercase tracking-wide px-6 py-3 w-2/5">Feature</th>
                   {['Free', 'Starter', 'Pro', 'Brokerage'].map(p => (
                     <th key={p} className={`text-center text-xs font-semibold uppercase tracking-wide px-4 py-3 ${p.toLowerCase() === currentPlan ? 'text-amber-700' : 'text-slate-500'}`}>
