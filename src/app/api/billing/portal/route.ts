@@ -1,8 +1,10 @@
 import { NextRequest, NextResponse } from 'next/server'
-import { auth } from '@clerk/nextjs/server'
+import { auth, currentUser } from '@clerk/nextjs/server'
 import { stripe } from '@/lib/stripe'
-import { absoluteUrl } from '@/lib/utils'
-import { getUserWithDetails } from '@/lib/user-service'
+import { getUserWithDetails, getOrCreateUser } from '@/lib/user-service'
+import { db } from '@/lib/db'
+import { organizations } from '@/lib/db/schema'
+import { eq } from 'drizzle-orm'
 
 export async function POST(request: NextRequest) {
   const { userId } = await auth()
@@ -11,14 +13,43 @@ export async function POST(request: NextRequest) {
   const origin = request.headers.get('origin') || process.env.NEXT_PUBLIC_APP_URL || ''
 
   try {
-    const dbUser = await getUserWithDetails(userId)
-    const customerId = dbUser?.organization?.stripeCustomerId
+    const clerkUser = await currentUser()
+    if (!clerkUser) return NextResponse.json({ error: 'User not found' }, { status: 401 })
 
+    // Ensure DB user exists (handles edge cases where webhook was missed)
+    let dbUser = await getUserWithDetails(userId)
+    if (!dbUser) {
+      const primaryEmail =
+        clerkUser.emailAddresses.find((e: any) => e.id === clerkUser.primaryEmailAddressId)?.emailAddress ??
+        clerkUser.emailAddresses[0]?.emailAddress
+      if (primaryEmail) {
+        await getOrCreateUser(userId, {
+          email: primaryEmail,
+          firstName: clerkUser.firstName ?? undefined,
+          lastName: clerkUser.lastName ?? undefined,
+        })
+        dbUser = await getUserWithDetails(userId)
+      }
+    }
+
+    if (!dbUser?.organization) {
+      return NextResponse.json({ error: 'Could not find your account. Please contact support.' }, { status: 400 })
+    }
+
+    let customerId = dbUser.organization.stripeCustomerId
+
+    // Auto-create Stripe customer if missing — users who downgrade or were on free
+    // may not have a customerId yet if they never completed a checkout.
     if (!customerId) {
-      return NextResponse.json(
-        { error: 'No billing account found. Please subscribe first.' },
-        { status: 400 }
-      )
+      const customer = await stripe.customers.create({
+        email: clerkUser.emailAddresses[0]?.emailAddress ?? dbUser.email,
+        name: `${dbUser.firstName ?? ''} ${dbUser.lastName ?? ''}`.trim() || dbUser.email,
+        metadata: { orgId: dbUser.organization.id, clerkUserId: userId },
+      })
+      customerId = customer.id
+      await db.update(organizations)
+        .set({ stripeCustomerId: customerId })
+        .where(eq(organizations.id, dbUser.organization.id))
     }
 
     const body = await request.json().catch(() => ({}))
