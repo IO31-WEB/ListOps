@@ -1,6 +1,6 @@
 'use client'
 
-import { useState, useEffect } from 'react'
+import { useState, useEffect, useCallback } from 'react'
 import { useParams, useRouter } from 'next/navigation'
 import Link from 'next/link'
 import {
@@ -8,7 +8,7 @@ import {
   Facebook, Instagram, Mail, Printer, ChevronDown, ChevronUp,
   Zap, Eye, Globe, Lock, Loader2, Video, Music, FileText,
   Hash, Linkedin, Twitter, Image, MapPin, Camera, Play, Mic,
-  Globe2, Send,
+  Globe2, Send, RefreshCw,
 } from 'lucide-react'
 import toast from 'react-hot-toast'
 
@@ -99,9 +99,11 @@ const ACCENT_CLASSES: Record<AccentColor, string> = {
   slate:  'bg-slate-100 text-slate-700',
 }
 
-function Section({ title, badge, icon: Icon, accent = 'amber', defaultOpen = false, children }: {
+function Section({ title, badge, icon: Icon, accent = 'amber', defaultOpen = false, onRegenerate, regenerating, children }: {
   title: string; badge?: string; icon: React.ComponentType<{ className?: string }>
-  accent?: AccentColor; defaultOpen?: boolean; children: React.ReactNode
+  accent?: AccentColor; defaultOpen?: boolean
+  onRegenerate?: () => void; regenerating?: boolean
+  children: React.ReactNode
 }) {
   const [open, setOpen] = useState(defaultOpen)
   return (
@@ -116,7 +118,23 @@ function Section({ title, badge, icon: Icon, accent = 'amber', defaultOpen = fal
             {badge && <span className="ml-2 text-xs text-slate-500 bg-slate-100 px-2 py-0.5 rounded-full">{badge}</span>}
           </div>
         </div>
-        {open ? <ChevronUp className="w-4 h-4 text-slate-400" /> : <ChevronDown className="w-4 h-4 text-slate-400" />}
+        <div className="flex items-center gap-2">
+          {onRegenerate && (
+            <button
+              onClick={(e) => { e.stopPropagation(); onRegenerate() }}
+              disabled={regenerating}
+              title="Regenerate this section"
+              className="flex items-center gap-1.5 text-xs font-medium text-slate-500 hover:text-amber-700 bg-slate-100 hover:bg-amber-50 border border-transparent hover:border-amber-200 px-2.5 py-1.5 rounded-lg transition-all disabled:opacity-50 disabled:cursor-not-allowed flex-shrink-0"
+            >
+              {regenerating
+                ? <Loader2 className="w-3.5 h-3.5 animate-spin" />
+                : <RefreshCw className="w-3.5 h-3.5" />
+              }
+              <span className="hidden sm:inline">{regenerating ? 'Regenerating…' : 'Regenerate'}</span>
+            </button>
+          )}
+          {open ? <ChevronUp className="w-4 h-4 text-slate-400 flex-shrink-0" /> : <ChevronDown className="w-4 h-4 text-slate-400 flex-shrink-0" />}
+        </div>
       </button>
       {open && <div className="border-t border-slate-100">{children}</div>}
     </div>
@@ -150,7 +168,7 @@ function WeekPill({ week }: { week: number }) {
 
 // ── Section 1: Listing Copy ────────────────────────────────────
 
-function ListingCopySection({ data }: { data: NonNullable<Campaign['listingCopy']> }) {
+function ListingCopySection({ data, onRegenerate, regenerating }: { data: NonNullable<Campaign['listingCopy']>; onRegenerate?: () => void; regenerating?: boolean }) {
   const [activeTone, setActiveTone] = useState<'luxury' | 'firstTimeBuyer' | 'investor' | null>(null)
   const tones = [
     { key: 'luxury' as const, label: 'Luxury', cls: 'bg-amber-100 text-amber-800' },
@@ -158,7 +176,7 @@ function ListingCopySection({ data }: { data: NonNullable<Campaign['listingCopy'
     { key: 'investor' as const, label: 'Investor', cls: 'bg-blue-100 text-blue-800' },
   ]
   return (
-    <Section title="Listing Copy" badge="Full Package" icon={FileText} accent="amber" defaultOpen>
+    <Section title="Listing Copy" badge="Full Package" icon={FileText} accent="amber" defaultOpen onRegenerate={onRegenerate} regenerating={regenerating}>
       <div className="p-5 border-b border-slate-100">
         <div className="flex items-center justify-between mb-2">
           <span className="text-xs font-bold text-slate-500 uppercase tracking-wider">Primary Headline</span>
@@ -263,7 +281,7 @@ function ListingCopySection({ data }: { data: NonNullable<Campaign['listingCopy'
 
 type SocialTab = 'facebook' | 'instagram' | 'tiktok' | 'linkedin' | 'x' | 'stories' | 'hashtags'
 
-function SocialCalendarSection({ campaign, isPro }: { campaign: Campaign; isPro: boolean }) {
+function SocialCalendarSection({ campaign, isPro, onRegenerate, regenerating }: { campaign: Campaign; isPro: boolean; onRegenerate?: () => void; regenerating?: boolean }) {
   const [tab, setTab] = useState<SocialTab>('facebook')
   const fbPosts = campaign.facebookPosts ?? []
   const igPosts = campaign.instagramPosts ?? []
@@ -286,7 +304,7 @@ function SocialCalendarSection({ campaign, isPro }: { campaign: Campaign; isPro:
   const totalPosts = fbPosts.length + igPosts.length + (isPro ? tiktokPosts.length + liPosts.length + xPosts.length : 0)
 
   return (
-    <Section title="Social Calendar" badge={`${totalPosts}+ posts`} icon={Share2} accent="blue">
+    <Section title="Social Calendar" badge={`${totalPosts}+ posts`} icon={Share2} accent="blue" onRegenerate={onRegenerate} regenerating={regenerating}>
       <div className="flex overflow-x-auto border-b border-slate-100 px-4 gap-1 pt-2 bg-slate-50">
         {tabs.map(t => (
           <button key={t.key} onClick={() => setTab(t.key)}
@@ -418,8 +436,10 @@ function SocialCalendarSection({ campaign, isPro }: { campaign: Campaign; isPro:
 
 // ── Section 3: Email Campaigns ─────────────────────────────────
 
-function EmailCampaignsSection({ emailJustListed, emailStillAvailable, drip }: {
+function EmailCampaignsSection({ emailJustListed, emailStillAvailable, drip, onRegenerate, regenerating, onRegenerateDrip, regeneratingDrip }: {
   emailJustListed?: string; emailStillAvailable?: string; drip?: Campaign['emailDrip']
+  onRegenerate?: () => void; regenerating?: boolean
+  onRegenerateDrip?: () => void; regeneratingDrip?: boolean
 }) {
   const emails = [
     ...(emailJustListed ? [{ key: 'jl', label: 'Just Listed', badge: 'Core', content: emailJustListed }] : []),
@@ -439,7 +459,7 @@ function EmailCampaignsSection({ emailJustListed, emailStillAvailable, drip }: {
   const activeEmail = emails.find(e => e.key === active)
 
   return (
-    <Section title="Email Campaigns" badge={`${emails.length} templates`} icon={Mail} accent="green">
+    <Section title="Email Campaigns" badge={`${emails.length} templates`} icon={Mail} accent="green" onRegenerate={onRegenerate} regenerating={regenerating}>
       <div className="flex overflow-x-auto gap-1 p-3 border-b border-slate-100 bg-slate-50">
         {emails.map(e => (
           <button key={e.key} onClick={() => setActive(e.key)}
@@ -469,7 +489,7 @@ function EmailCampaignsSection({ emailJustListed, emailStillAvailable, drip }: {
 
 // ── Section 4: Print & Offline ─────────────────────────────────
 
-function PrintOfflineSection({ print, campaignId }: { print: NonNullable<Campaign['printMaterials']>; campaignId: string }) {
+function PrintOfflineSection({ print, campaignId, onRegenerate, regenerating }: { print: NonNullable<Campaign['printMaterials']>; campaignId: string; onRegenerate?: () => void; regenerating?: boolean }) {
   const [downloadingPdf, setDownloadingPdf] = useState(false)
   const handlePdf = async () => {
     setDownloadingPdf(true)
@@ -485,7 +505,7 @@ function PrintOfflineSection({ print, campaignId }: { print: NonNullable<Campaig
     { label: 'Magazine Ad', icon: '📰', note: 'Premium format', content: print.magazineAd },
   ]
   return (
-    <Section title="Print & Offline" badge="6 formats" icon={Printer} accent="amber">
+    <Section title="Print & Offline" badge="6 formats" icon={Printer} accent="amber" onRegenerate={onRegenerate} regenerating={regenerating}>
       <div className="p-5 border-b border-slate-100 flex items-center justify-between gap-4 flex-wrap bg-amber-50">
         <div><p className="text-sm font-semibold text-slate-900">Print-Ready Listing Flyer</p><p className="text-xs text-slate-500 mt-0.5">Fully branded with your colors and agent info</p></div>
         <div className="flex gap-2">
@@ -513,10 +533,10 @@ function PrintOfflineSection({ print, campaignId }: { print: NonNullable<Campaig
 
 // ── Section 5: Video + Virtual Tour ───────────────────────────
 
-function VideoSection({ reelScripts, virtualTourScripts }: { reelScripts: ReelScript[]; virtualTourScripts: VirtualTourScript[] }) {
+function VideoSection({ reelScripts, virtualTourScripts, onRegenerate, regenerating }: { reelScripts: ReelScript[]; virtualTourScripts: VirtualTourScript[]; onRegenerate?: () => void; regenerating?: boolean }) {
   const [tab, setTab] = useState<'reels'|'virtual'>('reels')
   return (
-    <Section title="Video & Reel Scripts" badge={`${reelScripts.length + virtualTourScripts.length} scripts`} icon={Video} accent="purple">
+    <Section title="Video & Reel Scripts" badge={`${reelScripts.length + virtualTourScripts.length} scripts`} icon={Video} accent="purple" onRegenerate={onRegenerate} regenerating={regenerating}>
       <div className="flex gap-2 p-4 border-b border-slate-100">
         {[{k:'reels',l:'Social Reels',icon:Play,count:reelScripts.length},{k:'virtual',l:'Virtual Tour & Drone',icon:Mic,count:virtualTourScripts.length}].map(t => (
           <button key={t.k} onClick={() => setTab(t.k as any)}
@@ -559,9 +579,10 @@ function VideoSection({ reelScripts, virtualTourScripts }: { reelScripts: ReelSc
 
 // ── Section 6: Microsite Copy Editor ──────────────────────────
 
-function MicrositeCopySection({ micrositeCopy, micrositeSlug, micrositePublished, campaignId, onToggle, publishing }: {
+function MicrositeCopySection({ micrositeCopy, micrositeSlug, micrositePublished, campaignId, onToggle, publishing, onRegenerate, regenerating }: {
   micrositeCopy: NonNullable<Campaign['micrositeCopy']>; micrositeSlug?: string; micrositePublished?: boolean
   campaignId: string; onToggle: () => void; publishing: boolean
+  onRegenerate?: () => void; regenerating?: boolean
 }) {
   const fields = [
     { label: 'Hero Headline', content: micrositeCopy.heroHeadline, big: true },
@@ -575,7 +596,7 @@ function MicrositeCopySection({ micrositeCopy, micrositeSlug, micrositePublished
     { label: 'Photo Caption Template', content: micrositeCopy.photoCaptionTemplate },
   ]
   return (
-    <Section title="Microsite Copy Editor" badge="Live Page" icon={Globe2} accent="blue">
+    <Section title="Microsite Copy Editor" badge="Live Page" icon={Globe2} accent="blue" onRegenerate={onRegenerate} regenerating={regenerating}>
       <div className="p-4 border-b border-slate-100 flex items-center justify-between gap-4 bg-blue-50 flex-wrap">
         <div className="flex items-center gap-3">
           <div className={`w-2 h-2 rounded-full ${micrositePublished ? 'bg-green-500' : 'bg-slate-400'}`} />
@@ -604,9 +625,9 @@ function MicrositeCopySection({ micrositeCopy, micrositeSlug, micrositePublished
 
 // ── Section 7: Photo Captions ──────────────────────────────────
 
-function PhotoCaptionsSection({ captions, photos }: { captions: PhotoCaption[]; photos: string[] }) {
+function PhotoCaptionsSection({ captions, photos, onRegenerate, regenerating }: { captions: PhotoCaption[]; photos: string[]; onRegenerate?: () => void; regenerating?: boolean }) {
   return (
-    <Section title="Photo Captions" badge={`${captions.length} photos`} icon={Camera} accent="rose">
+    <Section title="Photo Captions" badge={`${captions.length} photos`} icon={Camera} accent="rose" onRegenerate={onRegenerate} regenerating={regenerating}>
       <p className="text-xs text-slate-400 italic px-5 py-3 border-b border-slate-100">Alt text, Instagram captions, story overlay text, and staging tips for each photo.</p>
       <div className="divide-y divide-slate-100">
         {captions.map((cap, i) => (
@@ -642,6 +663,7 @@ export default function CampaignDetailPage() {
   const [loading, setLoading] = useState(true)
   const [publishing, setPublishing] = useState(false)
   const [planTier, setPlanTier] = useState<string>('free')
+  const [regenerating, setRegenerating] = useState<string | null>(null)  // section key being regenerated
 
   useEffect(() => {
     fetchCampaign()
@@ -657,6 +679,38 @@ export default function CampaignDetailPage() {
     } catch { toast.error('Could not load campaign') }
     finally { setLoading(false) }
   }
+
+  const handleRegenerate = useCallback(async (section: string) => {
+    if (!id) return
+    setRegenerating(section)
+    const sectionLabels: Record<string, string> = {
+      listingCopy: 'Listing Copy',
+      social: 'Social Calendar',
+      email: 'Email Campaigns',
+      emailDrip: 'Email Drip',
+      print: 'Print Materials',
+      video: 'Video & Reel Scripts',
+      microsite: 'Microsite Copy',
+      photoCaptions: 'Photo Captions',
+    }
+    try {
+      const res = await fetch(`/api/campaigns/${id}/regenerate`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ section }),
+      })
+      const data = await res.json()
+      if (!res.ok) throw new Error(data.error || 'Failed to regenerate')
+
+      toast.success(`${sectionLabels[section] ?? section} regenerated!`)
+      // Refresh campaign data to show new content
+      await fetchCampaign()
+    } catch (err: any) {
+      toast.error(err.message || 'Failed to regenerate section')
+    } finally {
+      setRegenerating(null)
+    }
+  }, [id])
 
   const toggleMicrosite = async () => {
     if (!campaign) return
@@ -739,14 +793,14 @@ export default function CampaignDetailPage() {
 
       {/* 1. Listing Copy */}
       {campaign.listingCopy
-        ? <ListingCopySection data={campaign.listingCopy} />
+        ? <ListingCopySection data={campaign.listingCopy} onRegenerate={() => handleRegenerate('listingCopy')} regenerating={regenerating === 'listingCopy'} />
         : null}
 
       {/* 2. Social Calendar */}
-      <SocialCalendarSection campaign={campaign} isPro={isPro} />
+      <SocialCalendarSection campaign={campaign} isPro={isPro} onRegenerate={() => handleRegenerate('social')} regenerating={regenerating === 'social'} />
 
       {/* 3. Email Campaigns */}
-      <EmailCampaignsSection emailJustListed={campaign.emailJustListed} emailStillAvailable={campaign.emailStillAvailable} drip={isStarter ? campaign.emailDrip : undefined} />
+      <EmailCampaignsSection emailJustListed={campaign.emailJustListed} emailStillAvailable={campaign.emailStillAvailable} drip={isStarter ? campaign.emailDrip : undefined} onRegenerate={() => handleRegenerate('email')} regenerating={regenerating === 'email'} onRegenerateDrip={isStarter ? () => handleRegenerate('emailDrip') : undefined} regeneratingDrip={regenerating === 'emailDrip'} />
       {!isStarter && campaign.emailJustListed && (
         <LockedSection title="Email Drip Sequences" icon={Mail} plan="Starter"
           description="Buyer Day 1–30 drip, seller updates, open house invites, post-showing feedback, and market report newsletters." />
@@ -754,19 +808,19 @@ export default function CampaignDetailPage() {
 
       {/* 4. Print & Offline */}
       {campaign.printMaterials
-        ? <PrintOfflineSection print={campaign.printMaterials} campaignId={campaign.id} />
+        ? <PrintOfflineSection print={campaign.printMaterials} campaignId={campaign.id} onRegenerate={() => handleRegenerate('print')} regenerating={regenerating === 'print'} />
         : null}
 
       {/* 5. Video & Virtual Tour */}
       {isPro && (reelScripts.length > 0 || virtualTourScripts.length > 0)
-        ? <VideoSection reelScripts={reelScripts} virtualTourScripts={virtualTourScripts} />
+        ? <VideoSection reelScripts={reelScripts} virtualTourScripts={virtualTourScripts} onRegenerate={() => handleRegenerate('video')} regenerating={regenerating === 'video'} />
         : <LockedSection title="Video & Reel Scripts + Virtual Tour" icon={Video} plan="Pro"
             description="6 weeks of social reel scripts plus Matterport walkthrough narration, 30-sec highlight reel, drone voice-over, and timed walkthrough scripts." />
       }
 
       {/* 6. Microsite Copy Editor */}
       {isStarter && campaign.micrositeCopy
-        ? <MicrositeCopySection micrositeCopy={campaign.micrositeCopy} micrositeSlug={campaign.micrositeSlug} micrositePublished={campaign.micrositePublished} campaignId={campaign.id} onToggle={toggleMicrosite} publishing={publishing} />
+        ? <MicrositeCopySection micrositeCopy={campaign.micrositeCopy} micrositeSlug={campaign.micrositeSlug} micrositePublished={campaign.micrositePublished} campaignId={campaign.id} onToggle={toggleMicrosite} publishing={publishing} onRegenerate={() => handleRegenerate('microsite')} regenerating={regenerating === 'microsite'} />
         : !isStarter
           ? <LockedSection title="Microsite Copy Editor" icon={Globe2} plan="Starter"
               description="Hero headline, about section, neighborhood story, and CTA copy for your listing microsite — edit and publish in one click." />
@@ -775,7 +829,7 @@ export default function CampaignDetailPage() {
 
       {/* 7. Photo Captions */}
       {campaign.photoCaptions && campaign.photoCaptions.length > 0
-        ? <PhotoCaptionsSection captions={campaign.photoCaptions} photos={photos} />
+        ? <PhotoCaptionsSection captions={campaign.photoCaptions} photos={photos} onRegenerate={() => handleRegenerate('photoCaptions')} regenerating={regenerating === 'photoCaptions'} />
         : null}
     </div>
   )
