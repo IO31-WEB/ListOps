@@ -31,7 +31,6 @@ const anthropic = new Anthropic({ apiKey: process.env.ANTHROPIC_API_KEY ?? '' })
 
 const RequestSchema = z.object({
   mlsId: z.string().min(1).max(200),
-  listingUrl: z.string().url().optional(),
   manualListing: z.object({
     address: z.string().optional(),
     city: z.string().optional(),
@@ -510,11 +509,9 @@ export async function POST(request: NextRequest) {
 
   try {
     const body = await request.json()
-    const { mlsId, manualListing, listingUrl } = RequestSchema.parse(body)
+    const { mlsId, manualListing } = RequestSchema.parse(body)
 
-    // Determine input mode from mlsId prefix
     const isManualMode = mlsId.startsWith('manual:')
-    const isUrlMode = mlsId.startsWith('url:')
 
     // FIX: Check idempotency — if a campaign for this user+listing is already
     // in 'generating' state (started < 5 min ago), return that one instead of
@@ -588,41 +585,6 @@ export async function POST(request: NextRequest) {
         agent: { firstName: '', lastName: '', contact: { office: '' } },
       }
       isDemo = false
-    } else if (isUrlMode) {
-      // URL mode is handled client-side only — the frontend extracts what it can
-      // from the URL string and pre-fills the manual form for user confirmation.
-      // We never fetch third-party listing sites server-side to avoid ToS violations.
-      // By the time we get here, manualListing should always be populated.
-      if (manualListing && manualListing.address) {
-        mlsData = {
-          mlsId: `url-${Date.now()}`,
-          listPrice: manualListing.price ?? 0,
-          remarks: manualListing.description ?? '',
-          address: {
-            deliveryLine: manualListing.address ?? '',
-            line1: manualListing.address ?? '',
-            city: manualListing.city ?? '',
-            state: manualListing.state ?? '',
-            postalCode: '',
-          },
-          property: {
-            bedrooms: manualListing.bedrooms ?? 0,
-            bathsFull: manualListing.bathrooms ? Math.floor(manualListing.bathrooms) : 0,
-            area: manualListing.sqft ?? 0,
-            yearBuilt: null,
-            type: 'Residential',
-            features: [],
-          },
-          photos: [],
-          agent: { firstName: '', lastName: '', contact: { office: '' } },
-        }
-        isDemo = false
-      } else {
-        return NextResponse.json(
-          { error: 'Please fill in the property details before generating.' },
-          { status: 400 }
-        )
-      }
     } else {
       // Standard MLS ID fetch
       const result = await fetchMLSListing(mlsId)
