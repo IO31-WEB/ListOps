@@ -9,7 +9,7 @@ export const metadata: Metadata = {
     default: 'ListOps — 6-Week Real Estate Marketing in One Click',
     template: '%s | ListOps',
   },
-  description: 'Generate complete 6-week real estate marketing campaigns from your MLS listing ID. Facebook, Instagram, email, and print-ready flyers — all in about 60 seconds.',
+  description: 'Generate complete 6-week real estate marketing campaigns from your MLS listing ID. Facebook, Instagram, email, and print-ready flyers — all in about 2 minutes.',
   keywords: ['real estate marketing', 'MLS', 'real estate agent tools', 'listing marketing', 'AI real estate'],
   authors: [{ name: 'ListOps' }],
   creator: 'ListOps',
