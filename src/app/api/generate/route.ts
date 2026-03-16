@@ -130,6 +130,178 @@ async function fetchPhotoAsBase64(url: string): Promise<{ data: string; mediaTyp
   }
 }
 
+// ── Listing URL scraper ────────────────────────────────────────
+// Extracts property data from Zillow, Redfin, Realtor.com, and any
+// page that includes JSON-LD RealEstateListing structured data.
+async function scrapeListingUrl(url: string): Promise<any> {
+  const res = await fetch(url, {
+    headers: {
+      'User-Agent': 'Mozilla/5.0 (compatible; ListOps/1.0; +https://listops.io)',
+      'Accept': 'text/html,application/xhtml+xml',
+      'Accept-Language': 'en-US,en;q=0.9',
+    },
+    signal: AbortSignal.timeout(10000),
+  })
+
+  if (!res.ok) throw new Error(`Failed to fetch listing page: ${res.status}`)
+  const html = await res.text()
+
+  // ── 1. Try JSON-LD structured data (most reliable) ────────────
+  const jsonLdMatches = html.matchAll(/<script[^>]+type=["']application\/ld\+json["'][^>]*>([\s\S]*?)<\/script>/gi)
+  for (const match of jsonLdMatches) {
+    try {
+      const data = JSON.parse(match[1])
+      const items = Array.isArray(data) ? data : [data]
+      for (const item of items) {
+        if (item['@type'] === 'RealEstateListing' || item['@type'] === 'SingleFamilyResidence' || item['@type'] === 'Residence') {
+          return buildFromJsonLd(item, url)
+        }
+      }
+    } catch { /* continue */ }
+  }
+
+  // ── 2. Try Zillow's __NEXT_DATA__ JSON blob ────────────────────
+  const nextDataMatch = html.match(/<script id="__NEXT_DATA__"[^>]*>([\s\S]*?)<\/script>/)
+  if (nextDataMatch) {
+    try {
+      const nextData = JSON.parse(nextDataMatch[1])
+      const props = nextData?.props?.pageProps
+      // Zillow property page
+      const zprop = props?.componentProps?.gdpClientCache
+        ? Object.values(props.componentProps.gdpClientCache as Record<string, any>)[0]?.property
+        : props?.gdpClientCache
+          ? Object.values(props.gdpClientCache as Record<string, any>)[0]?.property
+          : null
+
+      if (zprop) return buildFromZillow(zprop, url)
+
+      // Redfin-style
+      const rfProp = props?.aboveTheFold ?? props?.listingData ?? props?.propertyData
+      if (rfProp?.price || rfProp?.listPrice) return buildFromRedfin(rfProp, url)
+    } catch { /* continue */ }
+  }
+
+  // ── 3. Extract from meta tags + page text as fallback ─────────
+  return buildFromMetaTags(html, url)
+}
+
+function buildFromJsonLd(item: any, url: string): any {
+  const addr = item.address ?? {}
+  const geo = item.geo ?? {}
+  return buildSyntheticListing({
+    address: addr.streetAddress ?? '',
+    city: addr.addressLocality ?? '',
+    state: addr.addressRegion ?? '',
+    zip: addr.postalCode ?? '',
+    price: parsePrice(item.offers?.price ?? item.price ?? ''),
+    beds: parseInt(item.numberOfRooms ?? item.numberOfBedrooms ?? '0') || 0,
+    baths: parseFloat(item.numberOfBathroomsTotal ?? item.numberOfBathrooms ?? '0') || 0,
+    sqft: parseInt(item.floorSize?.value ?? '0') || 0,
+    description: item.description ?? '',
+    photos: Array.isArray(item.photo) ? item.photo.map((p: any) => typeof p === 'string' ? p : p.url).filter(Boolean) : [],
+    url,
+  })
+}
+
+function buildFromZillow(zprop: any, url: string): any {
+  const addr = zprop.address ?? {}
+  return buildSyntheticListing({
+    address: addr.streetAddress ?? zprop.streetAddress ?? '',
+    city: addr.city ?? zprop.city ?? '',
+    state: addr.state ?? zprop.state ?? '',
+    zip: addr.zipcode ?? zprop.zipcode ?? '',
+    price: zprop.price ?? zprop.listingPrice ?? zprop.zestimate ?? 0,
+    beds: zprop.bedrooms ?? zprop.beds ?? 0,
+    baths: zprop.bathrooms ?? zprop.baths ?? 0,
+    sqft: zprop.livingArea ?? zprop.lotSize ?? 0,
+    description: zprop.description ?? zprop.listingSubType?.description ?? '',
+    photos: (zprop.photos ?? zprop.images ?? []).map((p: any) => p?.url ?? p?.src ?? p).filter((p: any) => typeof p === 'string').slice(0, 10),
+    yearBuilt: zprop.yearBuilt ?? null,
+    propertyType: zprop.homeType ?? zprop.propertyTypeDimension ?? 'Residential',
+    url,
+  })
+}
+
+function buildFromRedfin(rfProp: any, url: string): any {
+  const basic = rfProp.basicInfo ?? rfProp
+  return buildSyntheticListing({
+    address: basic.streetLine?.value ?? basic.address ?? '',
+    city: basic.city ?? '',
+    state: basic.state ?? '',
+    zip: basic.zip ?? '',
+    price: basic.price?.value ?? basic.listPrice ?? 0,
+    beds: basic.beds ?? 0,
+    baths: basic.baths ?? 0,
+    sqft: basic.sqFt?.value ?? basic.sqft ?? 0,
+    description: rfProp.publicRemarks ?? rfProp.description ?? '',
+    photos: [],
+    url,
+  })
+}
+
+function buildFromMetaTags(html: string, url: string): any {
+  const getMeta = (name: string) => {
+    const m = html.match(new RegExp(`<meta[^>]+(?:name|property)=["']${name}["'][^>]+content=["']([^"']+)["']`, 'i'))
+      ?? html.match(new RegExp(`<meta[^>]+content=["']([^"']+)["'][^>]+(?:name|property)=["']${name}["']`, 'i'))
+    return m?.[1] ?? ''
+  }
+
+  const title = getMeta('og:title') || getMeta('twitter:title')
+  const description = getMeta('og:description') || getMeta('twitter:description') || getMeta('description')
+
+  // Try to parse address from og:title or page title
+  // Zillow format: "15555 Wildflower Cir, Naples, FL 34119"
+  const titleText = title || html.match(/<title[^>]*>([^<]+)<\/title>/i)?.[1] ?? ''
+  const addrMatch = titleText.match(/^([^,]+),\s*([^,]+),\s*([A-Z]{2})\s*(\d{5})?/)
+
+  return buildSyntheticListing({
+    address: addrMatch?.[1]?.trim() ?? titleText.split('|')[0].trim(),
+    city: addrMatch?.[2]?.trim() ?? '',
+    state: addrMatch?.[3]?.trim() ?? '',
+    zip: addrMatch?.[4]?.trim() ?? '',
+    price: parsePrice(getMeta('product:price:amount') || getMeta('price') || ''),
+    beds: 0, baths: 0, sqft: 0,
+    description: description || `Listing from ${url}`,
+    photos: [],
+    url,
+  })
+}
+
+function buildSyntheticListing(d: {
+  address: string; city: string; state: string; zip: string
+  price: number; beds: number; baths: number; sqft: number
+  description: string; photos: string[]
+  yearBuilt?: number | null; propertyType?: string; url: string
+}): any {
+  return {
+    mlsId: `url-${Date.now()}`,
+    listPrice: d.price,
+    remarks: d.description || `Property at ${d.url}`,
+    address: {
+      deliveryLine: d.address,
+      line1: d.address,
+      city: d.city,
+      state: d.state,
+      postalCode: d.zip,
+    },
+    property: {
+      bedrooms: d.beds,
+      bathsFull: Math.floor(d.baths),
+      area: d.sqft,
+      yearBuilt: d.yearBuilt ?? null,
+      type: d.propertyType ?? 'Residential',
+      features: [],
+    },
+    photos: d.photos,
+    agent: { firstName: '', lastName: '', contact: { office: '' } },
+  }
+}
+
+function parsePrice(val: string | number): number {
+  if (typeof val === 'number') return val
+  return parseInt(String(val).replace(/[^0-9]/g, '')) || 0
+}
+
 // ── Master prompt builder ──────────────────────────────────────
 // Returns the text prompt string. Photos are attached as vision blocks at the call site.
 function buildCampaignPrompt(listing: any, planTier: PlanTier, brandKit?: any, userAiPersona?: any): string {
@@ -589,19 +761,26 @@ export async function POST(request: NextRequest) {
       }
       isDemo = false
     } else if (isUrlMode) {
-      // URL mode: use demo listing scaffolding but set the URL as the listing context
-      // so Claude can reference it. A future enhancement could scrape the URL.
+      // URL mode: fetch the listing page and extract structured data
       const url = listingUrl ?? mlsId.replace('url:', '')
-      mlsData = {
-        ...getDemoListing(mlsId),
-        remarks: `Listing sourced from: ${url}\n\nNote: This campaign was generated from a listing URL. For best results, please verify property details are accurate.`,
-        address: {
-          ...getDemoListing(mlsId).address,
-          deliveryLine: `Listing at ${url}`,
-          line1: `Listing at ${url}`,
-        },
+      try {
+        const scraped = await scrapeListingUrl(url)
+        mlsData = scraped
+        isDemo = false
+      } catch (scrapeErr) {
+        console.error('URL scrape failed, falling back to demo:', scrapeErr)
+        // Fall back to demo data but include the URL in remarks so Claude knows the context
+        mlsData = {
+          ...getDemoListing(mlsId),
+          remarks: `Property listing URL: ${url}\n\nNote: Could not automatically extract property data from this URL. Campaign generated using placeholder data — please review and update details after generation.`,
+          address: {
+            ...getDemoListing(mlsId).address,
+            deliveryLine: `See listing at ${url}`,
+            line1: `See listing at ${url}`,
+          },
+        }
+        isDemo = true
       }
-      isDemo = true
     } else {
       // Standard MLS ID fetch
       const result = await fetchMLSListing(mlsId)
