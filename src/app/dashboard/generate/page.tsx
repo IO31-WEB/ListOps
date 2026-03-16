@@ -2,12 +2,12 @@
 
 import { useState, useEffect } from 'react'
 import { useRouter } from 'next/navigation'
-import { Zap, Check, AlertTriangle, Loader2, Palette, X, Hash, PenLine, Link2 } from 'lucide-react'
+import { Zap, Check, AlertTriangle, Loader2, Palette, X, Hash, PenLine } from 'lucide-react'
 import toast from 'react-hot-toast'
 import Link from 'next/link'
 
 type GenStatus = 'idle' | 'generating' | 'error'
-type InputMode = 'mls' | 'manual' | 'url'
+type InputMode = 'mls' | 'manual'
 
 interface GenStep {
   id: string
@@ -112,7 +112,6 @@ export default function GeneratePage() {
   const router = useRouter()
   const [inputMode, setInputMode] = useState<InputMode>('mls')
   const [mlsId, setMlsId] = useState('')
-  const [listingUrl, setListingUrl] = useState('')
   const [manual, setManual] = useState<ManualForm>({
     address: '', city: '', state: '', price: '',
     bedrooms: '', bathrooms: '', sqft: '', description: '',
@@ -197,7 +196,6 @@ export default function GeneratePage() {
   const handleGenerate = () => {
     // Validate
     if (inputMode === 'mls' && !mlsId.trim()) { toast.error('Please enter an MLS listing ID'); return }
-    if (inputMode === 'url' && !listingUrl.trim()) { toast.error('Please enter a listing URL'); return }
     if (inputMode === 'manual' && !manual.address.trim()) { toast.error('Please enter at least a property address'); return }
 
     const isStarterPlus = brandKitStatus && STARTER_TIERS.includes(brandKitStatus.planTier)
@@ -209,11 +207,6 @@ export default function GeneratePage() {
 
     if (inputMode === 'mls') {
       runGenerate({ mlsId: mlsId.trim() })
-    } else if (inputMode === 'url') {
-      // URL tab is a pre-fill helper — hitting Generate here means they skipped Pre-fill
-      // Just switch to manual mode so they can fill in the details
-      setInputMode('manual')
-      toast('Please fill in the property details below, then click Generate.', { icon: 'ℹ️' })
     } else {
       // Manual: send as mlsId with manual data attached
       runGenerate({
@@ -234,14 +227,12 @@ export default function GeneratePage() {
 
   const inputValid = (
     (inputMode === 'mls' && mlsId.trim()) ||
-    (inputMode === 'url' && listingUrl.trim()) ||
     (inputMode === 'manual' && manual.address.trim())
   )
 
   const INPUT_TABS: { id: InputMode; label: string; icon: React.ComponentType<{ className?: string }> }[] = [
     { id: 'mls', label: 'MLS ID', icon: Hash },
     { id: 'manual', label: 'Enter Manually', icon: PenLine },
-    { id: 'url', label: 'Listing URL', icon: Link2 },
   ]
 
   return (
@@ -274,7 +265,7 @@ export default function GeneratePage() {
             >
               <tab.icon className="w-4 h-4" />
               <span className="hidden sm:inline">{tab.label}</span>
-              <span className="sm:hidden">{tab.id === 'mls' ? 'MLS' : tab.id === 'manual' ? 'Manual' : 'URL'}</span>
+              <span className="sm:hidden">{tab.id === 'mls' ? 'MLS' : 'Manual'}</span>
             </button>
           ))}
         </div>
@@ -296,67 +287,6 @@ export default function GeneratePage() {
               <p className="text-xs text-slate-500 mt-2">
                 Connected via SimplyRETS MLS API · Supports 500+ MLS boards nationwide
               </p>
-            </div>
-          )}
-
-          {/* URL input — client-side only, no server fetch */}
-          {inputMode === 'url' && (
-            <div className="mb-5">
-              <label className="block text-sm font-semibold text-slate-900 mb-2">Listing URL</label>
-              <div className="flex gap-2">
-                <input
-                  type="url"
-                  value={listingUrl}
-                  onChange={e => setListingUrl(e.target.value)}
-                  placeholder="https://www.zillow.com/homedetails/15555-Wildflower-Cir-Naples-FL-34119/..."
-                  disabled={status === 'generating'}
-                  className="flex-1 bg-slate-50 border border-slate-200 rounded-xl px-4 py-3 text-sm focus:outline-none focus:ring-2 focus:ring-amber-400 focus:border-transparent disabled:opacity-50"
-                />
-                <button
-                  type="button"
-                  onClick={() => {
-                    // Extract address from the URL slug client-side — no server fetch
-                    // Zillow: /homedetails/15555-Wildflower-Cir-Naples-FL-34119/
-                    // Redfin: /FL/Naples/15555-Wildflower-Cir-34119/
-                    try {
-                      const u = new URL(listingUrl)
-                      const slug = u.pathname.replace(/\/$/, '').split('/').pop() ?? ''
-                      // Strip trailing IDs like _zpid or numeric IDs
-                      const clean = slug.replace(/_zpid$/, '').replace(/-\d{6,}$/, '').replace(/-\d+$/, '')
-                      // Parse: Street-City-ST-ZIP
-                      const parts = clean.split('-')
-                      // Find state (2 uppercase letters) position
-                      const stateIdx = parts.findIndex(p => /^[A-Z]{2}$/.test(p))
-                      if (stateIdx > 0) {
-                        const zip = /^\d{5}$/.test(parts[stateIdx + 1] ?? '') ? parts[stateIdx + 1] : ''
-                        const cityEnd = stateIdx
-                        const cityStart = Math.max(stateIdx - 2, 0)
-                        const city = parts.slice(cityStart, cityEnd).join(' ')
-                        const address = parts.slice(0, cityStart).join(' ')
-                        const state = parts[stateIdx]
-                        setManual(prev => ({
-                          ...prev,
-                          address: address || prev.address,
-                          city: city || prev.city,
-                          state: state || prev.state,
-                        }))
-                      }
-                    } catch { /* URL parse failed, just switch modes */ }
-                    setInputMode('manual')
-                    toast.success('Address extracted — please verify and fill in remaining details')
-                  }}
-                  disabled={!listingUrl.trim() || status === 'generating'}
-                  className="flex-shrink-0 bg-amber-500 hover:bg-amber-400 text-white font-semibold px-4 py-3 rounded-xl transition-all disabled:opacity-50 disabled:cursor-not-allowed text-sm"
-                >
-                  Pre-fill →
-                </button>
-              </div>
-              <div className="mt-3 bg-amber-50 border border-amber-200 rounded-xl p-3">
-                <p className="text-xs text-amber-800 font-medium mb-1">How this works</p>
-                <p className="text-xs text-amber-700">
-                  We extract the address from the URL, then you fill in the remaining details (price, beds, baths, description) from the listing page. You control what goes into the campaign — we never fetch third-party listing sites.
-                </p>
-              </div>
             </div>
           )}
 
