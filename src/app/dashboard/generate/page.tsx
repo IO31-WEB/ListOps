@@ -449,19 +449,3 @@ export default function GeneratePage() {
     </div>
   )
 }
-
-
-type GenStatus = 'idle' | 'generating' | 'error'
-
-interface GenStep {
-  id: string
-  label: string
-  status: 'pending' | 'active' | 'done'
-}
-
-interface BrandKitStatus {
-  planTier: string
-  brandKitComplete: boolean
-  agentName?: string
-}
-
