@@ -52,7 +52,7 @@ export default async function DashboardPage() {
             <h2 className="font-display text-2xl sm:text-3xl font-semibold mb-2">
               Ready to generate your next campaign?
             </h2>
-            <p className="text-slate-400 text-sm">Paste your MLS ID and get a complete 6-week campaign in ~60 seconds.</p>
+            <p className="text-slate-400 text-sm">Paste your MLS ID and get a complete 6-week campaign in ~2 minutes.</p>
           </div>
           <Link
             href="/dashboard/generate"
