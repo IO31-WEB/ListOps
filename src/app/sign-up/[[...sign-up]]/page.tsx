@@ -27,7 +27,7 @@ export default function SignUpPage() {
           <ul className="space-y-4">
             {[
               'MLS-connected — no manual data entry',
-              'Facebook, Instagram, Email & Flyer — all in 60s',
+              'Facebook, Instagram, Email & Flyer — all in ~2 min',
               'Brand kit keeps your identity consistent',
               'Cancel anytime, no credit card needed',
             ].map((item) => (
@@ -42,7 +42,7 @@ export default function SignUpPage() {
 
           <div className="mt-10 bg-slate-800/60 rounded-xl p-5 border border-slate-700">
             <p className="text-slate-300 text-sm italic mb-3">
-              "I used to spend 3 hours on marketing per listing. Now it takes 60 seconds."
+              "I used to spend 3 hours on marketing per listing. Now it takes about 2 minutes."
             </p>
             <div className="flex items-center gap-2">
               <div className="w-8 h-8 rounded-full bg-amber-500/20 flex items-center justify-center text-xs font-bold text-amber-400">SM</div>
