@@ -251,7 +251,7 @@ function buildFromMetaTags(html: string, url: string): any {
 
   // Try to parse address from og:title or page title
   // Zillow format: "15555 Wildflower Cir, Naples, FL 34119"
-  const titleText = title || html.match(/<title[^>]*>([^<]+)<\/title>/i)?.[1] ?? ''
+  const titleText = title || (html.match(/<title[^>]*>([^<]+)<\/title>/i)?.[1] ?? '')
   const addrMatch = titleText.match(/^([^,]+),\s*([^,]+),\s*([A-Z]{2})\s*(\d{5})?/)
 
   return buildSyntheticListing({
