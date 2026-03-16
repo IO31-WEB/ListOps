@@ -11,7 +11,7 @@ export default function GdprPage() {
     <div style={{ fontFamily: 'system-ui, sans-serif', background: '#f8fafc', minHeight: '100vh' }}>
       <nav style={{ background: '#0f172a', padding: '16px 40px', display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
         <Link href="/" style={{ color: 'white', fontWeight: 800, fontSize: 20, textDecoration: 'none' }}>
-          Campaign<span style={{ color: '#f59e0b' }}>AI</span>
+          ListOps
         </Link>
         <Link href="/sign-up" style={{ background: '#f59e0b', color: '#0f172a', padding: '8px 20px', borderRadius: 8, fontWeight: 700, fontSize: 14, textDecoration: 'none' }}>
           Get Started
