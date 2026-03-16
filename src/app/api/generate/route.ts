@@ -30,7 +30,18 @@ export const maxDuration = 300
 const anthropic = new Anthropic({ apiKey: process.env.ANTHROPIC_API_KEY ?? '' })
 
 const RequestSchema = z.object({
-  mlsId: z.string().min(1).max(50),
+  mlsId: z.string().min(1).max(200),
+  listingUrl: z.string().url().optional(),
+  manualListing: z.object({
+    address: z.string().optional(),
+    city: z.string().optional(),
+    state: z.string().optional(),
+    price: z.number().nullable().optional(),
+    bedrooms: z.number().nullable().optional(),
+    bathrooms: z.number().nullable().optional(),
+    sqft: z.number().nullable().optional(),
+    description: z.string().optional(),
+  }).optional(),
 })
 
 // ── Demo listing fallback ──────────────────────────────────────
@@ -499,7 +510,11 @@ export async function POST(request: NextRequest) {
 
   try {
     const body = await request.json()
-    const { mlsId } = RequestSchema.parse(body)
+    const { mlsId, manualListing, listingUrl } = RequestSchema.parse(body)
+
+    // Determine input mode from mlsId prefix
+    const isManualMode = mlsId.startsWith('manual:')
+    const isUrlMode = mlsId.startsWith('url:')
 
     // FIX: Check idempotency — if a campaign for this user+listing is already
     // in 'generating' state (started < 5 min ago), return that one instead of
@@ -542,7 +557,57 @@ export async function POST(request: NextRequest) {
 
     const brandKit = canAccessFeature(planTier, 'brand_kit') ? user.brandKit : null
     const startMs = Date.now()
-    const { data: mlsData, isDemo } = await fetchMLSListing(mlsId)
+
+    // ── Resolve listing data based on input mode ──────────────────
+    let mlsData: any
+    let isDemo = false
+
+    if (isManualMode && manualListing) {
+      // Build a synthetic listing object matching the SimplyRETS shape
+      // so the rest of the pipeline works unchanged
+      mlsData = {
+        mlsId: mlsId.replace('manual:', '').slice(0, 50),
+        listPrice: manualListing.price ?? 0,
+        remarks: manualListing.description ?? '',
+        address: {
+          deliveryLine: manualListing.address ?? '',
+          line1: manualListing.address ?? '',
+          city: manualListing.city ?? '',
+          state: manualListing.state ?? '',
+          postalCode: '',
+        },
+        property: {
+          bedrooms: manualListing.bedrooms ?? 0,
+          bathsFull: manualListing.bathrooms ? Math.floor(manualListing.bathrooms) : 0,
+          area: manualListing.sqft ?? 0,
+          yearBuilt: null,
+          type: 'Residential',
+          features: [],
+        },
+        photos: [],
+        agent: { firstName: '', lastName: '', contact: { office: '' } },
+      }
+      isDemo = false
+    } else if (isUrlMode) {
+      // URL mode: use demo listing scaffolding but set the URL as the listing context
+      // so Claude can reference it. A future enhancement could scrape the URL.
+      const url = listingUrl ?? mlsId.replace('url:', '')
+      mlsData = {
+        ...getDemoListing(mlsId),
+        remarks: `Listing sourced from: ${url}\n\nNote: This campaign was generated from a listing URL. For best results, please verify property details are accurate.`,
+        address: {
+          ...getDemoListing(mlsId).address,
+          deliveryLine: `Listing at ${url}`,
+          line1: `Listing at ${url}`,
+        },
+      }
+      isDemo = true
+    } else {
+      // Standard MLS ID fetch
+      const result = await fetchMLSListing(mlsId)
+      mlsData = result.data
+      isDemo = result.isDemo
+    }
 
     const address = [
       mlsData.address?.deliveryLine || mlsData.address?.line1,
