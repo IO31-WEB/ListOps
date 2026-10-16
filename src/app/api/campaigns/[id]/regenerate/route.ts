@@ -360,7 +360,11 @@ export async function POST(
       messages: [{ role: 'user', content: prompt }],
     })
 
-    const raw = message.content[0].type === 'text' ? message.content[0].text : ''
+    const raw = message.content
+      .filter((b): b is Anthropic.TextBlock => b.type === 'text')
+      .map(b => b.text)
+      .join('')
+    if (!raw) console.error(`[regenerate] no text returned. stop_reason=${message.stop_reason} blocks=${message.content.map(b => b.type).join(',')}`)
     const cleaned = raw.replace(/```json\n?/g, '').replace(/```\n?/g, '').trim()
 
     let content: any
