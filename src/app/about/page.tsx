@@ -47,7 +47,7 @@ export default function AboutPage() {
         <div style={{ background: 'white', borderRadius: 20, padding: '48px', boxShadow: '0 1px 3px rgba(0,0,0,0.08)', marginBottom: 32 }}>
           <h2 style={{ fontSize: 28, fontWeight: 800, color: '#0f172a', marginBottom: 20 }}>What we built</h2>
           <p style={{ fontSize: 16, color: '#475569', lineHeight: 1.8, marginBottom: 16 }}>
-            ListOps connects to your MLS, reads your listing, and generates a complete 6-week marketing campaign in about 90 seconds. Six content types, all on-brand, all ready to post or print.
+            ListOps reads your listing details and photos and generates a complete 6-week marketing campaign in about 90 seconds. Six content types, all on-brand, all ready to post or print.
           </p>
           <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(200px, 1fr))', gap: 12, marginTop: 24 }}>
             {['Facebook Posts (6 weeks)', 'Instagram Captions', 'Just Listed Email', 'Still Available Email', 'Print-Ready Flyer', 'Listing Microsite'].map(item => (

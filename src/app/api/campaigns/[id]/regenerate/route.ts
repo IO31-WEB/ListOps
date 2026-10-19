@@ -2,7 +2,7 @@
  * POST /api/campaigns/[id]/regenerate
  *
  * Regenerates a single section of an existing campaign without re-fetching
- * the MLS listing or consuming a campaign quota slot.
+ * the original listing data or consuming a campaign quota slot.
  *
  * Body: { section: SectionKey }
  *
@@ -13,6 +13,7 @@
 
 import { NextRequest, NextResponse } from 'next/server'
 import { auth } from '@clerk/nextjs/server'
+import { guardAi } from '@/lib/ai-guard'
 import Anthropic from '@anthropic-ai/sdk'
 import { db } from '@/lib/db'
 import { campaigns } from '@/lib/db/schema'
@@ -87,7 +88,7 @@ Return JSON:
   "listingCopy": {
     "headline": "Single strongest headline (12 words max)",
     "headlineVariations": ["variation 1","variation 2","variation 3","variation 4","variation 5","variation 6","variation 7","variation 8","variation 9","variation 10"],
-    "fullDescription": "400-600 word professional MLS description. Scene-setting hook, key features, neighborhood context, CTA.",
+    "fullDescription": "400-600 word professional, MLS-ready description. Scene-setting hook, key features, neighborhood context, CTA.",
     "bulletPoints": ["Point 1","Point 2","Point 3","Point 4","Point 5","Point 6","Point 7","Point 8"],
     "neighborhoodStory": "80-100 word neighborhood lifestyle paragraph",
     "seoMetaTitle": "SEO meta title under 60 characters",
@@ -310,6 +311,8 @@ export async function POST(
 ) {
   const { userId } = await auth()
   if (!userId) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
+  const aiBlocked = await guardAi(userId, 'regenerate')
+  if (aiBlocked) return aiBlocked
 
   const { id: campaignId } = await params
 

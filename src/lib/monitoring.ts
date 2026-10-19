@@ -53,7 +53,7 @@ export function trackEvent(name: string, data?: Record<string, unknown>) {
 export function trackGenerationCost(opts: {
   userId: string
   planTier: string
-  mlsId: string
+  listingId: string
   durationMs: number
   estimatedInputTokens?: number
   estimatedOutputTokens?: number
@@ -65,7 +65,7 @@ export function trackGenerationCost(opts: {
   trackEvent('campaign.generated', {
     userId: opts.userId,
     planTier: opts.planTier,
-    mlsId: opts.mlsId,
+    listingId: opts.listingId,
     durationMs: opts.durationMs,
     estimatedCostUsd: parseFloat(totalCost.toFixed(4)),
   })

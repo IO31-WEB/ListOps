@@ -1,19 +1,17 @@
 /**
- * Rate Limiting — Upstash Redis
+ * Rate Limiting — Upstash Redis (with safe fallbacks)
  *
- * FIX: The previous implementation had a race condition between INCR and PEXPIRE.
- * If the process crashed between those two calls, a key could exist forever with
- * no TTL, permanently blocking a user.
+ * Policy (important):
+ *  - COST-SENSITIVE routes (generate, enrich, uploads, contact) FAIL CLOSED to a
+ *    per-instance in-memory limiter when Redis is unavailable. Before this change a
+ *    Redis outage (e.g. a deleted free-tier DB) silently removed all protection.
+ *  - Non-sensitive routes fail open so a Redis blip never takes the app down.
  *
- * Fix: Use SET NX (set-if-not-exists) to initialize the counter with an expiry
- * atomically, then INCR. This is the standard Redis rate limiting pattern.
- *
- * If UPSTASH_REDIS_REST_URL is not set (local dev), falls back to in-memory.
- *
- * Limits:
- *   /api/generate  — 5 req / 10 min per user  (Claude cost protection)
- *   /api/*         — 60 req / 1 min per IP    (general API abuse)
+ * The in-memory fallback is per serverless instance, so it is weaker than Redis,
+ * but it still caps a single abusive client far below "unlimited".
  */
+
+import { captureError } from '@/lib/monitoring'
 
 export interface RateLimitResult {
   success: boolean
@@ -22,104 +20,133 @@ export interface RateLimitResult {
   limit: number
 }
 
-// ── In-memory fallback (local dev only) ──────────────────────
 const memStore = new Map<string, { count: number; resetAt: number }>()
 
 function memRateLimit(key: string, limit: number, windowMs: number): RateLimitResult {
   const now = Date.now()
+  // opportunistic cleanup so the map can't grow without bound
+  if (memStore.size > 5000) {
+    for (const [k, v] of memStore) if (v.resetAt < now) memStore.delete(k)
+  }
   const entry = memStore.get(key)
-
   if (!entry || entry.resetAt < now) {
     memStore.set(key, { count: 1, resetAt: now + windowMs })
     return { success: true, remaining: limit - 1, reset: now + windowMs, limit }
   }
-
   entry.count++
-  const remaining = Math.max(0, limit - entry.count)
   return {
     success: entry.count <= limit,
-    remaining,
+    remaining: Math.max(0, limit - entry.count),
     reset: entry.resetAt,
     limit,
   }
 }
 
-// ── Upstash Redis rate limiter (production) ───────────────────
-// FIX: Uses SET NX EX (atomic init with TTL) + INCR pattern.
-// No window between key creation and expiry set — race condition eliminated.
+let lastRedisAlert = 0
+function alertRedisDown(detail: unknown) {
+  // Alert at most once every 10 minutes so Sentry isn't flooded.
+  if (Date.now() - lastRedisAlert < 10 * 60 * 1000) return
+  lastRedisAlert = Date.now()
+  captureError(new Error('Upstash rate limiter unavailable'), { detail: String(detail) })
+}
+
 async function upstashRateLimit(
   key: string,
   limit: number,
   windowSeconds: number
-): Promise<RateLimitResult> {
-  const url = process.env.UPSTASH_REDIS_REST_URL!
-  const token = process.env.UPSTASH_REDIS_REST_TOKEN!
+): Promise<RateLimitResult | null> {
+  const url = process.env.UPSTASH_REDIS_REST_URL
+  const token = process.env.UPSTASH_REDIS_REST_TOKEN
+  if (!url || !token) return null
   const now = Date.now()
   const windowMs = windowSeconds * 1000
 
-  // Pipeline:
-  // 1. SET key 0 NX EX windowSeconds  — initialize to 0 with TTL if key doesn't exist
-  // 2. INCR key                        — atomically increment
-  // 3. PTTL key                        — get remaining TTL in ms
+  // Atomic: SET NX EX (init with TTL) -> INCR -> PTTL
   const pipeline = [
     ['SET', key, '0', 'NX', 'EX', String(windowSeconds)],
     ['INCR', key],
     ['PTTL', key],
   ]
 
-  let res: Response
   try {
-    res = await fetch(`${url}/pipeline`, {
+    const res = await fetch(`${url}/pipeline`, {
       method: 'POST',
-      headers: {
-        Authorization: `Bearer ${token}`,
-        'Content-Type': 'application/json',
-      },
+      headers: { Authorization: `Bearer ${token}`, 'Content-Type': 'application/json' },
       body: JSON.stringify(pipeline),
+      signal: AbortSignal.timeout(2500),
     })
+    if (!res.ok) {
+      alertRedisDown(`status ${res.status}`)
+      return null
+    }
+    const data = await res.json()
+    const count: number = data[1]?.result ?? 1
+    const pttl: number = data[2]?.result ?? windowMs
+    return {
+      success: count <= limit,
+      remaining: Math.max(0, limit - count),
+      reset: pttl > 0 ? now + pttl : now + windowMs,
+      limit,
+    }
   } catch (err) {
-    // Network error — fail open so users aren't blocked by Redis downtime
-    console.error('[ratelimit] Upstash network error (failing open):', err)
-    return { success: true, remaining: limit, reset: now + windowMs, limit }
+    alertRedisDown(err)
+    return null
   }
+}
 
-  if (!res.ok) {
-    console.error('[ratelimit] Upstash error response (failing open):', res.status)
-    return { success: true, remaining: limit, reset: now + windowMs, limit }
+interface Policy {
+  name: string
+  limit: number
+  windowSeconds: number
+  /** true = if Redis is down, use the in-memory limiter (strict). false = allow. */
+  failClosed: boolean
+}
+
+async function limit(policy: Policy, id: string): Promise<RateLimitResult> {
+  const key = `rl:${policy.name}:${id}`
+  const viaRedis = await upstashRateLimit(key, policy.limit, policy.windowSeconds)
+  if (viaRedis) return viaRedis
+  if (policy.failClosed) return memRateLimit(key, policy.limit, policy.windowSeconds * 1000)
+  return {
+    success: true,
+    remaining: policy.limit,
+    reset: Date.now() + policy.windowSeconds * 1000,
+    limit: policy.limit,
   }
-
-  const data = await res.json()
-  const count: number = data[1]?.result ?? 1
-  const pttl: number  = data[2]?.result ?? windowMs
-
-  const resetAt = pttl > 0 ? now + pttl : now + windowMs
-  const remaining = Math.max(0, limit - count)
-
-  return { success: count <= limit, remaining, reset: resetAt, limit }
 }
 
-// ── Public API ─────────────────────────────────────────────────
-const hasUpstash = !!(
-  process.env.UPSTASH_REDIS_REST_URL && process.env.UPSTASH_REDIS_REST_TOKEN
-)
+// ── Policies ───────────────────────────────────────────────────
+export const rateLimitGenerate = (userId: string) =>
+  limit({ name: 'generate', limit: 5, windowSeconds: 10 * 60, failClosed: true }, userId)
 
-/**
- * Rate limit the campaign generation endpoint.
- * 5 generations per 10 minutes per user.
- */
-export async function rateLimitGenerate(userId: string): Promise<RateLimitResult> {
-  const key = `rl:generate:${userId}`
-  if (!hasUpstash) return memRateLimit(key, 5, 10 * 60 * 1000)
-  return upstashRateLimit(key, 5, 10 * 60)
+/** Any Claude-backed route besides /api/generate. Per-bucket hourly cap, fails closed. */
+export const rateLimitAi = (userId: string, bucket: string, perHour: number) =>
+  limit({ name: `ai-${bucket}`, limit: perHour, windowSeconds: 60 * 60, failClosed: true }, userId)
+
+/** Address enrichment calls a paid third-party API. */
+export const rateLimitEnrich = (userId: string) =>
+  limit({ name: 'enrich', limit: 20, windowSeconds: 60 * 60, failClosed: true }, userId)
+
+/** Photo uploads: 40 per 10 min per user. */
+export const rateLimitUpload = (userId: string) =>
+  limit({ name: 'upload', limit: 40, windowSeconds: 10 * 60, failClosed: true }, userId)
+
+/** Listing create/update. */
+export const rateLimitListingWrite = (userId: string) =>
+  limit({ name: 'listing-write', limit: 60, windowSeconds: 60 * 60, failClosed: false }, userId)
+
+/** Public contact form — keyed by IP. */
+export const rateLimitContact = (ip: string) =>
+  limit({ name: 'contact', limit: 3, windowSeconds: 60 * 60, failClosed: true }, ip)
+
+export const rateLimitAPI = (ip: string) =>
+  limit({ name: 'api', limit: 60, windowSeconds: 60, failClosed: false }, ip)
+
+export function rateLimitHeaders(rl: RateLimitResult): Record<string, string> {
+  return {
+    'X-RateLimit-Limit': String(rl.limit),
+    'X-RateLimit-Remaining': String(rl.remaining),
+    'X-RateLimit-Reset': String(rl.reset),
+    'Retry-After': String(Math.max(1, Math.ceil((rl.reset - Date.now()) / 1000))),
+  }
 }
-
-/**
- * Rate limit general API endpoints.
- * 60 requests per minute per IP.
- */
-export async function rateLimitAPI(ip: string): Promise<RateLimitResult> {
-  const key = `rl:api:${ip}`
-  if (!hasUpstash) return memRateLimit(key, 60, 60 * 1000)
-  return upstashRateLimit(key, 60, 60)
-}
-

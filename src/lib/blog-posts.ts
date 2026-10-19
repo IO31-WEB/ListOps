@@ -154,7 +154,7 @@ export const BLOG_POSTS: BlogPost[] = [
     ],
     cta: {
       heading: 'Run this checklist on every listing in 90 seconds',
-      subtext: 'ListOps generates all the copy — Facebook posts, emails, print materials, microsite — from your MLS ID. One click, every channel.',
+      subtext: 'ListOps generates all the copy — Facebook posts, emails, print materials, microsite — from your listing details and photos. One click, every channel.',
       buttonText: 'Try ListOps Free',
     },
     relatedSlugs: ['real-estate-social-media-strategy-2025', 'why-real-estate-agents-lose-listings'],
@@ -292,7 +292,7 @@ export const BLOG_POSTS: BlogPost[] = [
     ],
     cta: {
       heading: 'Get a complete 6-week social calendar for every listing',
-      subtext: 'ListOps writes the Facebook posts, Instagram captions, TikTok scripts, and hashtag packs from your MLS listing — in about 90 seconds.',
+      subtext: 'ListOps writes the Facebook posts, Instagram captions, TikTok scripts, and hashtag packs from your listing and photos — in about 90 seconds.',
       buttonText: 'Start Free',
     },
     relatedSlugs: ['real-estate-listing-marketing-checklist', 'ai-real-estate-marketing-guide'],
@@ -380,7 +380,7 @@ export const BLOG_POSTS: BlogPost[] = [
         stats: [
           { value: '6 hrs', label: 'Average time per listing saved with AI-assisted marketing' },
           { value: '90 sec', label: 'Time to generate a complete campaign with ListOps' },
-          { value: 'Multi-market', label: 'MLS boards supported via Repliers integration' },
+          { value: '40+', label: 'Marketing assets generated per listing' },
           { value: '3.2×', label: 'Higher engagement for AI-assisted vs. DIY social content' },
         ],
       },
@@ -391,9 +391,9 @@ export const BLOG_POSTS: BlogPost[] = [
       {
         type: 'ol',
         items: [
-          'Pull your MLS listing ID as soon as photos are uploaded',
+          'Add your listing details and photos to ListOps as soon as your photos are ready',
           'Run it through your AI marketing tool — get the full content package in 90 seconds',
-          'Review the listing description first: check for accuracy, add any hyperlocal details the MLS data didn\'t capture',
+          'Review the listing description first: check for accuracy, add any hyperlocal details the public records didn\'t capture',
           'Review the social posts: tweak your agent voice if needed, add personal observations from your showing',
           'Schedule Week 1 content across platforms',
           'Send the Just Listed email',
@@ -407,7 +407,7 @@ export const BLOG_POSTS: BlogPost[] = [
       },
       {
         type: 'p',
-        content: 'The #1 objection agents have to AI tools is "I\'ll have to learn a whole new system." Purpose-built real estate AI requires no prompting skill, no AI literacy, and no marketing background. You enter an MLS ID. You get a campaign.',
+        content: 'The #1 objection agents have to AI tools is "I\'ll have to learn a whole new system." Purpose-built real estate AI requires no prompting skill, no AI literacy, and no marketing background. You enter your listing and add photos. You get a campaign.',
       },
       {
         type: 'p',
@@ -420,7 +420,7 @@ export const BLOG_POSTS: BlogPost[] = [
     ],
     cta: {
       heading: 'See what AI-generated listing marketing actually looks like',
-      subtext: 'Enter any MLS ID and get a complete 6-week campaign — social, email, print, microsite copy — in about 90 seconds. No prompting required.',
+      subtext: 'Enter your listing details and photos and get a complete 6-week campaign — social, email, print, microsite copy — in about 90 seconds. No prompting required.',
       buttonText: 'Try It Free',
     },
     relatedSlugs: ['real-estate-listing-marketing-checklist', 'listing-description-writing-tips'],
@@ -542,7 +542,7 @@ export const BLOG_POSTS: BlogPost[] = [
     ],
     cta: {
       heading: 'Get 10 headline variations + a full listing description instantly',
-      subtext: 'ListOps reads your MLS listing and writes the description, headlines, neighborhood story, and tone variants — all from your listing ID.',
+      subtext: 'ListOps reads your listing and photos and writes the description, headlines, neighborhood story, and tone variants — all from your listing ID.',
       buttonText: 'Try ListOps Free',
     },
     relatedSlugs: ['real-estate-email-marketing-guide', 'real-estate-social-media-strategy-2025'],
@@ -671,7 +671,7 @@ export const BLOG_POSTS: BlogPost[] = [
     ],
     cta: {
       heading: 'Get 8 ready-to-send email templates for every listing',
-      subtext: 'ListOps generates the Just Listed email, Still Available email, and full 8-template drip sequence from your MLS listing ID.',
+      subtext: 'ListOps generates the Just Listed email, Still Available email, and full 8-template drip sequence from your listing details and photos.',
       buttonText: 'Start Free',
     },
     relatedSlugs: ['real-estate-listing-marketing-checklist', 'why-real-estate-agents-lose-listings'],
@@ -785,7 +785,7 @@ export const BLOG_POSTS: BlogPost[] = [
     ],
     cta: {
       heading: 'Win more listings with a marketing plan you can actually show',
-      subtext: 'ListOps generates a complete 6-week marketing campaign from any MLS ID. Use it in your listing presentations as proof of what you\'ll do.',
+      subtext: 'ListOps generates a complete 6-week marketing campaign from your listing details and photos. Use it in your listing presentations as proof of what you\'ll do.',
       buttonText: 'Try ListOps Free',
     },
     relatedSlugs: ['real-estate-listing-marketing-checklist', 'listing-description-writing-tips'],
@@ -820,7 +820,7 @@ export const BLOG_POSTS: BlogPost[] = [
       },
       {
         type: 'p',
-        content: 'The only purpose-built AI tool that generates a complete listing campaign from your MLS ID. Facebook posts, Instagram captions, email sequences, print materials, microsite copy, video scripts, and TikTok content — all in about 90 seconds. Connects directly to Repliers MLS data. Plans start free.',
+        content: 'The only purpose-built AI tool that generates a complete listing campaign from your listing details and photos. Facebook posts, Instagram captions, email sequences, print materials, microsite copy, video scripts, and TikTok content — all in about 90 seconds. Works from your own listing details and photos. Plans start free.',
       },
       {
         type: 'h3',
@@ -920,7 +920,7 @@ export const BLOG_POSTS: BlogPost[] = [
       },
       {
         type: 'p',
-        content: 'Included in ListOps Starter plans and above. Auto-generated from your MLS data with hero copy, neighborhood story, and CTA. Publishes at listops.io/l/[slug] — shareable URL for use in all your social posts and emails.',
+        content: 'Included in ListOps Starter plans and above. Auto-generated from your listing details with hero copy, neighborhood story, and CTA. Publishes at listops.io/l/[slug] — shareable URL for use in all your social posts and emails.',
       },
       {
         type: 'h3',
@@ -954,7 +954,7 @@ export const BLOG_POSTS: BlogPost[] = [
     ],
     cta: {
       heading: 'Add the campaign generator to your stack',
-      subtext: 'ListOps replaces 4–5 separate tools with one: campaign copy, social calendar, email sequences, print materials, and a listing microsite — all from your MLS ID.',
+      subtext: 'ListOps replaces 4–5 separate tools with one: campaign copy, social calendar, email sequences, print materials, and a listing microsite — all from your listing details and photos.',
       buttonText: 'Try Free for 14 Days',
     },
     relatedSlugs: ['ai-real-estate-marketing-guide', 'real-estate-social-media-strategy-2025'],

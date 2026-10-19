@@ -1,6 +1,8 @@
 import { auth } from '@clerk/nextjs/server'
+import { guardAi } from '@/lib/ai-guard'
 import { NextRequest, NextResponse } from 'next/server'
 import Anthropic from '@anthropic-ai/sdk'
+import { COMMERCIAL_MODEL, getText } from '@/lib/claude'
 import { db } from '@/lib/db'
 import { siteReports, propertyGrades, campaigns } from '@/lib/db/schema'
 import { eq, and } from 'drizzle-orm'
@@ -14,6 +16,8 @@ export async function POST(req: NextRequest) {
   try {
     const { userId } = await auth()
     if (!userId) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
+    const aiBlocked = await guardAi(userId, 'microsite')
+    if (aiBlocked) return aiBlocked
 
     const dbUser = await getUserWithDetails(userId)
     if (!dbUser?.organization) {
@@ -47,7 +51,7 @@ export async function POST(req: NextRequest) {
     const context = buildContext(report, grade)
 
     const msg = await anthropic.messages.create({
-      model: 'claude-opus-4-6',
+      model: COMMERCIAL_MODEL,
       max_tokens: 800,
       messages: [{
         role: 'user',
@@ -76,7 +80,7 @@ Rules:
       }],
     })
 
-    const raw = (msg.content[0] as { type: string; text: string }).text.trim()
+    const raw = getText(msg, 'microsite').trim()
     const clean = raw.replace(/^```json\s*/i, '').replace(/```\s*$/i, '').trim()
     const copy = JSON.parse(clean)
 

@@ -9,6 +9,7 @@ export default function ContactPage() {
   const [form, setForm] = useState({ name: '', email: '', company: '', type: 'general', message: '' })
   const [sending, setSending] = useState(false)
   const [sent, setSent] = useState(false)
+  const [honeypot, setHoneypot] = useState('')
 
   const searchParams = typeof window !== 'undefined' ? new URLSearchParams(window.location.search) : null
   const defaultType = searchParams?.get('type') || 'general'
@@ -16,10 +17,20 @@ export default function ContactPage() {
   const submit = async () => {
     if (!form.name || !form.email || !form.message) { toast.error('Please fill in all required fields'); return }
     setSending(true)
-    setTimeout(() => {
+    try {
+      const res = await fetch('/api/contact', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ ...form, website: honeypot }),
+      })
+      const data = await res.json().catch(() => ({}))
+      if (!res.ok) throw new Error(data.error || 'Could not send your message.')
       setSent(true)
+    } catch (e) {
+      toast.error(e instanceof Error ? e.message : 'Could not send your message.')
+    } finally {
       setSending(false)
-    }, 1500)
+    }
   }
 
   return (
@@ -84,6 +95,7 @@ export default function ContactPage() {
                 <label className="block text-xs font-semibold text-slate-600 mb-1.5">Message *</label>
                 <textarea value={form.message} onChange={e => setForm(f => ({ ...f, message: e.target.value }))} rows={5} placeholder="Tell us what you're looking for…" className="w-full bg-slate-50 border border-slate-200 rounded-xl px-4 py-3 text-sm focus:outline-none focus:ring-2 focus:ring-amber-400 resize-none" />
               </div>
+              <input type="text" tabIndex={-1} autoComplete="off" aria-hidden="true" value={honeypot} onChange={e => setHoneypot(e.target.value)} className="absolute -left-[9999px] h-0 w-0 opacity-0" name="website" />
               <button onClick={submit} disabled={sending} className="w-full flex items-center justify-center gap-2 bg-slate-900 text-amber-50 font-semibold py-3.5 rounded-xl hover:bg-slate-800 disabled:opacity-50 transition-all">
                 <Mail className="w-4 h-4" />
                 {sending ? 'Sending…' : 'Send Message'}

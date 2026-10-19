@@ -41,7 +41,7 @@ export default function HomePage() {
         <div className="max-w-5xl mx-auto text-center">
           <div className="inline-flex items-center gap-2 bg-amber-50 border border-amber-200 text-amber-800 text-xs font-medium px-3 py-1.5 rounded-full mb-8 animate-fade-in">
             <span className="w-1.5 h-1.5 rounded-full bg-amber-500 animate-pulse" />
-            MLS-Connected • Claude AI Vision • Real Listing Data
+            Claude AI Vision • Your Photos • Your Listing
           </div>
 
           <h1 className="font-display text-5xl sm:text-6xl lg:text-7xl font-semibold text-slate-900 leading-[1.05] mb-6 animate-fade-in animate-stagger-1">
@@ -51,7 +51,7 @@ export default function HomePage() {
           </h1>
 
           <p className="text-lg sm:text-xl text-slate-600 max-w-2xl mx-auto mb-10 leading-relaxed animate-fade-in animate-stagger-2">
-            Enter your MLS listing ID and get a complete 6-week marketing campaign — headlines, social posts, email sequences, print materials, video scripts, and a listing microsite — all generated in under 2 minutes.
+            Enter your listing details, add your photos, and get a complete 6-week marketing campaign — headlines, social posts, email sequences, print materials, video scripts, and a listing microsite — all generated in under 2 minutes.
           </p>
 
           <div className="flex flex-col sm:flex-row items-center justify-center gap-4 animate-fade-in animate-stagger-3">
@@ -67,7 +67,7 @@ export default function HomePage() {
           <div className="flex flex-wrap items-center justify-center gap-6 mt-10 text-sm text-slate-500 animate-fade-in animate-stagger-4">
             <span className="flex items-center gap-1.5"><CheckCircle className="w-4 h-4 text-amber-500" /> No credit card needed</span>
             <span className="flex items-center gap-1.5"><CheckCircle className="w-4 h-4 text-amber-500" /> Cancel anytime</span>
-            <span className="flex items-center gap-1.5"><CheckCircle className="w-4 h-4 text-amber-500" /> MLS-connected</span>
+            <span className="flex items-center gap-1.5"><CheckCircle className="w-4 h-4 text-amber-500" /> Photo-aware AI</span>
           </div>
         </div>
 
@@ -77,7 +77,7 @@ export default function HomePage() {
             { value: '<2 min', label: 'Avg. Generation Time' },
             { value: '10+', label: 'Content Modules' },
             { value: '6 Weeks', label: 'Of Posts & Emails' },
-            { value: '500+', label: 'MLS Boards Supported' },
+            { value: '40+', label: 'Marketing Assets per Listing' },
           ].map((stat) => (
             <div key={stat.label} className="bg-white px-6 py-6 text-center">
               <div className="font-display text-2xl sm:text-3xl font-semibold text-slate-900">{stat.value}</div>
@@ -93,7 +93,7 @@ export default function HomePage() {
           <div className="text-center mb-16">
             <p className="text-amber-600 font-medium text-sm uppercase tracking-widest mb-3">The Process</p>
             <h2 className="font-display text-4xl sm:text-5xl font-semibold text-slate-900">
-              From MLS to Market <em>in Three Steps</em>
+              From Listing to Launch <em>in Three Steps</em>
             </h2>
           </div>
 
@@ -101,14 +101,14 @@ export default function HomePage() {
             {[
               {
                 num: '01',
-                title: 'Paste Your MLS ID',
-                desc: 'We connect directly to your MLS board via Repliers and pull your listing data, photos, specs, and agent details automatically. No manual entry required.',
+                title: 'Add Your Listing & Photos',
+                desc: 'Enter the address and key details — or auto-fill beds, baths and square footage from public records — then upload your listing photos.',
                 icon: '🔗',
               },
               {
                 num: '02',
                 title: 'Click Generate',
-                desc: 'Claude AI reads your listing, analyzes your MLS photos with vision, and produces a complete campaign — headlines, 6-week social calendars, email sequences, print materials, video scripts, and a listing microsite. Every word tailored to your specific property.',
+                desc: 'Claude AI reads your listing, analyzes your photos with vision, and produces a complete campaign — headlines, 6-week social calendars, email sequences, print materials, video scripts, and a listing microsite. Every word tailored to your specific property.',
                 icon: '⚡',
               },
               {
@@ -149,7 +149,7 @@ export default function HomePage() {
               { icon: '📱', tag: 'FB+IG', title: '6-Week Social Calendar', desc: 'Themed posts for every week — launch, features, neighborhood, open house, investment value, and final call. Facebook and Instagram formatted separately.', plan: 'All plans' },
               { icon: '📧', tag: 'EMAIL', title: 'Email Campaign Suite', desc: 'Just Listed and Still Available emails plus an 8-template drip sequence: buyer Day 1–30, seller update, open house invite, post-showing follow-up, and market report.', plan: 'Free (2) / Starter+ (all 8)' },
               { icon: '🖨️', tag: 'PRINT', title: 'Print & Offline Materials', desc: 'Yard sign rider, postcard headline and body, open house info packet, brochure copy, and magazine ad — plus a fully branded print-ready PDF flyer.', plan: 'All plans' },
-              { icon: '📸', tag: 'PHOTO', title: 'AI Photo Captions', desc: 'Claude Vision analyzes each MLS photo and writes: Instagram caption, SEO alt text, Stories overlay text, and a concrete staging improvement tip — per room.', plan: 'Starter+' },
+              { icon: '📸', tag: 'PHOTO', title: 'AI Photo Captions', desc: 'Claude Vision analyzes your uploaded photos and writes: Instagram caption, SEO alt text, Stories overlay text, and a concrete staging improvement tip — per room.', plan: 'Starter+' },
               { icon: '🌐', tag: 'SITE', title: 'Listing Microsite', desc: 'Auto-generated property page at listops.io/l/[slug] with hero copy, neighborhood story, and CTA — publish or unpublish in one click. Includes view analytics.', plan: 'Starter+' },
               { icon: '🎬', tag: 'VIDEO', title: 'Video & Reel Scripts', desc: '6 weekly reel scripts with hook, full script, on-screen text, and music suggestion. Plus Matterport walkthrough, drone voice-over, 30-sec highlight reel, and timed walkthrough narration.', plan: 'Pro+' },
               { icon: '📲', tag: 'MULTI', title: 'TikTok, LinkedIn & X', desc: '6 weeks of TikTok scripts with trending audio suggestions, LinkedIn market-insight posts, X thread sequences, and Instagram/Facebook Stories slide decks.', plan: 'Pro+' },
@@ -296,7 +296,7 @@ export default function HomePage() {
                 </div>
                 <span className="font-display font-semibold text-white">ListOps</span>
               </div>
-              <p className="text-sm leading-relaxed">AI-powered marketing campaigns for real estate agents. MLS-connected, Claude AI-powered.</p>
+              <p className="text-sm leading-relaxed">AI-powered marketing campaigns for real estate agents. Built from your listing and photos, Claude AI-powered.</p>
             </div>
             <div>
               <h4 className="font-semibold text-white text-sm mb-4">Product</h4>
@@ -328,7 +328,7 @@ export default function HomePage() {
           </div>
           <div className="border-t border-slate-800 pt-8 flex flex-col sm:flex-row items-center justify-between gap-4 text-xs">
             <p>© {new Date().getFullYear()} ListOps. All rights reserved.</p>
-            <p>Powered by Claude AI + Repliers MLS</p>
+            <p>Powered by Claude AI</p>
           </div>
         </div>
       </footer>

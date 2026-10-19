@@ -9,7 +9,7 @@ import { getUserWithDetails } from '@/lib/user-service'
 import { canAccess } from '@/lib/plans'
 import type { PlanTier } from '@/lib/plans'
 
-const resend = new Resend(process.env.RESEND_API_KEY!)
+// Resend client is created per-request (inside POST) so a missing key can't crash the build.
 
 interface Prospect {
   email: string
@@ -23,6 +23,12 @@ interface EmailDraft {
 }
 
 export async function POST(req: NextRequest) {
+  if (!process.env.RESEND_API_KEY) {
+    console.error('[email-campaign/send] RESEND_API_KEY not configured')
+    return NextResponse.json({ error: 'Email sending is not available right now.' }, { status: 503 })
+  }
+  const resend = new Resend(process.env.RESEND_API_KEY)
+
   try {
     const { userId } = await auth()
     if (!userId) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
@@ -73,7 +79,12 @@ export async function POST(req: NextRequest) {
         from: `${fromName} <${fromEmail}>`,
         to: prospect.email,
         subject: personalizedSubject,
-        text: personalizedBody,
+        text: `${personalizedBody}\n\n--\nTo stop receiving these emails, reply "unsubscribe".${process.env.MAIL_FOOTER_ADDRESS ? `\n${process.env.MAIL_FOOTER_ADDRESS}` : ''}`,
+        reply_to: process.env.SUPPORT_EMAIL ?? 'support@listops.io',
+        headers: {
+          'List-Unsubscribe': `<mailto:${process.env.SUPPORT_EMAIL ?? 'support@listops.io'}?subject=unsubscribe>`,
+          'List-Unsubscribe-Post': 'List-Unsubscribe=One-Click',
+        },
         // html: buildHtmlEmail(personalizedBody, report), // optional: add HTML template
         tags: [
           { name: 'campaign_type', value: 'commercial_cre' },

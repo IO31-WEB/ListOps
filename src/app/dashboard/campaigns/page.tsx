@@ -150,7 +150,7 @@ export default function CampaignsPage() {
                 : filter === 'generating' ? 'Campaigns in progress will appear here.'
                 : filter === 'failed' ? 'Any generation errors will show up here.'
                 : filter === 'complete' ? 'Your completed campaigns will appear here.'
-                : 'Generate your first campaign from an MLS listing ID.'}
+                : 'Generate your first campaign from your listing details and photos.'}
             </p>
             <Link href="/dashboard/generate" className="inline-flex items-center gap-2 bg-slate-900 text-white text-sm font-semibold px-6 py-3 rounded-xl hover:bg-slate-800 transition-colors">
               <Plus className="w-4 h-4" /> {filter === 'all' && !search ? 'Create First Campaign' : 'New Campaign'}

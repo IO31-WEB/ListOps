@@ -3,11 +3,11 @@ import Link from 'next/link'
 const faqs = [
   {
     q: 'How do I generate a campaign?',
-    a: 'Click "New Campaign" in the sidebar, enter your MLS listing ID, and click Generate. ListOps will create 6 weeks of Facebook posts, Instagram captions, email copy, and (on Pro) video scripts.',
+    a: 'Click "New Campaign" in the sidebar, enter your address and listing details, upload your photos, and click Generate. ListOps will create 6 weeks of Facebook posts, Instagram captions, email copy, and (on Pro) video scripts.',
   },
   {
-    q: 'What MLS ID do I use?',
-    a: 'Use the numeric or alphanumeric ID your MLS board assigns to each listing — typically found in your MLS portal next to the property address. If you don\'t have one, try any ID and the demo listing will be used for testing.',
+    q: 'Do I need an MLS ID?',
+    a: 'No. ListOps does not connect to any MLS. Enter the address and basics (price, beds, baths, square footage) and upload your own listing photos. You can optionally auto-fill property facts from public records — just double-check them, since public records can be out of date.',
   },
   {
     q: 'How do I upgrade my plan?',

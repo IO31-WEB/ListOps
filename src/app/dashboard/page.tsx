@@ -52,7 +52,7 @@ export default async function DashboardPage() {
             <h2 className="font-display text-2xl sm:text-3xl font-semibold mb-2">
               Ready to generate your next campaign?
             </h2>
-            <p className="text-slate-400 text-sm">Paste your MLS ID and get a complete 6-week campaign in ~2 minutes.</p>
+            <p className="text-slate-400 text-sm">Add your listing and photos and get a complete 6-week campaign in ~2 minutes.</p>
           </div>
           <Link
             href="/dashboard/generate"
@@ -183,7 +183,7 @@ export default async function DashboardPage() {
               <FileText className="w-7 h-7 text-slate-400" />
             </div>
             <h4 className="font-display text-lg font-semibold text-slate-900 mb-2">No campaigns yet</h4>
-            <p className="text-slate-500 text-sm mb-6">Generate your first campaign from an MLS listing ID.</p>
+            <p className="text-slate-500 text-sm mb-6">Generate your first campaign from your listing details and photos.</p>
             <Link href="/dashboard/generate" className="inline-flex items-center gap-2 bg-slate-900 text-white text-sm font-semibold px-6 py-3 rounded-xl hover:bg-slate-800 transition-colors">
               <Plus className="w-4 h-4" /> Create First Campaign
             </Link>

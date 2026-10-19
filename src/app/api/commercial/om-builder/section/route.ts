@@ -1,6 +1,8 @@
 import { auth } from '@clerk/nextjs/server'
+import { guardAi } from '@/lib/ai-guard'
 import { NextRequest, NextResponse } from 'next/server'
 import Anthropic from '@anthropic-ai/sdk'
+import { COMMERCIAL_MODEL, getText } from '@/lib/claude'
 import { db } from '@/lib/db'
 import { siteReports, propertyGrades } from '@/lib/db/schema'
 import { eq, and } from 'drizzle-orm'
@@ -23,6 +25,8 @@ export async function POST(req: NextRequest) {
   try {
     const { userId } = await auth()
     if (!userId) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
+    const aiBlocked = await guardAi(userId, 'om-builder-section')
+    if (aiBlocked) return aiBlocked
 
     const dbUser = await getUserWithDetails(userId)
     if (!dbUser?.organization) {
@@ -73,7 +77,7 @@ export async function POST(req: NextRequest) {
     ]
 
     const msg = await anthropic.messages.create({
-      model: 'claude-opus-4-6',
+      model: COMMERCIAL_MODEL,
       max_tokens: 600,
       messages: [{
         role: 'user',
@@ -88,7 +92,7 @@ Output ONLY the section text — no labels, no markdown headers, no preamble.`,
       }],
     })
 
-    const content = (msg.content[0] as { type: string; text: string }).text.trim()
+    const content = getText(msg, 'om-builder-section').trim()
     return NextResponse.json({ content })
   } catch (err) {
     console.error('[om-builder/section]', err)

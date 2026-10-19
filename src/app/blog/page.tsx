@@ -153,7 +153,7 @@ export default function BlogIndexPage() {
                 Stop writing. Start closing.
               </h2>
               <p className="text-slate-400 mb-8 max-w-lg mx-auto">
-                ListOps turns your MLS listing ID into a complete 6-week marketing campaign in about 90 seconds. Every channel. Every format. Done.
+                ListOps turns your listing details and photos into a complete 6-week marketing campaign in about 90 seconds. Every channel. Every format. Done.
               </p>
               <Link
                 href="/sign-up"

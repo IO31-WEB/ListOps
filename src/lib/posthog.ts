@@ -47,14 +47,14 @@ export function trackServerEvent(
 export function trackCampaignGenerated(opts: {
   userId: string
   planTier: string
-  mlsId: string
+  listingId: string
   durationMs: number
   isDemo: boolean
   contentTypes: string[]
 }) {
   trackServerEvent(opts.userId, 'campaign_generated', {
     plan_tier: opts.planTier,
-    mls_id: opts.mlsId,
+    listing_id: opts.listingId,
     duration_ms: opts.durationMs,
     is_demo: opts.isDemo,
     content_types: opts.contentTypes,

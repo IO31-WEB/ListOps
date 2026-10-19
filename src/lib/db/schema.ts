@@ -176,8 +176,13 @@ export const subscriptions = pgTable('subscriptions', {
 
 export const listings = pgTable('listings', {
   id: uuid('id').primaryKey().defaultRandom(),
-  mlsId: text('mls_id').notNull(),
-  mlsBoard: text('mls_board').notNull().default('repliers'),
+  // Legacy MLS columns — nullable now. New listings are agent-entered ('manual') or
+  // pre-filled from public records ('enriched'); only old rows have source 'mls_legacy'.
+  mlsId: text('mls_id'),
+  mlsBoard: text('mls_board'),
+  source: text('source').$type<'manual' | 'enriched' | 'mls_legacy'>().notNull().default('manual'),
+  enrichmentProvider: text('enrichment_provider'),
+  enrichmentData: jsonb('enrichment_data'),
   agentId: uuid('agent_id').notNull().references(() => users.id),
   orgId: uuid('org_id').references(() => organizations.id),
 
@@ -193,7 +198,8 @@ export const listings = pgTable('listings', {
   propertyType: text('property_type'),
   description: text('description'),
   features: text('features').array().default([]),
-  photos: text('photos').array().default([]),
+  photos: text('photos').array().default([]),       // public URLs (derived from photoKeys for new rows)
+  photoKeys: text('photo_keys').array().default([]), // R2 object keys: listings/<clerkId>/<id>.<ext>
 
   listingAgentName: text('listing_agent_name'),
   listingAgentEmail: text('listing_agent_email'),
@@ -206,9 +212,10 @@ export const listings = pgTable('listings', {
   expiresAt: timestamp('expires_at'),
 
   createdAt: timestamp('created_at').notNull().defaultNow(),
+  updatedAt: timestamp('updated_at').notNull().defaultNow(),
 }, (t) => ({
-  mlsIdBoardIdx: uniqueIndex('listing_mls_id_board_idx').on(t.mlsId, t.mlsBoard),
   agentIdIdx: index('listing_agent_id_idx').on(t.agentId),
+  agentCreatedIdx: index('listing_agent_created_idx').on(t.agentId, t.createdAt),
 }))
 
 // ── Campaigns ──────────────────────────────────────────────────

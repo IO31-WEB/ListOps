@@ -126,17 +126,18 @@ export async function POST(request: NextRequest) {
     if (err instanceof AttomEnrichmentError) {
       if (err.code === 'NO_API_KEY') {
         return NextResponse.json(
-          { error: 'ATTOM API key not configured. Add ATTOM_API_KEY to your environment.' },
+          { error: 'Property data enrichment is not available right now.' },
           { status: 501 }
         )
       }
       if (err.code === 'NOT_FOUND') {
         return NextResponse.json(
-          { error: `ATTOM could not locate this address: ${report.propertyAddress}. Try adding city/state/zip to the report.` },
+          { error: 'We could not locate this address. Try adding city, state and ZIP to the report.' },
           { status: 422 }
         )
       }
-      return NextResponse.json({ error: `ATTOM error: ${err.message}` }, { status: 502 })
+      captureError(err, { context: 'attom_enrichment_upstream', reportId })
+      return NextResponse.json({ error: 'The property data provider returned an error. Please try again later.' }, { status: 502 })
     }
     captureError(err instanceof Error ? err : new Error(String(err)), {
       context: 'attom_enrichment',

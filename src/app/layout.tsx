@@ -9,8 +9,8 @@ export const metadata: Metadata = {
     default: 'ListOps — 6-Week Real Estate Marketing in One Click',
     template: '%s | ListOps',
   },
-  description: 'Generate complete 6-week real estate marketing campaigns from your MLS listing ID. Facebook, Instagram, email, and print-ready flyers — all in about 2 minutes.',
-  keywords: ['real estate marketing', 'MLS', 'real estate agent tools', 'listing marketing', 'AI real estate'],
+  description: 'Generate a complete 6-week real estate marketing campaign from your listing details and photos. Facebook, Instagram, email, and print-ready flyers — all in about 2 minutes.',
+  keywords: ['real estate marketing', 'listing marketing automation', 'real estate agent tools', 'listing marketing', 'AI real estate'],
   authors: [{ name: 'ListOps' }],
   creator: 'ListOps',
   openGraph: {
@@ -18,16 +18,17 @@ export const metadata: Metadata = {
     locale: 'en_US',
     url: 'https://listops.io',
     title: 'ListOps — 6-Week Real Estate Marketing in One Click',
-    description: 'Generate complete 6-week real estate marketing campaigns from your MLS listing ID.',
+    description: 'Generate a complete 6-week real estate marketing campaign from your listing details and photos.',
     siteName: 'ListOps',
   },
   twitter: {
     card: 'summary_large_image',
     title: 'ListOps',
-    description: 'AI-powered real estate marketing campaigns from your MLS ID.',
+    description: 'AI-powered real estate marketing campaigns from your listing and photos.',
   },
   robots: { index: true, follow: true },
   metadataBase: new URL(process.env.NEXT_PUBLIC_APP_URL || 'https://listops.io'),
+  alternates: { canonical: '/' },
 }
 
 export const viewport: Viewport = {

@@ -104,7 +104,7 @@ export const PLANS: Plan[] = [
     maxAgents: 1,
     features: [
       { text: '3 campaigns / month', included: true },
-      { text: 'MLS listing data auto-pull (500+ boards)', included: true },
+      { text: 'Address auto-fill from public records', included: true },
       { text: '10 headline variations + full MLS description', included: true },
       { text: '6-week Facebook & Instagram calendar', included: true },
       { text: 'Just Listed + Still Available emails', included: true },
@@ -138,7 +138,7 @@ export const PLANS: Plan[] = [
       { text: 'Brand kit (logo, colors, headshot, tone)', included: true, highlight: true },
       { text: 'Remove ListOps branding', included: true },
       { text: 'Email drip sequences (8 templates)', included: true, highlight: true },
-      { text: 'AI photo captions per MLS photo', included: true },
+      { text: 'AI photo captions from your uploaded photos', included: true },
       { text: 'Auto-generated listing microsite', included: true },
       { text: 'Microsite copy editor', included: true },
       { text: 'Campaign history (30 days)', included: true },

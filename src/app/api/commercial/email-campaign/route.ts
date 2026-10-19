@@ -1,6 +1,8 @@
 import { auth } from '@clerk/nextjs/server'
+import { guardAi } from '@/lib/ai-guard'
 import { NextRequest, NextResponse } from 'next/server'
 import Anthropic from '@anthropic-ai/sdk'
+import { COMMERCIAL_MODEL, getText } from '@/lib/claude'
 import { db } from '@/lib/db'
 import { siteReports, propertyGrades } from '@/lib/db/schema'
 import { eq, and } from 'drizzle-orm'
@@ -37,6 +39,8 @@ export async function POST(req: NextRequest) {
   try {
     const { userId } = await auth()
     if (!userId) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
+    const aiBlocked = await guardAi(userId, 'email-campaign')
+    if (aiBlocked) return aiBlocked
 
     const dbUser = await getUserWithDetails(userId)
     if (!dbUser?.organization) {
@@ -90,7 +94,7 @@ async function generateEmail(
   campaignType: string
 ): Promise<EmailDraft> {
   const msg = await anthropic.messages.create({
-    model: 'claude-opus-4-6',
+    model: COMMERCIAL_MODEL,
     max_tokens: 500,
     messages: [{
       role: 'user',
@@ -116,7 +120,7 @@ The body should be plain text (no markdown), natural broker voice, personalized 
     }],
   })
 
-  const raw = (msg.content[0] as { type: string; text: string }).text.trim()
+  const raw = getText(msg, 'email-campaign').trim()
   const clean = raw.replace(/^```json\s*/i, '').replace(/```\s*$/i, '').trim()
   return JSON.parse(clean) as EmailDraft
 }

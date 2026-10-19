@@ -26,7 +26,7 @@ export default function SignUpPage() {
           </h2>
           <ul className="space-y-4">
             {[
-              'MLS-connected — no manual data entry',
+              'Photo-aware AI — captions written from your own listing photos',
               'Facebook, Instagram, Email & Flyer — all in ~2 min',
               'Brand kit keeps your identity consistent',
               'Cancel anytime, no credit card needed',

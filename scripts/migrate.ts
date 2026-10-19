@@ -104,8 +104,11 @@ async function migrate() {
   await sql`
     CREATE TABLE IF NOT EXISTS "listings" (
       "id" uuid PRIMARY KEY DEFAULT gen_random_uuid() NOT NULL,
-      "mls_id" text NOT NULL,
-      "mls_board" text NOT NULL DEFAULT 'repliers',
+      "mls_id" text,
+      "mls_board" text,
+      "source" text NOT NULL DEFAULT 'manual',
+      "enrichment_provider" text,
+      "enrichment_data" jsonb,
       "agent_id" uuid NOT NULL REFERENCES "users"("id"),
       "org_id" uuid REFERENCES "organizations"("id"),
       "address" text,
@@ -121,6 +124,7 @@ async function migrate() {
       "description" text,
       "features" text[],
       "photos" text[],
+      "photo_keys" text[] DEFAULT '{}',
       "listing_agent_name" text,
       "listing_agent_email" text,
       "listing_agent_phone" text,
@@ -129,7 +133,8 @@ async function migrate() {
       "status" text NOT NULL DEFAULT 'active',
       "fetched_at" timestamp NOT NULL DEFAULT now(),
       "expires_at" timestamp,
-      "created_at" timestamp NOT NULL DEFAULT now()
+      "created_at" timestamp NOT NULL DEFAULT now(),
+      "updated_at" timestamp NOT NULL DEFAULT now()
     )
   `
   await sql`

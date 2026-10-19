@@ -96,11 +96,12 @@ export async function POST(request: NextRequest) {
     if (err instanceof PlacesEnrichmentError) {
       if (err.code === 'NO_API_KEY') {
         return NextResponse.json(
-          { error: 'Google Places API is not configured. Add GOOGLE_PLACES_API_KEY to your environment.' },
+          { error: 'Nearby-tenant enrichment is not available right now.' },
           { status: 501 }
         )
       }
-      return NextResponse.json({ error: err.message }, { status: 422 })
+      captureError(err, { context: 'places_enrichment', reportId })
+      return NextResponse.json({ error: 'We could not enrich this property. Please check the address and try again.' }, { status: 422 })
     }
     captureError(err instanceof Error ? err : new Error(String(err)), { reportId })
     return NextResponse.json({ error: 'Enrichment failed' }, { status: 500 })

@@ -460,3 +460,18 @@ export async function writeAuditLog(data: {
     console.error('Audit log error:', e)
   }
 }
+
+/**
+ * Give back a campaign quota unit when generation fails after the quota was consumed,
+ * so users aren't charged for campaigns they never received. Floors at 0.
+ */
+export async function refundCampaignQuota(clerkId: string): Promise<void> {
+  const user = await db.query.users.findFirst({ where: eq(users.clerkId, clerkId) })
+  if (!user) return
+  await db.update(users)
+    .set({
+      campaignsUsedThisMonth: sql`GREATEST(campaigns_used_this_month - 1, 0)`,
+      campaignsUsedTotal: sql`GREATEST(campaigns_used_total - 1, 0)`,
+    })
+    .where(eq(users.id, user.id))
+}

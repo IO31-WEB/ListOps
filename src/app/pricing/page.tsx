@@ -11,7 +11,7 @@ const FEATURE_CATEGORIES = [
     name: 'Content Generation',
     features: [
       { name: 'Campaigns per month',                          free: '3',     starter: '5',     pro: 'Unlimited', brokerage: 'Unlimited' },
-      { name: 'MLS listing data auto-pull (500+ boards)',     free: true,    starter: true,    pro: true,        brokerage: true },
+      { name: 'Public-records address auto-fill',             free: true,    starter: true,    pro: true,        brokerage: true },
       { name: '10 headline variations',                       free: true,    starter: true,    pro: true,        brokerage: true },
       { name: 'Full MLS description + bullet points',         free: true,    starter: true,    pro: true,        brokerage: true },
       { name: 'Neighborhood story + SEO meta',                free: true,    starter: true,    pro: true,        brokerage: true },
@@ -23,7 +23,7 @@ const FEATURE_CATEGORIES = [
       { name: 'Print materials (yard sign, postcard, brochure, magazine ad)', free: true, starter: true, pro: true, brokerage: true },
       { name: 'Print-ready listing flyer (PDF)',              free: true,    starter: true,    pro: true,        brokerage: true },
       { name: 'Email drip (8 templates: buyer + seller)',     free: false,   starter: true,    pro: true,        brokerage: true },
-      { name: 'AI photo captions (per MLS photo)',            free: false,   starter: true,    pro: true,        brokerage: true },
+      { name: 'AI photo captions (from your uploaded photos)',            free: false,   starter: true,    pro: true,        brokerage: true },
       { name: 'Microsite copy editor',                        free: false,   starter: true,    pro: true,        brokerage: true },
       { name: '6-week video & reel scripts',                  free: false,   starter: false,   pro: true,        brokerage: true },
       { name: 'Virtual tour narration (4 script types)',      free: false,   starter: false,   pro: true,        brokerage: true },
@@ -264,8 +264,8 @@ export default function PricingPage() {
             <div className="space-y-4">
               {[
                 {
-                  q: 'Does ListOps work with my MLS?',
-                  a: 'We connect via Repliers, which handles MLS licensing and connects to boards across the US. If your board isn\'t yet supported, contact us — we work with Repliers to add new boards. The app also works with demo data out of the box so you can try it before connecting your MLS.',
+                  q: 'Do I need MLS access to use ListOps?',
+                  a: 'No. You enter your listing details and upload your own photos — no MLS connection or login required. Optional address auto-fill uses public records to pre-populate beds, baths and square footage. That means it works for any listing, in any market, including pre-MLS and off-market properties.',
                 },
                 {
                   q: 'What exactly does each campaign include?',
@@ -285,7 +285,7 @@ export default function PricingPage() {
                 },
                 {
                   q: 'Is my listing data secure?',
-                  a: 'Yes. We use encrypted connections to pull MLS data, store nothing longer than necessary, and never sell your data. ListOps is GDPR and CCPA compliant.',
+                  a: 'Yes. We use encrypted connections, store only what\'s needed to run your account, and never sell your data. ListOps is GDPR and CCPA compliant.',
                 },
                 {
                   q: 'What happens if I hit my campaign limit?',
@@ -293,7 +293,7 @@ export default function PricingPage() {
                 },
                 {
                   q: 'How does AI photo captioning work?',
-                  a: 'On Starter and above, we pass your actual MLS listing photos to Claude\'s vision model. It identifies each room, writes an Instagram caption based on what it literally sees, generates SEO alt text, suggests a staging improvement, and creates a Stories overlay — one set per photo.',
+                  a: 'On Starter and above, we pass up to four of the listing photos you upload to Claude\'s vision model. It identifies each room, writes an Instagram caption based on what it literally sees, generates SEO alt text, suggests a staging improvement, and creates a Stories overlay — one set per photo.',
                 },
               ].map((faq) => (
                 <div key={faq.q} className="bg-white border border-slate-200 rounded-xl p-6">

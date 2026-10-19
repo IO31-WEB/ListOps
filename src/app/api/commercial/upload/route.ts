@@ -16,6 +16,7 @@
 
 import { NextRequest, NextResponse } from 'next/server'
 import { auth } from '@clerk/nextjs/server'
+import { guardAi } from '@/lib/ai-guard'
 import { db } from '@/lib/db'
 import { siteReports, gradeWeights } from '@/lib/db/schema'
 import { getUserWithDetails } from '@/lib/user-service'
@@ -39,6 +40,8 @@ export async function POST(request: NextRequest) {
   if (!userId) {
     return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
   }
+  const aiBlocked = await guardAi(userId, 'property-parse')
+  if (aiBlocked) return aiBlocked
 
   const rl = await rateLimitAPI(request.headers.get('x-forwarded-for') ?? userId)
   if (!rl.success) {
