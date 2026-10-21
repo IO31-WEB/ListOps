@@ -7,6 +7,9 @@ import { db } from '@/lib/db'
 import { organizations } from '@/lib/db/schema'
 import { eq } from 'drizzle-orm'
 import { z } from 'zod'
+import { assertAdult } from '@/lib/age'
+import { ApiError, handleApiError } from '@/lib/api-utils'
+import { renewalSummary } from '@/components/billing/renewal-notice'
 
 const RequestSchema = z.object({
   planId: z.enum(['starter', 'pro', 'commercial', 'brokerage']),
@@ -19,7 +22,11 @@ export async function POST(request: NextRequest) {
 
   // Use the actual request origin so Stripe redirects back to whichever domain
   // the user is on (preview URL, custom domain, etc) rather than the hardcoded APP_URL
-  const origin = request.headers.get('origin') || process.env.NEXT_PUBLIC_APP_URL || ''
+  // Only trust the Origin header if it is our own domain or a Vercel preview — otherwise an attacker-controlled
+  // Origin could become the post-payment redirect target.
+  const appUrl = process.env.NEXT_PUBLIC_APP_URL || ''
+  const reqOrigin = request.headers.get('origin') || ''
+  const origin = reqOrigin === appUrl || /^https:\/\/[a-z0-9-]+\.vercel\.app$/.test(reqOrigin) ? reqOrigin : appUrl
 
   try {
     const body = await request.json()
@@ -49,6 +56,8 @@ export async function POST(request: NextRequest) {
     if (!dbUser?.organization) {
       return NextResponse.json({ error: 'Could not create organization. Please contact support.' }, { status: 400 })
     }
+
+    assertAdult(dbUser)
 
     const plan = PLANS.find(p => p.id === planId)
     if (!plan) return NextResponse.json({ error: 'Invalid plan' }, { status: 400 })
@@ -91,6 +100,20 @@ export async function POST(request: NextRequest) {
       },
       allow_promotion_codes: true,
       billing_address_collection: 'auto',
+      // Renewal terms shown on Stripe's hosted payment page, right above the Pay/Subscribe button.
+      custom_text: {
+        submit: {
+          message: renewalSummary({
+            planName: plan.name,
+            price: billing === 'annual' ? (plan.yearlyPrice ?? 0) : (plan.monthlyPrice ?? 0),
+            interval: billing === 'annual' ? 'year' : 'month',
+            trialDays: planId === 'brokerage' ? 14 : undefined,
+          }).slice(0, 1200),
+        },
+      },
+      // Optional explicit "I agree to the Terms" checkbox at checkout. Requires the Terms URL to be set in
+      // Stripe Dashboard → Settings → Public details, so it is opt-in via env to avoid a 400 from Stripe.
+      ...(process.env.STRIPE_REQUIRE_TOS === 'true' ? { consent_collection: { terms_of_service: 'required' as const } } : {}),
     })
 
     return NextResponse.json({ url: session.url })
@@ -98,6 +121,7 @@ export async function POST(request: NextRequest) {
     if (err instanceof z.ZodError) {
       return NextResponse.json({ error: 'Invalid request body' }, { status: 400 })
     }
+    if (err instanceof ApiError) return handleApiError(err)
     console.error('Checkout error:', err)
     return NextResponse.json({ error: 'Failed to create checkout session' }, { status: 500 })
   }

@@ -41,7 +41,8 @@ export const rentcast: EnrichmentProvider = {
 
     const f = (p.features ?? {}) as Record<string, unknown>
     const features: string[] = []
-    if (f.garage === true) features.push('Garage')
+    const spaces = num(f.garageSpaces)
+    if (f.garage === true || spaces) features.push(spaces ? `${spaces}-Car Garage` : 'Garage')
     if (f.pool === true) features.push('Pool')
     if (f.fireplace === true) features.push('Fireplace')
 

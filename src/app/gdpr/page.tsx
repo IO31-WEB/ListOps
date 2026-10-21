@@ -53,7 +53,8 @@ export default function GdprPage() {
 
         <div style={{ textAlign: 'center' }}>
           <p style={{ color: '#94a3b8', fontSize: 14 }}>
-            For full details on how we handle your data, see our <Link href="/privacy" style={{ color: '#f59e0b', fontWeight: 600 }}>Privacy Policy</Link>.
+            For full details on how we handle your data, see our <Link href="/privacy" style={{ color: '#f59e0b', fontWeight: 600 }}>Privacy Policy</Link>
+            <Link href="/dmca" style={{ color: '#f59e0b', fontWeight: 600 }}>Copyright (DMCA)</Link>.
           </p>
         </div>
       </div>

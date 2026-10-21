@@ -1,5 +1,7 @@
 'use client'
 
+import { getBillingInfo } from '@/lib/billing-client'
+import { RenewalNotice } from '@/components/billing/renewal-notice'
 import { useState, useEffect } from 'react'
 import { Check, X, Zap, CreditCard, AlertCircle, Star, Shield, ArrowRight, Loader2, ChevronDown, ChevronUp, Building2, Users, Lock } from 'lucide-react'
 import { PLANS, ENTERPRISE_PLAN } from '@/lib/plans'
@@ -90,11 +92,8 @@ export default function BillingPage() {
 
   const fetchBillingInfo = async () => {
     try {
-      const res = await fetch('/api/billing/info')
-      if (res.ok) {
-        const data = await res.json()
-        setBillingInfo(data)
-      }
+      const data = await getBillingInfo(true) // force: this page must always show fresh numbers
+      if (data) setBillingInfo(data as typeof billingInfo)
     } catch (err) {
       console.error('Failed to load billing info:', err)
     } finally {
@@ -364,6 +363,16 @@ export default function BillingPage() {
               >
                 {isLoading ? <Loader2 className="w-4 h-4 animate-spin" /> : cta}
               </button>
+              {plan.id !== 'free' && !isCurrent && cta !== 'Downgrade' && (
+                <RenewalNotice
+                  className="mt-3"
+                  dark={isDark}
+                  planName={plan.name}
+                  price={annual ? (plan.yearlyPrice ?? 0) : (plan.monthlyPrice ?? 0)}
+                  interval={annual ? 'year' : 'month'}
+                  trialDays={plan.id === 'brokerage' ? 14 : undefined}
+                />
+              )}
             </div>
           )
         })}
@@ -376,7 +385,7 @@ export default function BillingPage() {
           <div>
             <div className="flex items-center gap-2 mb-2">
               <Building2 className="w-4 h-4 text-amber-400" />
-              <span className="text-amber-400 text-xs font-semibold uppercase tracking-widest">Enterprise / MLS Board</span>
+              <span className="text-amber-400 text-xs font-semibold uppercase tracking-widest">Enterprise / Association</span>
             </div>
             <h3 className="font-display text-2xl font-semibold text-white mb-2">{ENTERPRISE_PLAN.name}</h3>
             <p className="text-slate-400 text-sm mb-4">{ENTERPRISE_PLAN.tagline}</p>

@@ -145,7 +145,7 @@ export default function HomePage() {
 
           <div className="grid sm:grid-cols-2 lg:grid-cols-3 gap-6">
             {[
-              { icon: '📝', tag: 'COPY', title: 'Listing Copy Suite', desc: '10 headline variations, full MLS description, neighborhood story, SEO meta, Spanish translation, and tone variants for luxury, investor, and first-time buyer angles.', plan: 'All plans' },
+              { icon: '📝', tag: 'COPY', title: 'Listing Copy Suite', desc: '10 headline variations, full MLS-ready description, neighborhood story, SEO meta, Spanish translation, and tone variants for luxury, investor, and first-time buyer angles.', plan: 'All plans' },
               { icon: '📱', tag: 'FB+IG', title: '6-Week Social Calendar', desc: 'Themed posts for every week — launch, features, neighborhood, open house, investment value, and final call. Facebook and Instagram formatted separately.', plan: 'All plans' },
               { icon: '📧', tag: 'EMAIL', title: 'Email Campaign Suite', desc: 'Just Listed and Still Available emails plus an 8-template drip sequence: buyer Day 1–30, seller update, open house invite, post-showing follow-up, and market report.', plan: 'Free (2) / Starter+ (all 8)' },
               { icon: '🖨️', tag: 'PRINT', title: 'Print & Offline Materials', desc: 'Yard sign rider, postcard headline and body, open house info packet, brochure copy, and magazine ad — plus a fully branded print-ready PDF flyer.', plan: 'All plans' },
@@ -319,7 +319,8 @@ export default function HomePage() {
             <div>
               <h4 className="font-semibold text-white text-sm mb-4">Legal</h4>
               <ul className="space-y-2 text-sm">
-                <li><Link href="/privacy" className="hover:text-white transition-colors">Privacy Policy</Link></li>
+                <li><Link href="/privacy" className="hover:text-white transition-colors">Privacy Policy</Link>
+            <Link href="/dmca" className="hover:text-white transition-colors">Copyright (DMCA)</Link></li>
                 <li><Link href="/terms" className="hover:text-white transition-colors">Terms of Service</Link></li>
                 <li><Link href="/security" className="hover:text-white transition-colors">Security</Link></li>
                 <li><Link href="/gdpr" className="hover:text-white transition-colors">GDPR</Link></li>

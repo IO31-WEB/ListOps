@@ -56,7 +56,7 @@ export async function getOrCreateUser(clerkId: string, data: {
 }
 
 export async function getUserWithDetails(clerkId: string) {
-  await syncPlanFromClerkMetadata(clerkId)
+  await syncPlanThrottled(clerkId)
   return db.query.users.findFirst({
     where: eq(users.clerkId, clerkId),
     with: { organization: { with: { subscriptions: true } }, brandKit: true },
@@ -117,6 +117,26 @@ export async function downgradeToFree(orgId: string) {
 // ── Sync plan from Clerk privateMetadata → DB ─────────────────
 // Escape hatch: set privateMetadata.planTier or .plan in Clerk dashboard
 // to override the DB plan without touching Stripe.
+// PERF: syncPlanFromClerkMetadata makes a live Clerk Backend API call (~150-400ms). It used to run on EVERY
+// getUserWithDetails / checkCampaignQuota call — several times per dashboard page load. Plan changes arrive
+// via Stripe webhooks, so reconciling at most once per minute per user per server instance is plenty.
+const PLAN_SYNC_TTL_MS = 60_000
+const lastPlanSync = new Map<string, number>()
+
+async function syncPlanThrottled(clerkId: string): Promise<void> {
+  const now = Date.now()
+  const last = lastPlanSync.get(clerkId) ?? 0
+  if (now - last < PLAN_SYNC_TTL_MS) return
+  if (lastPlanSync.size > 2000) lastPlanSync.clear() // bound memory
+  lastPlanSync.set(clerkId, now)
+  await syncPlanFromClerkMetadata(clerkId)
+}
+
+/** Force the next getUserWithDetails/checkCampaignQuota to re-sync (call right after a checkout completes). */
+export function invalidatePlanSync(clerkId: string): void {
+  lastPlanSync.delete(clerkId)
+}
+
 export async function syncPlanFromClerkMetadata(clerkId: string): Promise<PlanTier | null> {
   try {
     const client = await clerkClient()
@@ -211,7 +231,7 @@ export async function upsertBrandKit(userId: string, orgId: string, data: Partia
 export async function checkCampaignQuota(clerkId: string): Promise<{
   allowed: boolean; used: number; limit: number | 'unlimited'; planTier: PlanTier; resetsAt?: Date
 }> {
-  await syncPlanFromClerkMetadata(clerkId)
+  await syncPlanThrottled(clerkId)
 
   const user = await db.query.users.findFirst({
     where: eq(users.clerkId, clerkId),
@@ -384,12 +404,15 @@ export async function getUserCampaigns(clerkId: string, page = 1, pageLimit = 20
   if (!user) return { campaigns: [], total: 0, pages: 0 }
 
   const offset = (page - 1) * safeLimit
+  // PERF: select only what the list renders. The old query loaded every column of 20 campaigns (all the generated
+  // posts/emails/scripts as JSON) plus each listing's raw_data — hundreds of KB per row — just to draw cards.
   const [allCampaigns, totalResult] = await Promise.all([
     db.query.campaigns.findMany({
       where: eq(campaigns.agentId, user.id),
       orderBy: [desc(campaigns.createdAt)],
       limit: safeLimit, offset,
-      with: { listing: true },
+      columns: { id: true, status: true, createdAt: true, micrositeSlug: true, micrositePublished: true, micrositeViews: true },
+      with: { listing: { columns: { address: true, city: true, state: true, price: true, bedrooms: true, bathrooms: true, sqft: true } } },
     }),
     db.select({ count: count() }).from(campaigns).where(eq(campaigns.agentId, user.id)),
   ])

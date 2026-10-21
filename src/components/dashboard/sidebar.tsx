@@ -1,5 +1,6 @@
 'use client'
 
+import { getBillingInfo } from '@/lib/billing-client'
 import { useState, useEffect } from 'react'
 import Link from 'next/link'
 import { usePathname } from 'next/navigation'
@@ -41,8 +42,7 @@ export function DashboardSidebar() {
   const pathname = usePathname()
 
   useEffect(() => {
-    fetch('/api/billing/info')
-      .then(r => r.ok ? r.json() : null)
+    getBillingInfo()
       .then(data => {
         if (data) setBilling({
           planTier: data.planTier ?? 'free',

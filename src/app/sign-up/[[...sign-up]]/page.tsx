@@ -1,6 +1,7 @@
 import { SignUp } from '@clerk/nextjs'
 import Link from 'next/link'
 import { House, Check } from 'lucide-react'
+import { AgeGate } from '@/components/auth/age-gate'
 
 export default function SignUpPage() {
   return (
@@ -68,6 +69,7 @@ export default function SignUpPage() {
           </div>
           <span className="font-display font-semibold text-slate-900 text-xl">ListOps</span>
         </Link>
+        <AgeGate>
         <SignUp
           forceRedirectUrl="/dashboard"
           fallbackRedirectUrl="/dashboard"
@@ -83,6 +85,7 @@ export default function SignUpPage() {
             },
           }}
         />
+        </AgeGate>
       </div>
     </div>
   )

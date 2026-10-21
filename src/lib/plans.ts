@@ -105,7 +105,7 @@ export const PLANS: Plan[] = [
     features: [
       { text: '3 campaigns / month', included: true },
       { text: 'Address auto-fill from public records', included: true },
-      { text: '10 headline variations + full MLS description', included: true },
+      { text: '10 headline variations + full MLS-ready description', included: true },
       { text: '6-week Facebook & Instagram calendar', included: true },
       { text: 'Just Listed + Still Available emails', included: true },
       { text: 'Print materials (yard sign, postcard, brochure)', included: true },
@@ -201,7 +201,7 @@ export const PLANS: Plan[] = [
       { text: 'Admin dashboard', included: true },
       { text: 'Compliance & audit logs', included: true },
       { text: 'CSV/PDF export of all campaigns', included: true },
-      { text: 'MLS board-wide integration', included: true },
+      { text: 'Board / association-wide deployment', included: true },
       { text: 'Dedicated Slack support', included: true },
       { text: 'SSO / SAML (add-on)', included: true },
     ],
@@ -215,12 +215,12 @@ export const PLAN_MAP = Object.fromEntries(PLANS.map(p => [p.id, p])) as Record<
 export const ENTERPRISE_PLAN = {
   id: 'enterprise' as PlanTier,
   name: 'Enterprise',
-  tagline: 'MLS board-level deployment',
+  tagline: 'Board & association deployment',
   price: 'Custom',
   features: [
     'All Brokerage features',
     'Unlimited agents',
-    'MLS board-level licensing',
+    'Board & association licensing',
     'Custom domain (marketing.yourbrokerage.com)',
     'SSO/SAML + SCIM provisioning',
     'Dedicated Customer Success Manager',

@@ -55,7 +55,6 @@ export type ListingStatus = 'active' | 'pending' | 'sold' | 'withdrawn'
 
 export interface Listing {
   id: string
-  mlsId: string
   address: string
   city: string
   state: string
@@ -109,7 +108,6 @@ export interface Campaign {
   orgId: string
   userId: string
   listingId: string | null
-  mlsId: string
   status: CampaignStatus
   content: CampaignContent | null
   micrositeSlug: string | null
@@ -143,7 +141,6 @@ export interface ApiResponse<T> {
 }
 
 export interface GenerateCampaignRequest {
-  mlsId: string
   brandKitId?: string
 }
 

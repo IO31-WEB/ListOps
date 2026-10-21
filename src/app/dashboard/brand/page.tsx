@@ -1,5 +1,6 @@
 'use client'
 
+import { getBillingInfo } from '@/lib/billing-client'
 import { useState, useCallback, useEffect } from 'react'
 import { useDropzone } from 'react-dropzone'
 import {
@@ -183,12 +184,12 @@ export default function BrandPage() {
   useEffect(() => {
     const fetchBrandKit = async () => {
       try {
-        const [bkRes, infoRes] = await Promise.all([
+        const [bkRes, info] = await Promise.all([
           fetch('/api/brand-kit'),
-          fetch('/api/billing/info'),
+          getBillingInfo(),
         ])
         const { brandKit } = await bkRes.json()
-        const { planTier } = await infoRes.json()
+        const planTier = info?.planTier ?? 'free'
         setPlanTier(planTier)
         if (brandKit) {
           setForm(prev => ({

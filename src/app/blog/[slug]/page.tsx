@@ -281,6 +281,7 @@ export default async function BlogPostPage({ params }: Props) {
             <Link href="/blog" className="hover:text-slate-700 transition-colors">Blog</Link>
             <Link href="/pricing" className="hover:text-slate-700 transition-colors">Pricing</Link>
             <Link href="/privacy" className="hover:text-slate-700 transition-colors">Privacy</Link>
+            <Link href="/dmca" className="hover:text-slate-700 transition-colors">Copyright (DMCA)</Link>
             <Link href="/terms" className="hover:text-slate-700 transition-colors">Terms</Link>
           </div>
         </div>

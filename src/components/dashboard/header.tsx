@@ -105,7 +105,7 @@ export function DashboardHeader() {
     saveNotifications(notifications)
   }, [notifications])
 
-  // Poll for real notifications from server every 30s
+  // Poll for real notifications every 2 minutes — and only while the tab is visible (was every 30s, always).
   useEffect(() => {
     const fetchNotifs = async () => {
       try {
@@ -123,8 +123,10 @@ export function DashboardHeader() {
       } catch {}
     }
     fetchNotifs()
-    const interval = setInterval(fetchNotifs, 30_000)
-    return () => clearInterval(interval)
+    const interval = setInterval(() => { if (document.visibilityState === 'visible') fetchNotifs() }, 120_000)
+    const onVisible = () => { if (document.visibilityState === 'visible') fetchNotifs() }
+    document.addEventListener('visibilitychange', onVisible)
+    return () => { clearInterval(interval); document.removeEventListener('visibilitychange', onVisible) }
   }, [])
   const unreadCount = notifications.filter(n => !n.read).length
   const notifRef = useRef<HTMLDivElement>(null)

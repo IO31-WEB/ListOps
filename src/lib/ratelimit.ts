@@ -123,6 +123,10 @@ export const rateLimitGenerate = (userId: string) =>
 export const rateLimitAi = (userId: string, bucket: string, perHour: number) =>
   limit({ name: `ai-${bucket}`, limit: perHour, windowSeconds: 60 * 60, failClosed: true }, userId)
 
+/** Outreach email sends: 10 batches / day / user (each batch capped at 100 recipients in the route). */
+export const rateLimitEmailSend = (userId: string) =>
+  limit({ name: 'email-send', limit: 10, windowSeconds: 24 * 60 * 60, failClosed: true }, userId)
+
 /** Address enrichment calls a paid third-party API. */
 export const rateLimitEnrich = (userId: string) =>
   limit({ name: 'enrich', limit: 20, windowSeconds: 60 * 60, failClosed: true }, userId)

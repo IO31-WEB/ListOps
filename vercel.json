@@ -3,5 +3,8 @@
     "src/app/api/generate/route.ts": {
       "maxDuration": 300
     }
-  }
+  },
+  "crons": [
+    { "path": "/api/cron/cleanup-uploads", "schedule": "17 4 * * *" }
+  ]
 }

@@ -18,6 +18,12 @@ const isPublicRoute = createRouteMatcher([
   '/l/(.*)',
   '/api/webhooks/(.*)',
   '/api/contact',
+  '/dmca',
+  '/unsubscribe(.*)',
+  '/age-blocked',
+  '/api/unsubscribe',
+  '/api/csp-report',
+  '/api/cron/(.*)', // protected by CRON_SECRET inside each handler
   '/api/commercial/data-push',
 ])
 

@@ -2,7 +2,40 @@ import type { Metadata, Viewport } from 'next'
 import { ClerkProvider } from '@clerk/nextjs'
 import { PostHogProvider } from '@/components/posthog-provider'
 import { Toaster } from 'react-hot-toast'
+import localFont from 'next/font/local'
 import '@/styles/globals.css'
+
+// ── Self-hosted fonts (privacy) ───────────────────────────────────────────────
+// All fonts are served from our own domain (files in src/app/fonts, SIL Open Font
+// License — license files sit next to them). Nothing is requested from Google or any
+// font CDN, so a visitor's IP / user-agent is never sent to a third party for fonts.
+const fontDisplay = localFont({
+  src: [
+    { path: './fonts/playfair-display-latin-wght-normal.woff2', style: 'normal', weight: '400 900' },
+    { path: './fonts/playfair-display-latin-wght-italic.woff2', style: 'italic', weight: '400 900' },
+  ],
+  variable: '--font-display',
+  display: 'swap',
+  fallback: ['Georgia', 'serif'],
+})
+const fontBody = localFont({
+  src: [
+    { path: './fonts/dm-sans-latin-wght-normal.woff2', style: 'normal', weight: '100 1000' },
+    { path: './fonts/dm-sans-latin-wght-italic.woff2', style: 'italic', weight: '100 1000' },
+  ],
+  variable: '--font-body',
+  display: 'swap',
+  fallback: ['system-ui', 'sans-serif'],
+})
+const fontMono = localFont({
+  src: [
+    { path: './fonts/dm-mono-latin-400-normal.woff2', style: 'normal', weight: '400' },
+    { path: './fonts/dm-mono-latin-500-normal.woff2', style: 'normal', weight: '500' },
+  ],
+  variable: '--font-mono',
+  display: 'swap',
+  fallback: ['ui-monospace', 'monospace'],
+})
 
 export const metadata: Metadata = {
   title: {
@@ -55,11 +88,7 @@ export default function RootLayout({ children }: { children: React.ReactNode }) 
         },
       }}
     >
-      <html lang="en" suppressHydrationWarning>
-        <head>
-          <link rel="preconnect" href="https://fonts.googleapis.com" />
-          <link rel="preconnect" href="https://fonts.gstatic.com" crossOrigin="anonymous" />
-        </head>
+      <html lang="en" suppressHydrationWarning className={`${fontDisplay.variable} ${fontBody.variable} ${fontMono.variable}`}>
         <body className="antialiased min-h-screen">
           <PostHogProvider>
           {children}

@@ -64,6 +64,26 @@ export async function uploadToR2(opts: {
   }
 }
 
+/** Delete an object from R2. Returns true if it is gone (404 counts as gone). Never throws. */
+export async function deleteFromR2(key: string): Promise<boolean> {
+  if (!isConfigured()) return false
+  try {
+    const { AwsClient } = (() => { try { return require('aws4fetch') } catch { return { AwsClient: null } } })()
+    if (!AwsClient) return false
+    const client = new AwsClient({
+      accessKeyId: process.env.R2_ACCESS_KEY_ID!,
+      secretAccessKey: process.env.R2_SECRET_ACCESS_KEY!,
+      service: 's3',
+      region: 'auto',
+    })
+    const res = await client.fetch(`${R2_ENDPOINT}/${BUCKET}/${key}`, { method: 'DELETE' })
+    return res.ok || res.status === 404
+  } catch (err) {
+    console.error('[r2] Delete error:', err)
+    return false
+  }
+}
+
 export function getR2Url(key: string) {
   return `${PUBLIC_URL}/${key}`
 }

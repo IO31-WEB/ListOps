@@ -26,6 +26,7 @@ import { rateLimitGenerate, rateLimitHeaders } from '@/lib/ratelimit'
 import { ApiError, handleApiError, readJson } from '@/lib/api-utils'
 import { assertBudgetAvailable, recordSpend } from '@/lib/ai-budget'
 import { getOwnListing } from '@/lib/listing-service'
+import { assertAdult } from '@/lib/age'
 import { getR2Url } from '@/lib/r2'
 import { sniffImage } from '@/lib/image-validate'
 import { captureError, trackGenerationCost } from '@/lib/monitoring'
@@ -488,6 +489,7 @@ export async function POST(request: NextRequest) {
 
     const user = await getUserWithDetails(userId)
     if (!user) throw new ApiError(404, 'User not found')
+    assertAdult(user)
 
     // 3. Ownership — the query itself is scoped by agent_id. Someone else's listing id is a 404.
     const listingRow = await getOwnListing(user.id, listingId)

@@ -85,7 +85,7 @@ export default function ContactPage() {
                 <label className="block text-xs font-semibold text-slate-600 mb-1.5">Inquiry Type</label>
                 <select value={form.type} onChange={e => setForm(f => ({ ...f, type: e.target.value }))} className="w-full bg-slate-50 border border-slate-200 rounded-xl px-4 py-3 text-sm focus:outline-none focus:ring-2 focus:ring-amber-400">
                   <option value="general">General Question</option>
-                  <option value="enterprise">Enterprise / MLS Partnership</option>
+                  <option value="enterprise">Enterprise / Association Partnership</option>
                   <option value="brokerage">Brokerage Plan</option>
                   <option value="support">Technical Support</option>
                   <option value="billing">Billing</option>

@@ -11,7 +11,8 @@
 
 import { NextRequest, NextResponse } from 'next/server'
 import { auth } from '@clerk/nextjs/server'
-import { Resend } from 'resend'
+import { sendEmail, escapeHtml, oneLine } from '@/lib/email'
+import { rateLimitEmailSend, rateLimitHeaders } from '@/lib/ratelimit'
 import { db } from '@/lib/db'
 import { referrals } from '@/lib/db/schema'
 import { getUserWithDetails, getOrgSubscription, getTeamMembers } from '@/lib/user-service'
@@ -29,11 +30,15 @@ export async function POST(req: NextRequest) {
   if (!userId) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
 
   try {
+    // Invites send real email to third parties — cap per user per day so this can't be used to spam.
+    const rl = await rateLimitEmailSend(userId)
+    if (!rl.success) return NextResponse.json({ error: 'Daily invite limit reached. Please try again tomorrow.' }, { status: 429, headers: rateLimitHeaders(rl) })
+
     const body = await req.json()
     const { email, role = 'agent' } = body
 
     // Validate email
-    if (!email || typeof email !== 'string' || !email.includes('@') || email.length > 254) {
+    if (!email || typeof email !== 'string' || !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email) || email.length > 254) {
       return NextResponse.json({ error: 'Valid email required' }, { status: 400 })
     }
 
@@ -89,27 +94,28 @@ export async function POST(req: NextRequest) {
     const senderName = [user.firstName, user.lastName].filter(Boolean).join(' ') || 'Your colleague'
 
     if (resendKey) {
-      // FIX: Resend imported at top-level — no dynamic require(), no nested try/catch chains
-      try {
-        const resend = new Resend(resendKey)
-        const { error: emailError } = await resend.emails.send({
-          from: 'ListOps <onboarding@resend.dev>',
-          to: email,
-          subject: `${senderName} invited you to join ListOps`,
-          html: `<div style="font-family:Arial,sans-serif;max-width:520px;margin:0 auto;padding:32px">
+      // Transactional: sent because a team member asked us to invite this person. Goes through the
+      // shared helper so it uses the verified domain (NOT onboarding@resend.dev, which only delivers to
+      // the Resend account owner), has a text part, reply-to, and the postal-address footer.
+      const safeSender = escapeHtml(senderName)
+      const safeUrl = escapeHtml(inviteUrl)
+      const result = await sendEmail({
+        kind: 'transactional',
+        to: email,
+        fromName: 'ListOps',
+        replyTo: user.email,
+        subject: `${oneLine(senderName, 60)} invited you to join ListOps`,
+        text: `${senderName} has invited you to join their team on ListOps, the AI-powered real estate marketing platform.\n\nAccept the invite: ${inviteUrl}\n\nThis invite expires in 7 days. If you did not expect it, you can safely ignore this email.`,
+        html: `<div style="font-family:Arial,sans-serif;max-width:520px;margin:0 auto;padding:32px">
             <h2 style="color:#0f172a">You're invited to join ListOps</h2>
-            <p style="color:#475569">${senderName} has invited you to join their team on ListOps — the AI-powered real estate marketing platform.</p>
-            <p style="color:#475569">Generate complete 6-week listing campaigns in under 90 seconds.</p>
-            <a href="${inviteUrl}" style="display:inline-block;background:#0f172a;color:white;padding:14px 28px;border-radius:10px;text-decoration:none;font-weight:700;margin:16px 0">Accept Invite &rarr;</a>
+            <p style="color:#475569">${safeSender} has invited you to join their team on ListOps &mdash; the AI-powered real estate marketing platform.</p>
+            <a href="${safeUrl}" style="display:inline-block;background:#0f172a;color:white;padding:14px 28px;border-radius:10px;text-decoration:none;font-weight:700;margin:16px 0">Accept invite</a>
             <p style="color:#94a3b8;font-size:13px">This invite expires in 7 days. If you did not expect this, you can safely ignore this email.</p>
           </div>`,
-        })
-        if (emailError) {
-          console.error('[invite] Resend error:', emailError)
-        }
-      } catch (emailErr) {
-        console.warn('[invite] Email send failed (non-fatal — invite saved in DB):', emailErr)
-      }
+        reason: `You received this because ${senderName} entered your email address to invite you.`,
+        tags: [{ name: 'kind', value: 'team_invite' }],
+      })
+      if (!result.ok) console.error('[invite] email not sent:', result.reason)
     } else {
       console.log(`[invite] No RESEND_API_KEY — invite recorded but email not sent to ${email}`)
       console.log(`[invite] Invite URL: ${inviteUrl}`)

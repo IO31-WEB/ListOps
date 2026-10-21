@@ -1,9 +1,10 @@
 'use client'
 
+import { getBillingInfo, invalidateBillingInfo } from '@/lib/billing-client'
 import { useState, useEffect, useCallback, useRef } from 'react'
 import { useRouter } from 'next/navigation'
 import { useDropzone } from 'react-dropzone'
-import { Zap, Check, AlertTriangle, Loader2, Palette, X, Sparkles, ImagePlus, Trash2, MapPin } from 'lucide-react'
+import { Zap, Check, AlertTriangle, Loader2, Palette, X, Sparkles, ImagePlus, Trash2, MapPin, ChevronLeft, ChevronRight } from 'lucide-react'
 import toast from 'react-hot-toast'
 import Link from 'next/link'
 import { track } from '@/lib/analytics'
@@ -155,7 +156,7 @@ export default function GeneratePage() {
   useEffect(() => {
     track('generate_page_viewed')
     Promise.all([
-      fetch('/api/billing/info').then(r => (r.ok ? r.json() : null)),
+      getBillingInfo(),
       fetch('/api/brand-kit').then(r => (r.ok ? r.json() : null)),
       fetch('/api/listings/enrich').then(r => (r.ok ? r.json() : null)),
     ])
@@ -222,6 +223,32 @@ export default function GeneratePage() {
     disabled: busy,
     onDropRejected: () => toast.error('Use JPG, PNG or WebP photos (HEIC: export as JPG first).'),
   })
+
+  // ── Reordering ─────────────────────────────────────────────
+  // Order = order of the photos array. Only uploaded photos count toward the "first 4 go to the AI" rule,
+  // and the server preserves array order, so what you see here is exactly what Claude receives.
+  const [dragId, setDragId] = useState<string | null>(null)
+  const reorder = (fromId: string, toId: string) => {
+    if (fromId === toId) return
+    setPhotos(prev => {
+      const from = prev.findIndex(p => p.id === fromId)
+      const to = prev.findIndex(p => p.id === toId)
+      if (from < 0 || to < 0) return prev
+      const next = [...prev]
+      const [moved] = next.splice(from, 1)
+      next.splice(to, 0, moved)
+      return next
+    })
+  }
+  const nudge = (id: string, delta: -1 | 1) =>
+    setPhotos(prev => {
+      const i = prev.findIndex(p => p.id === id)
+      const j = i + delta
+      if (i < 0 || j < 0 || j >= prev.length) return prev
+      const next = [...prev]
+      ;[next[i], next[j]] = [next[j], next[i]]
+      return next
+    })
 
   const removePhoto = (id: string) => {
     setPhotos(prev => {
@@ -363,6 +390,7 @@ export default function GeneratePage() {
       if (!res.ok) throw new Error(data.error || `Request failed (${res.status})`)
       stepIds.forEach(sid => updateStep(sid, 'done'))
       if (!data.campaignId) throw new Error('Campaign was saved but no ID was returned.')
+      invalidateBillingInfo() // usage changed — next read must be fresh
       track('generate_succeeded', { ms: Date.now() - startedAt })
       toast.success('Campaign ready! Redirecting…')
       router.push(`/dashboard/campaigns/${data.campaignId}`)
@@ -487,21 +515,39 @@ export default function GeneratePage() {
         </div>
         {photos.length > 0 && (
           <ul className="grid grid-cols-3 sm:grid-cols-4 gap-3">
-            {photos.map((p, i) => (
-              <li key={p.id} className="relative aspect-square rounded-xl overflow-hidden bg-slate-100 border border-slate-200">
+            {photos.map((p, i) => {
+              const aiRank = p.status === 'done' ? photos.slice(0, i).filter(x => x.status === 'done').length : -1
+              return (
+              <li
+                key={p.id}
+                draggable={!busy}
+                onDragStart={() => setDragId(p.id)}
+                onDragOver={e => e.preventDefault()}
+                onDrop={() => { if (dragId) reorder(dragId, p.id); setDragId(null) }}
+                onDragEnd={() => setDragId(null)}
+                className={`relative aspect-square rounded-xl overflow-hidden bg-slate-100 border ${dragId === p.id ? 'border-amber-400 opacity-50' : 'border-slate-200'} ${busy ? '' : 'cursor-grab active:cursor-grabbing'}`}>
                 {/* eslint-disable-next-line @next/next/no-img-element */}
                 <img src={p.preview} alt={`Listing photo ${i + 1}`} className="w-full h-full object-cover" />
-                {i < 4 && p.status === 'done' && <span className="absolute bottom-1 left-1 text-[10px] bg-black/60 text-white rounded px-1.5 py-0.5">AI sees this</span>}
+                {aiRank >= 0 && aiRank < 4 && <span className="absolute bottom-1 left-1 text-[10px] bg-black/60 text-white rounded px-1.5 py-0.5">AI sees #{aiRank + 1}</span>}
+                {!busy && (
+                  <div className="absolute bottom-1 right-1 flex gap-1">
+                    <button type="button" onClick={() => nudge(p.id, -1)} disabled={i === 0} aria-label="Move photo earlier"
+                      className="bg-white/90 hover:bg-white disabled:opacity-30 rounded-full p-1 shadow"><ChevronLeft className="w-3.5 h-3.5 text-slate-700" /></button>
+                    <button type="button" onClick={() => nudge(p.id, 1)} disabled={i === photos.length - 1} aria-label="Move photo later"
+                      className="bg-white/90 hover:bg-white disabled:opacity-30 rounded-full p-1 shadow"><ChevronRight className="w-3.5 h-3.5 text-slate-700" /></button>
+                  </div>
+                )}
                 {p.status === 'uploading' && <div className="absolute inset-0 bg-white/70 flex items-center justify-center"><Loader2 className="w-5 h-5 animate-spin text-amber-500" /></div>}
                 {p.status === 'error' && <div className="absolute inset-0 bg-red-50/90 flex items-center justify-center p-2 text-center text-[11px] text-red-700">{p.error}</div>}
                 {p.status === 'done' && <span className="absolute top-1 left-1 bg-green-500 rounded-full p-0.5"><Check className="w-3 h-3 text-white" /></span>}
                 <button type="button" onClick={() => removePhoto(p.id)} disabled={busy} aria-label="Remove photo"
                   className="absolute top-1 right-1 bg-white/90 hover:bg-white rounded-full p-1 shadow"><Trash2 className="w-3.5 h-3.5 text-slate-600" /></button>
               </li>
-            ))}
+              )
+            })}
           </ul>
         )}
-        <p className="text-xs text-slate-500">The first 4 photos are analyzed by AI to write room-specific captions. Drag-reorder is coming — for now, add your best shots first.</p>
+        <p className="text-xs text-slate-500">Drag photos (or use the arrows) to reorder. The first 4 uploaded photos are analyzed by AI to write room-specific captions, so put your best exterior and living-space shots first.</p>
       </section>
 
       {/* Generate */}

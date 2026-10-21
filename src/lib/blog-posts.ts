@@ -329,7 +329,7 @@ export const BLOG_POSTS: BlogPost[] = [
           'Creating 6–8 week content calendars with different angles per week',
           'Generating email sequences (drip campaigns, Just Listed, open house)',
           'Writing print materials: brochures, postcards, yard sign copy',
-          'Creating photo captions based on what\'s in each MLS image',
+          'Creating photo captions based on what\'s in each listing photo',
           'Translating content into Spanish for bilingual markets',
           'Writing microsite copy from property specs',
         ],

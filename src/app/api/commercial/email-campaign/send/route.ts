@@ -1,131 +1,124 @@
 // src/app/api/commercial/email-campaign/send/route.ts
+/**
+ * Sends email #1 of an outreach sequence to a list of prospects.
+ *
+ * Compliance + abuse controls (all enforced server-side):
+ *  - every message goes through sendEmail({ kind: 'marketing' }), which REFUSES to send without a postal
+ *    address, skips suppressed (unsubscribed) recipients, and adds a working one-click unsubscribe link
+ *  - replies go to the sending agent, and the From name identifies them (no deceptive headers)
+ *  - strict validation, max 100 recipients per request, de-duplication, 10 batches/day/user
+ */
 import { auth } from '@clerk/nextjs/server'
 import { NextRequest, NextResponse } from 'next/server'
-import { Resend } from 'resend'
+import { z } from 'zod'
 import { db } from '@/lib/db'
-import { siteReports, propertyGrades } from '@/lib/db/schema'
+import { siteReports } from '@/lib/db/schema'
 import { eq, and } from 'drizzle-orm'
 import { getUserWithDetails } from '@/lib/user-service'
 import { canAccess } from '@/lib/plans'
 import type { PlanTier } from '@/lib/plans'
+import { ApiError, handleApiError, readJson } from '@/lib/api-utils'
+import { rateLimitEmailSend, rateLimitHeaders } from '@/lib/ratelimit'
+import { sendEmail, postalAddress, oneLine } from '@/lib/email'
+import { normalizeEmail } from '@/lib/unsubscribe'
+import { assertAdult } from '@/lib/age'
 
-// Resend client is created per-request (inside POST) so a missing key can't crash the build.
-
-interface Prospect {
-  email: string
-  name?: string
-}
-
-interface EmailDraft {
-  subject: string
-  body: string
-  sendDay: number
-}
+const BodySchema = z.object({
+  reportId: z.string().uuid(),
+  prospects: z.array(z.object({
+    email: z.string().trim().email().max(254),
+    name: z.string().transform(s => oneLine(s, 100)).optional(),
+  })).min(1).max(100),
+  sequence: z.array(z.object({
+    subject: z.string().min(1).max(200),
+    body: z.string().min(1).max(8000),
+    sendDay: z.number().int().min(0).max(365),
+  })).min(1).max(10),
+})
 
 export async function POST(req: NextRequest) {
-  if (!process.env.RESEND_API_KEY) {
-    console.error('[email-campaign/send] RESEND_API_KEY not configured')
-    return NextResponse.json({ error: 'Email sending is not available right now.' }, { status: 503 })
-  }
-  const resend = new Resend(process.env.RESEND_API_KEY)
-
   try {
     const { userId } = await auth()
-    if (!userId) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
+    if (!userId) throw new ApiError(401, 'Unauthorized')
+
+    // Refuse early (before any work) if we cannot send compliant mail.
+    if (!process.env.RESEND_API_KEY || !postalAddress() || !process.env.UNSUBSCRIBE_SECRET) {
+      console.error('[email-campaign/send] missing RESEND_API_KEY / MAIL_FOOTER_ADDRESS / UNSUBSCRIBE_SECRET')
+      throw new ApiError(503, 'Email sending is not available right now.')
+    }
+
+    const rl = await rateLimitEmailSend(userId)
+    if (!rl.success) throw new ApiError(429, 'Daily email send limit reached. Please try again tomorrow.', rateLimitHeaders(rl))
 
     const dbUser = await getUserWithDetails(userId)
-    if (!dbUser?.organization) {
-      return NextResponse.json({ error: 'Organization not found' }, { status: 404 })
-    }
+    if (!dbUser?.organization) throw new ApiError(404, 'Organization not found')
+    assertAdult(dbUser)
+
     const sub = dbUser.organization.subscriptions?.[0]
     const plan = ((sub?.plan ?? dbUser.organization.plan) ?? 'free') as PlanTier
-    if (!canAccess(plan, 'site_analysis')) {
-      return NextResponse.json({ error: 'Commercial plan required' }, { status: 403 })
-    }
+    if (!canAccess(plan, 'site_analysis')) throw new ApiError(403, 'Commercial plan required')
 
-    const { reportId, prospects, sequence } = await req.json() as {
-      reportId: string
-      prospects: Prospect[]
-      sequence: EmailDraft[]
-    }
-
-    if (!prospects?.length || !sequence?.length) {
-      return NextResponse.json({ error: 'prospects and sequence are required' }, { status: 400 })
-    }
+    const { reportId, prospects, sequence } = BodySchema.parse(await readJson(req, 256 * 1024))
 
     const [report] = await db
       .select()
       .from(siteReports)
       .where(and(eq(siteReports.id, reportId), eq(siteReports.userId, dbUser.id)))
       .limit(1)
+    if (!report) throw new ApiError(404, 'Report not found')
 
-    if (!report) return NextResponse.json({ error: 'Report not found' }, { status: 404 })
+    const senderName = [dbUser.firstName, dbUser.lastName].filter(Boolean).join(' ') || 'A ListOps user'
+    const firstEmail = sequence.find(e => e.sendDay === 0) ?? sequence[0]
 
-    // Get sender info from brand kit / user profile — fall back to a safe default
-    const fromEmail = process.env.RESEND_FROM_EMAIL ?? 'campaigns@listops.io'
-    const fromName = 'ListOps Commercial'
+    // de-duplicate recipients (case-insensitive)
+    const seen = new Set<string>()
+    const unique = prospects.filter(p => {
+      const k = normalizeEmail(p.email)
+      if (seen.has(k)) return false
+      seen.add(k)
+      return true
+    })
 
-    let totalScheduled = 0
-
-    // For each prospect, send email #1 immediately; schedule future emails via Resend batch
-    // Resend's free/basic plan doesn't have native scheduling, so we send email 1 now
-    // and record the rest for a separate scheduler (or use Resend scheduled sends if available).
-    for (const prospect of prospects) {
-      const firstEmail = sequence.find(e => e.sendDay === 0) ?? sequence[0]
-      const personalizedSubject = personalize(firstEmail.subject, prospect, report)
-      const personalizedBody = personalize(firstEmail.body, prospect, report)
-
-      await resend.emails.send({
-        from: `${fromName} <${fromEmail}>`,
+    let sent = 0, suppressed = 0, failed = 0
+    for (const prospect of unique) {
+      const result = await sendEmail({
+        kind: 'marketing',
         to: prospect.email,
-        subject: personalizedSubject,
-        text: `${personalizedBody}\n\n--\nTo stop receiving these emails, reply "unsubscribe".${process.env.MAIL_FOOTER_ADDRESS ? `\n${process.env.MAIL_FOOTER_ADDRESS}` : ''}`,
-        reply_to: process.env.SUPPORT_EMAIL ?? 'support@listops.io',
-        headers: {
-          'List-Unsubscribe': `<mailto:${process.env.SUPPORT_EMAIL ?? 'support@listops.io'}?subject=unsubscribe>`,
-          'List-Unsubscribe-Post': 'List-Unsubscribe=One-Click',
-        },
-        // html: buildHtmlEmail(personalizedBody, report), // optional: add HTML template
+        fromName: `${senderName} via ListOps`,
+        replyTo: dbUser.email, // replies go to the agent, not to ListOps
+        subject: personalize(firstEmail.subject, prospect, report),
+        text: personalize(firstEmail.body, prospect, report),
+        reason: `You are receiving this email because ${senderName} contacted you about a commercial property.`,
         tags: [
           { name: 'campaign_type', value: 'commercial_cre' },
           { name: 'report_id', value: reportId },
         ],
       })
-
-      totalScheduled++
-
-      // Note: For a production implementation, store the remaining sequence emails
-      // in a 'scheduled_emails' table and process via a cron job or Resend scheduled sends.
-      // Example DB insert for remaining emails:
-      // await db.insert(scheduledEmails).values(
-      //   sequence.slice(1).map(email => ({
-      //     id: nanoid(),
-      //     userId,
-      //     reportId,
-      //     prospectEmail: prospect.email,
-      //     prospectName: prospect.name ?? null,
-      //     subject: email.subject,
-      //     body: email.body,
-      //     scheduledFor: addDays(new Date(), email.sendDay),
-      //     status: 'pending',
-      //   }))
-      // )
+      if (result.ok) sent++
+      else if (result.reason === 'suppressed') suppressed++
+      else failed++
     }
 
     return NextResponse.json({
-      sent: totalScheduled,
+      sent,
+      skippedUnsubscribed: suppressed,
+      failed,
       sequenceLength: sequence.length,
-      message: `Email 1 sent to ${totalScheduled} prospect${totalScheduled !== 1 ? 's' : ''}. Remaining sequence emails will send on schedule.`,
+      // NOTE: follow-up emails (day 1+) are NOT scheduled automatically — only email #1 is sent here.
+      message:
+        `Email 1 sent to ${sent} prospect${sent !== 1 ? 's' : ''}` +
+        (suppressed ? `; ${suppressed} skipped because they previously unsubscribed` : '') +
+        (failed ? `; ${failed} failed to send` : '') +
+        `. Follow-up emails in the sequence are not sent automatically yet.`,
     })
   } catch (err) {
-    console.error('[email-campaign/send]', err)
-    return NextResponse.json({ error: 'Send failed' }, { status: 500 })
+    return handleApiError(err, { route: 'email-campaign/send' })
   }
 }
 
 function personalize(
   text: string,
-  prospect: Prospect,
+  prospect: { email: string; name?: string },
   report: Record<string, unknown>
 ): string {
   return text

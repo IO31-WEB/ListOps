@@ -2,6 +2,7 @@
 
 import { useState } from 'react'
 import Link from 'next/link'
+import { RenewalNotice } from '@/components/billing/renewal-notice'
 import { House, ArrowRight, Check, X, HelpCircle } from 'lucide-react'
 import { PLANS, ENTERPRISE_PLAN } from '@/lib/plans'
 import { formatCurrency } from '@/lib/utils'
@@ -13,7 +14,7 @@ const FEATURE_CATEGORIES = [
       { name: 'Campaigns per month',                          free: '3',     starter: '5',     pro: 'Unlimited', brokerage: 'Unlimited' },
       { name: 'Public-records address auto-fill',             free: true,    starter: true,    pro: true,        brokerage: true },
       { name: '10 headline variations',                       free: true,    starter: true,    pro: true,        brokerage: true },
-      { name: 'Full MLS description + bullet points',         free: true,    starter: true,    pro: true,        brokerage: true },
+      { name: 'Full MLS-ready description + bullet points',         free: true,    starter: true,    pro: true,        brokerage: true },
       { name: 'Neighborhood story + SEO meta',                free: true,    starter: true,    pro: true,        brokerage: true },
       { name: 'Tone variants (luxury / investor / FTB)',      free: true,    starter: true,    pro: true,        brokerage: true },
       { name: 'Spanish listing description',                  free: true,    starter: true,    pro: true,        brokerage: true },
@@ -64,7 +65,7 @@ const FEATURE_CATEGORIES = [
       { name: 'Admin controls',                               free: false,   starter: false,   pro: false,       brokerage: true },
       { name: 'Compliance & audit logs',                      free: false,   starter: false,   pro: false,       brokerage: true },
       { name: 'CSV/PDF export of campaigns',                  free: false,   starter: false,   pro: false,       brokerage: true },
-      { name: 'MLS board-wide integration',                   free: false,   starter: false,   pro: false,       brokerage: true },
+      { name: 'Board / association-wide deployment',                   free: false,   starter: false,   pro: false,       brokerage: true },
     ],
   },
   {
@@ -189,6 +190,16 @@ export default function PricingPage() {
                     >
                       {plan.cta}
                     </Link>
+                    {plan.id !== 'free' && (
+                      <RenewalNotice
+                        className="mt-3 text-center"
+                        dark={plan.highlighted}
+                        planName={plan.name}
+                        price={annual ? (plan.yearlyPrice ?? 0) : (plan.monthlyPrice ?? 0)}
+                        interval={annual ? 'year' : 'month'}
+                        trialDays={plan.id === 'brokerage' ? 14 : undefined}
+                      />
+                    )}
                   </div>
                 </div>
               )
@@ -235,7 +246,7 @@ export default function PricingPage() {
             <div className="relative">
               <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-8">
                 <div className="max-w-xl">
-                  <span className="inline-block text-xs font-bold text-amber-400 bg-amber-400/10 px-3 py-1 rounded-full mb-4">Enterprise & MLS Partnerships</span>
+                  <span className="inline-block text-xs font-bold text-amber-400 bg-amber-400/10 px-3 py-1 rounded-full mb-4">Enterprise & Association Partnerships</span>
                   <h3 className="font-display text-3xl font-semibold mb-3">{ENTERPRISE_PLAN.name}</h3>
                   <p className="text-slate-400 mb-6">{ENTERPRISE_PLAN.tagline}</p>
                   <ul className="grid sm:grid-cols-2 gap-2">
@@ -269,7 +280,7 @@ export default function PricingPage() {
                 },
                 {
                   q: 'What exactly does each campaign include?',
-                  a: 'Every campaign generates: 10 headline variations, a full MLS description, neighborhood story, SEO meta, Spanish description, 6-week Facebook calendar, 6-week Instagram calendar, Just Listed and Still Available emails, plus print materials (yard sign copy, postcard, brochure). Starter adds email drip sequences, AI photo captions, and microsite copy. Pro adds video/reel scripts, virtual tour narration, TikTok, LinkedIn, X, and Stories content.',
+                  a: 'Every campaign generates: 10 headline variations, a full MLS-ready description, neighborhood story, SEO meta, Spanish description, 6-week Facebook calendar, 6-week Instagram calendar, Just Listed and Still Available emails, plus print materials (yard sign copy, postcard, brochure). Starter adds email drip sequences, AI photo captions, and microsite copy. Pro adds video/reel scripts, virtual tour narration, TikTok, LinkedIn, X, and Stories content.',
                 },
                 {
                   q: 'Can I cancel anytime?',

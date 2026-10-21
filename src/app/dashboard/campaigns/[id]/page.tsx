@@ -1,5 +1,6 @@
 'use client'
 
+import { getBillingInfo } from '@/lib/billing-client'
 import { useState, useEffect, useCallback } from 'react'
 import { useParams, useRouter } from 'next/navigation'
 import Link from 'next/link'
@@ -201,7 +202,7 @@ function ListingCopySection({ data, onRegenerate, regenerating }: { data: NonNul
       </div>
       <div className="p-5 border-b border-slate-100">
         <div className="flex items-center justify-between mb-3">
-          <span className="text-xs font-bold text-slate-500 uppercase tracking-wider">Full MLS Description</span>
+          <span className="text-xs font-bold text-slate-500 uppercase tracking-wider">Full MLS-Ready Description</span>
           <CopyButton text={data.fullDescription} />
         </div>
         <div className="bg-slate-50 rounded-xl p-4 text-sm text-slate-700 leading-relaxed whitespace-pre-wrap border border-slate-100 font-serif">{data.fullDescription}</div>
@@ -667,7 +668,7 @@ export default function CampaignDetailPage() {
 
   useEffect(() => {
     fetchCampaign()
-    fetch('/api/billing/info').then(r => r.ok ? r.json() : null).then(d => { if (d?.planTier) setPlanTier(d.planTier) }).catch(() => {})
+    getBillingInfo().then(d => { if (d?.planTier) setPlanTier(d.planTier) }).catch(() => {})
   }, [id])
 
   const fetchCampaign = async () => {
@@ -787,7 +788,7 @@ export default function CampaignDetailPage() {
         </div>
         {photos.length > 0
           ? <div className="p-4 grid grid-cols-2 sm:grid-cols-3 gap-3">{photos.slice(0,6).map((photo,i) => <a key={i} href={photo} target="_blank" rel="noopener noreferrer" className="aspect-video rounded-xl overflow-hidden bg-slate-100 block hover:opacity-90 transition-opacity"><img src={photo} alt={`Photo ${i+1}`} className="w-full h-full object-cover" /></a>)}</div>
-          : <div className="p-8 text-center"><div className="text-4xl mb-3">🏡</div><p className="text-sm font-semibold text-slate-500 mb-1">No photos available</p><p className="text-xs text-slate-400">MLS photos will appear here for real listings.</p></div>
+          : <div className="p-8 text-center"><div className="text-4xl mb-3">🏡</div><p className="text-sm font-semibold text-slate-500 mb-1">No photos available</p><p className="text-xs text-slate-400">Photos you upload with your listing will appear here.</p></div>
         }
       </div>
 

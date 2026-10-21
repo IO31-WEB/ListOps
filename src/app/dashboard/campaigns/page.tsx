@@ -237,6 +237,7 @@ export default function CampaignsPage() {
                     {/* Action */}
                     <div className="flex justify-end">
                       <Link
+                        prefetch={false}
                         href={`/dashboard/campaigns/${campaign.id}`}
                         className="inline-flex items-center gap-1.5 text-xs font-medium text-slate-600 hover:text-slate-900 bg-slate-100 hover:bg-slate-200 px-3 py-1.5 rounded-lg transition-all"
                       >

@@ -4,8 +4,9 @@
  */
 import { and, desc, eq } from 'drizzle-orm'
 import { db } from '@/lib/db'
-import { campaigns, listings } from '@/lib/db/schema'
-import { getR2Url } from '@/lib/r2'
+import { campaigns, listings, listingUploads } from '@/lib/db/schema'
+import { getR2Url, deleteFromR2 } from '@/lib/r2'
+import { inArray } from 'drizzle-orm'
 import { assertOwnPhotoKeys, type ListingInput } from '@/lib/listing-schemas'
 
 function toRow(clerkId: string, input: ListingInput) {
@@ -39,12 +40,26 @@ export async function createListing(user: { id: string; orgId: string | null }, 
   return row
 }
 
+/** Delete R2 objects + tracking rows (best effort; the nightly cleanup job is the safety net). */
+async function purgePhotos(keys: string[]) {
+  if (!keys.length) return
+  const results = await Promise.all(keys.map(async k => [k, await deleteFromR2(k)] as const))
+  const gone = results.filter(([, ok]) => ok).map(([k]) => k)
+  if (gone.length) await db.delete(listingUploads).where(inArray(listingUploads.key, gone))
+}
+
 export async function updateListing(userDbId: string, clerkId: string, id: string, input: ListingInput) {
+  const before = await getOwnListing(userDbId, id)
+  if (!before) return null
   const [row] = await db
     .update(listings)
     .set(toRow(clerkId, input))
     .where(and(eq(listings.id, id), eq(listings.agentId, userDbId)))
     .returning()
+  if (row) {
+    const keep = new Set(row.photoKeys ?? [])
+    await purgePhotos((before.photoKeys ?? []).filter(k => !keep.has(k))) // photos the agent removed
+  }
   return row ?? null
 }
 
@@ -62,10 +77,12 @@ export async function deleteOwnListing(userDbId: string, id: string) {
   const owned = await getOwnListing(userDbId, id)
   if (!owned) return false
   await db.update(campaigns).set({ listingId: null }).where(eq(campaigns.listingId, id))
+  const photoKeys = owned.photoKeys ?? []
   const rows = await db
     .delete(listings)
     .where(and(eq(listings.id, id), eq(listings.agentId, userDbId)))
     .returning({ id: listings.id })
+  if (rows.length > 0) await purgePhotos(photoKeys)
   return rows.length > 0
 }
 

@@ -50,6 +50,10 @@ async function migrate() {
       "referred_by" uuid,
       "onboarding_complete" boolean NOT NULL DEFAULT false,
       "onboarding_step" integer NOT NULL DEFAULT 0,
+      "age_confirmed_at" timestamp,
+      "age_blocked_at" timestamp,
+      "terms_accepted_at" timestamp,
+      "terms_version" text,
       "created_at" timestamp NOT NULL DEFAULT now(),
       "updated_at" timestamp NOT NULL DEFAULT now()
     )
@@ -135,6 +139,21 @@ async function migrate() {
       "expires_at" timestamp,
       "created_at" timestamp NOT NULL DEFAULT now(),
       "updated_at" timestamp NOT NULL DEFAULT now()
+    )
+  `
+  await sql`
+    CREATE TABLE IF NOT EXISTS "email_suppressions" (
+      "email" text PRIMARY KEY,
+      "reason" text NOT NULL DEFAULT 'unsubscribe',
+      "created_at" timestamp NOT NULL DEFAULT now()
+    )
+  `
+  await sql`
+    CREATE TABLE IF NOT EXISTS "listing_uploads" (
+      "key" text PRIMARY KEY,
+      "user_id" uuid NOT NULL REFERENCES "users"("id") ON DELETE CASCADE,
+      "bytes" integer NOT NULL DEFAULT 0,
+      "created_at" timestamp NOT NULL DEFAULT now()
     )
   `
   await sql`

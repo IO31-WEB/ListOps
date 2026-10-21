@@ -5,6 +5,7 @@ import { rateLimitListingWrite, rateLimitHeaders } from '@/lib/ratelimit'
 import { ListingInputSchema } from '@/lib/listing-schemas'
 import { getUserWithDetails } from '@/lib/user-service'
 import { createListing, listOwnListings } from '@/lib/listing-service'
+import { assertAdult } from '@/lib/age'
 
 export async function GET() {
   try {
@@ -29,6 +30,7 @@ export async function POST(request: NextRequest) {
     const input = ListingInputSchema.parse(await readJson(request))
     const user = await getUserWithDetails(userId)
     if (!user) throw new ApiError(404, 'Account not found')
+    assertAdult(user)
 
     const row = await createListing(user, userId, input)
     return NextResponse.json({ id: row.id }, { status: 201 })

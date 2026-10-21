@@ -100,6 +100,12 @@ export const users = pgTable('users', {
   onboardingComplete: boolean('onboarding_complete').notNull().default(false),
   onboardingStep: integer('onboarding_step').notNull().default(0),
 
+  // Legal gates (server-enforced; see lib/age.ts)
+  ageConfirmedAt: timestamp('age_confirmed_at'),   // user attested they are 18+
+  ageBlockedAt: timestamp('age_blocked_at'),       // user said they are under 18 -> account blocked
+  termsAcceptedAt: timestamp('terms_accepted_at'),
+  termsVersion: text('terms_version'),
+
   createdAt: timestamp('created_at').notNull().defaultNow(),
   updatedAt: timestamp('updated_at').notNull().defaultNow(),
 }, (t) => ({
@@ -470,4 +476,24 @@ export const siteReportRelations = relations(siteReports, ({ one, many }) => ({
 export const propertyGradeRelations = relations(propertyGrades, ({ one }) => ({
   siteReport: one(siteReports, { fields: [propertyGrades.siteReportId], references: [siteReports.id] }),
   organization: one(organizations, { fields: [propertyGrades.orgId], references: [organizations.id] }),
+}))
+
+
+// ── Email suppression list (CAN-SPAM unsubscribes, bounces, complaints) ─────────
+// Every marketing/outreach send checks this table first. Rows are never deleted by the app.
+export const emailSuppressions = pgTable('email_suppressions', {
+  email: text('email').primaryKey(), // always lower-cased
+  reason: text('reason').notNull().default('unsubscribe'), // unsubscribe | bounce | complaint | manual
+  createdAt: timestamp('created_at').notNull().defaultNow(),
+})
+
+// ── Tracks every uploaded listing photo so unattached ones can be cleaned up ────
+export const listingUploads = pgTable('listing_uploads', {
+  key: text('key').primaryKey(), // R2 object key
+  userId: uuid('user_id').notNull().references(() => users.id, { onDelete: 'cascade' }),
+  bytes: integer('bytes').notNull().default(0),
+  createdAt: timestamp('created_at').notNull().defaultNow(),
+}, (t) => ({
+  createdIdx: index('listing_uploads_created_idx').on(t.createdAt),
+  userIdx: index('listing_uploads_user_idx').on(t.userId),
 }))

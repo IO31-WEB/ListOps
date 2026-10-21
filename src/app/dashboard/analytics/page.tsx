@@ -102,7 +102,7 @@ export default async function AnalyticsPage() {
           <div className="p-8 sm:p-12 text-center relative">
             <div className="absolute inset-0 bg-gradient-to-b from-transparent to-white pointer-events-none z-10" />
             <div className="space-y-3 opacity-30 pointer-events-none mb-8">
-              {['Agent Performance', 'Campaign ROI', 'Content Engagement', 'MLS Listing Performance'].map(item => (
+              {['Agent Performance', 'Campaign ROI', 'Content Engagement', 'Listing Performance'].map(item => (
                 <div key={item} className="h-12 bg-slate-100 rounded-xl animate-pulse" />
               ))}
             </div>
