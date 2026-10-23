@@ -5,6 +5,7 @@
  * Called after cancellation, upgrade, or any billing change.
  */
 
+import { rateLimitBilling } from '@/lib/ratelimit'
 import { NextResponse } from 'next/server'
 import { auth, clerkClient } from '@clerk/nextjs/server'
 import { stripe } from '@/lib/stripe'
@@ -88,6 +89,7 @@ async function syncFromStripe(userId: string): Promise<PlanTier> {
 export async function GET() {
   const { userId } = await auth()
   if (!userId) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
+  if (!(await rateLimitBilling(userId)).success) return NextResponse.json({ error: 'Too many requests' }, { status: 429 })
   const planTier = await syncFromStripe(userId)
   return NextResponse.json({ planTier, synced: true, message: `Synced from Stripe: ${planTier}` })
 }
@@ -95,6 +97,7 @@ export async function GET() {
 export async function POST() {
   const { userId } = await auth()
   if (!userId) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
+  if (!(await rateLimitBilling(userId)).success) return NextResponse.json({ error: 'Too many requests' }, { status: 429 })
   const planTier = await syncFromStripe(userId)
   return NextResponse.json({ planTier, synced: true })
 }

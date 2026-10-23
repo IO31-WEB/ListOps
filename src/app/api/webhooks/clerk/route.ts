@@ -9,7 +9,8 @@ import { headers } from 'next/headers'
 import { getOrCreateUser } from '@/lib/user-service'
 import { db } from '@/lib/db'
 import { users } from '@/lib/db/schema'
-import { eq } from 'drizzle-orm'
+import { and, eq, isNull } from 'drizzle-orm'
+import { logAudit } from '@/lib/audit'
 
 export const runtime = 'nodejs'
 
@@ -115,7 +116,15 @@ export async function POST(request: NextRequest) {
       }
 
       case 'user.deleted': {
-        console.log(`🗑️ User deleted: ${event.data.id}`)
+        // Soft delete: block access now, purge content after 30 days (see /api/cron/retention).
+        // Previously this did nothing, so a deleted Clerk account's data stayed in our database forever.
+        const clerkId = event.data.id as string | undefined
+        if (clerkId) {
+          const closed = await db.update(users).set({ deletedAt: new Date() })
+            .where(and(eq(users.clerkId, clerkId), isNull(users.deletedAt)))
+            .returning({ id: users.id })
+          if (closed[0]) await logAudit({ action: 'user.deleted', actorClerkId: clerkId, targetUserId: closed[0].id })
+        }
         break
       }
     }

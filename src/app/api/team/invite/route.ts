@@ -9,10 +9,12 @@
  * 3. Resend imported at top-level — no more dynamic require() inside try/catch
  */
 
+import { z } from 'zod'
 import { NextRequest, NextResponse } from 'next/server'
 import { auth } from '@clerk/nextjs/server'
 import { sendEmail, escapeHtml, oneLine } from '@/lib/email'
 import { rateLimitEmailSend, rateLimitHeaders } from '@/lib/ratelimit'
+import { logAudit } from '@/lib/audit'
 import { db } from '@/lib/db'
 import { referrals } from '@/lib/db/schema'
 import { getUserWithDetails, getOrgSubscription, getTeamMembers } from '@/lib/user-service'
@@ -25,6 +27,11 @@ import { PLANS } from '@/lib/plans'
 const VALID_INVITE_ROLES = ['admin', 'agent', 'viewer'] as const
 type InviteRole = typeof VALID_INVITE_ROLES[number]
 
+const InviteBody = z.object({
+  email: z.string().trim().toLowerCase().email().max(254),
+  role: z.string().default('agent').refine(r => (VALID_INVITE_ROLES as readonly string[]).includes(r)),
+})
+
 export async function POST(req: NextRequest) {
   const { userId } = await auth()
   if (!userId) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
@@ -34,20 +41,13 @@ export async function POST(req: NextRequest) {
     const rl = await rateLimitEmailSend(userId)
     if (!rl.success) return NextResponse.json({ error: 'Daily invite limit reached. Please try again tomorrow.' }, { status: 429, headers: rateLimitHeaders(rl) })
 
-    const body = await req.json()
-    const { email, role = 'agent' } = body
-
-    // Validate email
-    if (!email || typeof email !== 'string' || !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email) || email.length > 254) {
-      return NextResponse.json({ error: 'Valid email required' }, { status: 400 })
+    // Server-side validation. The role allow-list stops privilege escalation (e.g. someone posting role: 'owner').
+    const parsed = InviteBody.safeParse(await req.json().catch(() => null))
+    if (!parsed.success) {
+      const roleBad = parsed.error.issues.some(i => i.path[0] === 'role')
+      return NextResponse.json({ error: roleBad ? `Invalid role. Must be one of: ${VALID_INVITE_ROLES.join(', ')}` : 'Valid email required' }, { status: 400 })
     }
-
-    // FIX: Validate role against allowlist — prevents passing 'owner' to escalate privileges
-    if (!VALID_INVITE_ROLES.includes(role as InviteRole)) {
-      return NextResponse.json({
-        error: `Invalid role. Must be one of: ${VALID_INVITE_ROLES.join(', ')}`,
-      }, { status: 400 })
-    }
+    const { email, role } = parsed.data
 
     const user = await getUserWithDetails(userId)
     if (!user) return NextResponse.json({ error: 'User not found' }, { status: 404 })
@@ -116,6 +116,7 @@ export async function POST(req: NextRequest) {
         tags: [{ name: 'kind', value: 'team_invite' }],
       })
       if (!result.ok) console.error('[invite] email not sent:', result.reason)
+      await logAudit({ action: 'team.invite_sent', actorClerkId: userId, targetUserId: user.id, request: req, metadata: { inviteeDomain: email.split('@')[1], role, delivered: result.ok } })
     } else {
       console.log(`[invite] No RESEND_API_KEY — invite recorded but email not sent to ${email}`)
       console.log(`[invite] Invite URL: ${inviteUrl}`)

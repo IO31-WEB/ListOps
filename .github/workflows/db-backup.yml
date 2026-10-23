@@ -1,0 +1,30 @@
+# Daily logical backup of the production database to a private R2 bucket.
+# One-time setup (GitHub repo -> Settings -> Secrets and variables -> Actions): add the five secrets used below.
+name: Database backup
+on:
+  schedule: [{ cron: '23 6 * * *' }]   # daily, 06:23 UTC
+  workflow_dispatch: {}                # lets you run it manually to test
+permissions: { contents: read }
+jobs:
+  backup:
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    env:
+      PG_VERSION: '17'   # must be >= your Neon Postgres major version (Neon console -> project -> Postgres version)
+    steps:
+      - uses: actions/checkout@v4
+      - name: Install matching pg_dump
+        run: |
+          sudo apt-get update -y
+          sudo apt-get install -y postgresql-common
+          sudo /usr/share/postgresql-common/pgdg/apt.postgresql.org.sh -y
+          sudo apt-get install -y "postgresql-client-${PG_VERSION}" awscli
+      - name: Back up
+        env:
+          DATABASE_URL_UNPOOLED: ${{ secrets.DATABASE_URL_UNPOOLED }}
+          BACKUP_BUCKET: ${{ secrets.BACKUP_BUCKET }}
+          R2_ENDPOINT: ${{ secrets.R2_ENDPOINT }}
+          AWS_ACCESS_KEY_ID: ${{ secrets.BACKUP_R2_ACCESS_KEY_ID }}
+          AWS_SECRET_ACCESS_KEY: ${{ secrets.BACKUP_R2_SECRET_ACCESS_KEY }}
+          AWS_DEFAULT_REGION: auto
+        run: ./scripts/backup-db.sh

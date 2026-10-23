@@ -65,7 +65,7 @@ export default async function TeamPage() {
             <div className="flex-1">
               <h3 className="font-semibold text-slate-900 mb-1">Team features require Pro+</h3>
               <p className="text-sm text-slate-600 mb-4 leading-relaxed">
-                Pro plan includes 3 agent seats. Brokerage plan includes 25 seats with admin dashboard, 
+                Pro plan includes 3 agent seats. Brokerage plan includes 25 seats with agent performance analytics, 
                 white-label outputs, and compliance tools.
               </p>
               <div className="flex flex-wrap gap-3">
@@ -138,11 +138,17 @@ export default async function TeamPage() {
             <Shield className="w-4 h-4 text-amber-400" />
             <span className="text-amber-400 text-xs font-semibold uppercase tracking-widest">Brokerage Features Active</span>
           </div>
+          <div className="flex flex-wrap gap-x-6 gap-y-2 mb-4 text-sm">
+            <Link href="/dashboard/analytics" className="text-amber-300 underline">Agent performance →</Link>
+            <Link href="/dashboard/team/activity" className="text-amber-300 underline">Team activity log →</Link>
+            <a href="/api/team/export" className="text-amber-300 underline">Export all campaigns (CSV)</a>
+            <span className="text-xs text-slate-400">Owners and admins only</span>
+          </div>
           <div className="grid sm:grid-cols-3 gap-4">
             {[
-              { icon: '🎨', title: 'White-Label', desc: 'Your brand on all outputs — no ListOps branding shown to agents or clients.' },
-              { icon: '📊', title: 'Admin Dashboard', desc: 'See campaign activity across all agents in your workspace.' },
-              { icon: '📋', title: 'Audit Logs', desc: 'Full compliance trail of all actions for all agents.' },
+              { icon: '🎨', title: 'White-Label', desc: 'Your brokerage name, logo and colors on all generated content and flyers (set up in Brand Kit).' },
+              { icon: '📊', title: 'Agent Performance', desc: 'Campaigns generated, microsite views and last activity for every agent, plus CSV export of all team campaigns.' },
+              { icon: '📋', title: 'Team Activity Log', desc: 'A record of sensitive actions: invitations, listing deletions, outreach sends and billing events.' },
             ].map(f => (
               <div key={f.title} className="bg-slate-800 rounded-xl p-4">
                 <div className="text-xl mb-2">{f.icon}</div>

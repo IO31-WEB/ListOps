@@ -501,7 +501,7 @@ function PrintOfflineSection({ print, campaignId, onRegenerate, regenerating }: 
     { label: 'Yard Sign Rider', icon: '🪧', note: 'Standard 6" rider', content: print.yardSignRider },
     { label: 'Postcard Headline', icon: '📮', content: print.postcardHeadline },
     { label: 'Postcard Body', icon: '📮', note: 'Door-knocker back copy', content: print.postcardBody },
-    { label: 'Open House Info Packet', icon: '🏡', note: 'Welcome paragraph', content: print.openHouseSignIn },
+    { label: 'Open House Welcome Paragraph', icon: '🏡', note: 'Welcome paragraph', content: print.openHouseSignIn },
     { label: 'Brochure Copy', icon: '📄', content: print.brochureCopy },
     { label: 'Magazine Ad', icon: '📰', note: 'Premium format', content: print.magazineAd },
   ]
@@ -578,7 +578,7 @@ function VideoSection({ reelScripts, virtualTourScripts, onRegenerate, regenerat
   )
 }
 
-// ── Section 6: Microsite Copy Editor ──────────────────────────
+// ── Section 6: Microsite Copy ──────────────────────────
 
 function MicrositeCopySection({ micrositeCopy, micrositeSlug, micrositePublished, campaignId, onToggle, publishing, onRegenerate, regenerating }: {
   micrositeCopy: NonNullable<Campaign['micrositeCopy']>; micrositeSlug?: string; micrositePublished?: boolean
@@ -597,7 +597,7 @@ function MicrositeCopySection({ micrositeCopy, micrositeSlug, micrositePublished
     { label: 'Photo Caption Template', content: micrositeCopy.photoCaptionTemplate },
   ]
   return (
-    <Section title="Microsite Copy Editor" badge="Live Page" icon={Globe2} accent="blue" onRegenerate={onRegenerate} regenerating={regenerating}>
+    <Section title="Microsite Copy" badge="Live Page" icon={Globe2} accent="blue" onRegenerate={onRegenerate} regenerating={regenerating}>
       <div className="p-4 border-b border-slate-100 flex items-center justify-between gap-4 bg-blue-50 flex-wrap">
         <div className="flex items-center gap-3">
           <div className={`w-2 h-2 rounded-full ${micrositePublished ? 'bg-green-500' : 'bg-slate-400'}`} />
@@ -688,7 +688,7 @@ export default function CampaignDetailPage() {
       listingCopy: 'Listing Copy',
       social: 'Social Calendar',
       email: 'Email Campaigns',
-      emailDrip: 'Email Drip',
+      emailDrip: 'Email Templates',
       print: 'Print Materials',
       video: 'Video & Reel Scripts',
       microsite: 'Microsite Copy',
@@ -803,7 +803,7 @@ export default function CampaignDetailPage() {
       {/* 3. Email Campaigns */}
       <EmailCampaignsSection emailJustListed={campaign.emailJustListed} emailStillAvailable={campaign.emailStillAvailable} drip={isStarter ? campaign.emailDrip : undefined} onRegenerate={() => handleRegenerate('email')} regenerating={regenerating === 'email'} onRegenerateDrip={isStarter ? () => handleRegenerate('emailDrip') : undefined} regeneratingDrip={regenerating === 'emailDrip'} />
       {!isStarter && campaign.emailJustListed && (
-        <LockedSection title="Email Drip Sequences" icon={Mail} plan="Starter"
+        <LockedSection title="Email Templates (8)" icon={Mail} plan="Starter"
           description="Buyer Day 1–30 drip, seller updates, open house invites, post-showing feedback, and market report newsletters." />
       )}
 
@@ -819,11 +819,11 @@ export default function CampaignDetailPage() {
             description="6 weeks of social reel scripts plus Matterport walkthrough narration, 30-sec highlight reel, drone voice-over, and timed walkthrough scripts." />
       }
 
-      {/* 6. Microsite Copy Editor */}
+      {/* 6. Microsite Copy */}
       {isStarter && campaign.micrositeCopy
         ? <MicrositeCopySection micrositeCopy={campaign.micrositeCopy} micrositeSlug={campaign.micrositeSlug} micrositePublished={campaign.micrositePublished} campaignId={campaign.id} onToggle={toggleMicrosite} publishing={publishing} onRegenerate={() => handleRegenerate('microsite')} regenerating={regenerating === 'microsite'} />
         : !isStarter
-          ? <LockedSection title="Microsite Copy Editor" icon={Globe2} plan="Starter"
+          ? <LockedSection title="Microsite Copy" icon={Globe2} plan="Starter"
               description="Hero headline, about section, neighborhood story, and CTA copy for your listing microsite — edit and publish in one click." />
           : null
       }

@@ -23,9 +23,8 @@ const FEATURE_CATEGORIES = [
       { name: 'Just Listed + Still Available emails',         free: true,    starter: true,    pro: true,        brokerage: true },
       { name: 'Print materials (yard sign, postcard, brochure, magazine ad)', free: true, starter: true, pro: true, brokerage: true },
       { name: 'Print-ready listing flyer (PDF)',              free: true,    starter: true,    pro: true,        brokerage: true },
-      { name: 'Email drip (8 templates: buyer + seller)',     free: false,   starter: true,    pro: true,        brokerage: true },
+      { name: 'Email templates (8: buyer follow-ups, seller update & more)',     free: false,   starter: true,    pro: true,        brokerage: true },
       { name: 'AI photo captions (from your uploaded photos)',            free: false,   starter: true,    pro: true,        brokerage: true },
-      { name: 'Microsite copy editor',                        free: false,   starter: true,    pro: true,        brokerage: true },
       { name: '6-week video & reel scripts',                  free: false,   starter: false,   pro: true,        brokerage: true },
       { name: 'Virtual tour narration (4 script types)',      free: false,   starter: false,   pro: true,        brokerage: true },
       { name: '6-week TikTok scripts',                        free: false,   starter: false,   pro: true,        brokerage: true },
@@ -41,10 +40,7 @@ const FEATURE_CATEGORIES = [
       { name: 'Brand kit (logo, colors, headshot)',           free: false,   starter: true,    pro: true,        brokerage: true },
       { name: 'AI writing persona (tone selector)',           free: false,   starter: true,    pro: true,        brokerage: true },
       { name: 'Custom agent tagline',                         free: false,   starter: true,    pro: true,        brokerage: true },
-      { name: 'Remove ListOps branding',                      free: false,   starter: true,    pro: true,        brokerage: true },
-      { name: 'Flyer templates',                              free: '1',     starter: '3',     pro: '15+',       brokerage: '15+ Custom' },
-      { name: 'White-label all outputs',                      free: false,   starter: false,   pro: false,       brokerage: true },
-      { name: 'Custom app name & logo',                       free: false,   starter: false,   pro: false,       brokerage: true },
+      { name: 'Flyer templates',                              free: '1',     starter: '3',     pro: '3 + 5 color schemes', brokerage: '3 + 5 color schemes' },
       { name: 'Brokerage brand override on all content',      free: false,   starter: false,   pro: false,       brokerage: true },
     ],
   },
@@ -62,17 +58,16 @@ const FEATURE_CATEGORIES = [
     features: [
       { name: 'Team seats',                                   free: '1',     starter: '1',     pro: '3',         brokerage: '25' },
       { name: 'Agent performance dashboard',                  free: false,   starter: false,   pro: false,       brokerage: true },
-      { name: 'Admin controls',                               free: false,   starter: false,   pro: false,       brokerage: true },
-      { name: 'Compliance & audit logs',                      free: false,   starter: false,   pro: false,       brokerage: true },
-      { name: 'CSV/PDF export of campaigns',                  free: false,   starter: false,   pro: false,       brokerage: true },
+      { name: 'Team management (invites & roles)',                               free: false,   starter: false,   pro: false,       brokerage: true },
+      { name: 'Team activity log',                      free: false,   starter: false,   pro: false,       brokerage: true },
+      { name: 'CSV export of all team campaigns',                  free: false,   starter: false,   pro: false,       brokerage: true },
       { name: 'Board / association-wide deployment',                   free: false,   starter: false,   pro: false,       brokerage: true },
     ],
   },
   {
     name: 'Performance & Support',
     features: [
-      { name: 'Campaign history',                             free: false,   starter: '30 days', pro: 'Unlimited', brokerage: 'Unlimited' },
-      { name: 'Priority AI generation (<30s)',                free: false,   starter: false,   pro: true,        brokerage: true },
+      { name: 'Campaign history',                             free: true,    starter: true,    pro: true,    brokerage: true },
       { name: 'Analytics dashboard',                          free: false,   starter: false,   pro: false,       brokerage: true },
       { name: 'Email support',                                free: true,    starter: true,    pro: true,        brokerage: true },
       { name: 'Priority support',                             free: false,   starter: false,   pro: true,        brokerage: true },
@@ -280,7 +275,7 @@ export default function PricingPage() {
                 },
                 {
                   q: 'What exactly does each campaign include?',
-                  a: 'Every campaign generates: 10 headline variations, a full MLS-ready description, neighborhood story, SEO meta, Spanish description, 6-week Facebook calendar, 6-week Instagram calendar, Just Listed and Still Available emails, plus print materials (yard sign copy, postcard, brochure). Starter adds email drip sequences, AI photo captions, and microsite copy. Pro adds video/reel scripts, virtual tour narration, TikTok, LinkedIn, X, and Stories content.',
+                  a: 'Every campaign generates: 10 headline variations, a full MLS-ready description, neighborhood story, SEO meta, Spanish description, 6-week Facebook calendar, 6-week Instagram calendar, Just Listed and Still Available emails, plus print materials (yard sign copy, postcard, brochure). Starter adds 8 ready-to-send email templates, AI photo captions, and microsite copy. Pro adds video/reel scripts, virtual tour narration, TikTok, LinkedIn, X, and Stories content.',
                 },
                 {
                   q: 'Can I cancel anytime?',
@@ -292,7 +287,7 @@ export default function PricingPage() {
                 },
                 {
                   q: 'Can multiple agents share one account?',
-                  a: 'Pro includes 3 seats. Brokerage supports up to 25 agents under one account with an admin dashboard and per-agent analytics. Enterprise is unlimited.',
+                  a: 'Pro includes 3 seats. Brokerage supports up to 25 agents under one account with team management, per-agent analytics, a team activity log and CSV export. Enterprise is unlimited.',
                 },
                 {
                   q: 'Is my listing data secure?',

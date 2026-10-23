@@ -426,6 +426,8 @@ function EmailCampaignPanel({ reports }: { reports: ReportListItem[] }) {
   const [generating, setGenerating] = useState(false)
   const [emailSequence, setEmailSequence] = useState<Array<{ subject: string; body: string; sendDay: number }> | null>(null)
   const [sending, setSending] = useState(false)
+  const [followUps, setFollowUps] = useState<{ reportId: string; scheduled: number } | null>(null)
+  const [cancelling, setCancelling] = useState(false)
   const csvRef = useRef<HTMLInputElement>(null)
 
   function addProspect() {
@@ -490,12 +492,25 @@ function EmailCampaignPanel({ reports }: { reports: ReportListItem[] }) {
       })
       const data = await res.json()
       if (!res.ok) { toast.error(data.error ?? 'Send failed'); return }
-      toast.success(`Campaign launched to ${prospects.length} prospect${prospects.length !== 1 ? 's' : ''}!`)
+      toast.success(data.message ?? `Email 1 sent to ${data.sent ?? 0} prospect(s).`, { duration: 8000 })
+      setFollowUps(data.scheduledFollowUps > 0 && selectedReport ? { reportId: selectedReport, scheduled: data.scheduledFollowUps } : null)
     } catch {
       toast.error('Send failed')
     } finally {
       setSending(false)
     }
+  }
+
+  const cancelFollowUps = async () => {
+    if (!followUps) return
+    setCancelling(true)
+    try {
+      const res = await fetch(`/api/commercial/email-campaign/send?reportId=${followUps.reportId}`, { method: 'DELETE' })
+      const d = await res.json()
+      if (!res.ok) { toast.error(d.error ?? 'Could not cancel'); return }
+      toast.success(`Cancelled ${d.cancelled} scheduled follow-up${d.cancelled !== 1 ? 's' : ''}.`)
+      setFollowUps(null)
+    } finally { setCancelling(false) }
   }
 
   return (
@@ -597,10 +612,20 @@ function EmailCampaignPanel({ reports }: { reports: ReportListItem[] }) {
                 disabled={sending || prospects.length === 0}
                 className="flex-1 flex items-center justify-center gap-2 py-2.5 bg-amber-500 text-white font-semibold rounded-xl hover:bg-amber-600 disabled:opacity-50 transition-colors text-sm"
               >
-                {sending ? <><RefreshCw className="w-4 h-4 animate-spin" /> Sending…</> : <><Send className="w-4 h-4" /> Launch Campaign</>}
+                {sending ? <><RefreshCw className="w-4 h-4 animate-spin" /> Sending…</> : <><Send className="w-4 h-4" /> Send email 1 &amp; schedule follow-ups</>}
               </button>
             )}
           </div>
+            {followUps && (
+              <div className="mt-3 rounded-lg border border-amber-200 bg-amber-50 px-4 py-3 text-xs text-amber-900">
+                <strong>{followUps.scheduled} follow-up email{followUps.scheduled !== 1 ? 's are' : ' is'} scheduled.</strong>{' '}
+                They send automatically once a day (around 9–10 am US Eastern) on the days you set. People who unsubscribe are skipped automatically,
+                but ListOps can&apos;t see replies — cancel the follow-ups if a prospect responds.{' '}
+                <button type="button" onClick={cancelFollowUps} disabled={cancelling} className="underline font-semibold disabled:opacity-50">
+                  {cancelling ? 'Cancelling…' : 'Cancel all scheduled follow-ups'}
+                </button>
+              </div>
+            )}
 
           {/* Preview sequence */}
           {emailSequence && (
@@ -1332,7 +1357,7 @@ export default function CommercialDashboardPage() {
           id="emailCampaign"
           icon={Mail}
           title="Investor & Tenant Email Campaigns"
-          description="Auto-generate 5-email drip sequences, import prospect lists, and launch via Resend"
+          description="Generate a 5-email outreach sequence, import prospects, send email 1 now and schedule the follow-ups automatically"
           badge="CRE-specific"
           badgeColor="blue"
           isOpen={openPanels.emailCampaign}

@@ -11,7 +11,8 @@ import { NextRequest, NextResponse } from 'next/server'
 import { nanoid } from 'nanoid'
 import { ApiError, handleApiError, requireUserId } from '@/lib/api-utils'
 import { rateLimitUpload, rateLimitHeaders } from '@/lib/ratelimit'
-import { sniffImage } from '@/lib/image-validate'
+import { dimensionsOk, sniffImage } from '@/lib/image-validate'
+import { and, count, eq, gte } from 'drizzle-orm'
 import { uploadToR2, getR2Url } from '@/lib/r2'
 import { photoKeyPrefix } from '@/lib/listing-schemas'
 import { getUserWithDetails } from '@/lib/user-service'
@@ -50,6 +51,13 @@ export async function POST(request: NextRequest) {
     const bytes = new Uint8Array(await file.arrayBuffer())
     const kind = sniffImage(bytes)
     if (!kind) throw new ApiError(415, 'Only JPG, PNG or WebP photos are supported.')
+
+    if (!dimensionsOk(bytes)) throw new ApiError(422, 'That photo has unsupported dimensions (max 8000 px per side).')
+
+    // Storage-abuse cap: at most 200 uploads per user per rolling 24 h (a busy agent with 8 listings uses ~160).
+    const [{ n }] = await db.select({ n: count() }).from(listingUploads)
+      .where(and(eq(listingUploads.userId, user.id), gte(listingUploads.createdAt, new Date(Date.now() - 24 * 60 * 60 * 1000))))
+    if (Number(n) >= 200) throw new ApiError(429, 'Daily photo upload limit reached. Please try again tomorrow.')
 
     const key = `${photoKeyPrefix(userId)}${nanoid(16)}.${kind.ext}`
     const url = await uploadToR2({ key, body: bytes, contentType: kind.mime })

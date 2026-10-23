@@ -33,7 +33,7 @@ export async function guardAi(userId: string, bucket: AiBucket): Promise<NextRes
     const rl = await rateLimitAi(userId, bucket, cfg.perHour)
     if (!rl.success) throw new ApiError(429, 'You\'re doing that too quickly. Please try again in a little while.', rateLimitHeaders(rl))
     await assertBudgetAvailable(userId)
-    await addSpend(userId, cfg.costUsd)
+    await addSpend(userId, cfg.costUsd, bucket)
     return null
   } catch (err) {
     return handleApiError(err, { guard: bucket })

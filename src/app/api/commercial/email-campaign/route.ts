@@ -1,3 +1,4 @@
+import { INJECTION_GUARD, sanitizeForPrompt } from '@/lib/prompt-safety'
 import { auth } from '@clerk/nextjs/server'
 import { guardAi } from '@/lib/ai-guard'
 import { NextRequest, NextResponse } from 'next/server'
@@ -95,6 +96,7 @@ async function generateEmail(
 ): Promise<EmailDraft> {
   const msg = await anthropic.messages.create({
     model: COMMERCIAL_MODEL,
+    system: INJECTION_GUARD,
     max_tokens: 500,
     messages: [{
       role: 'user',
@@ -127,7 +129,7 @@ The body should be plain text (no markdown), natural broker voice, personalized 
 
 function buildContext(report: Record<string, unknown>, grade: Record<string, unknown>): string {
   const lines: string[] = [
-    `Property: ${report.propertyAddress}${report.propertyCity ? `, ${report.propertyCity}` : ''}${report.propertyState ? `, ${report.propertyState}` : ''}`,
+    `Property: ${sanitizeForPrompt(report.propertyAddress, 160)}${report.propertyCity ? `, ${sanitizeForPrompt(report.propertyCity, 80)}` : ''}${report.propertyState ? `, ${sanitizeForPrompt(report.propertyState, 4)}` : ''}`,
     `Overall Grade: ${grade.overallGrade} (score: ${grade.overallScore}/100)`,
   ]
 

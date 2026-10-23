@@ -17,6 +17,7 @@ import { db } from '@/lib/db'
 import { campaigns } from '@/lib/db/schema'
 import { eq, and } from 'drizzle-orm'
 import { getCampaign, checkCampaignQuota } from '@/lib/user-service'
+import { rateLimitPdf, rateLimitHeaders } from '@/lib/ratelimit'
 import { uploadToR2 } from '@/lib/r2'
 import { trackFlyerDownloaded } from '@/lib/posthog'
 
@@ -26,6 +27,8 @@ export async function POST(
 ) {
   const { userId } = await auth()
   if (!userId) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
+  const pdfRl = await rateLimitPdf(userId)
+  if (!pdfRl.success) return NextResponse.json({ error: 'Too many PDF requests. Please wait a few minutes.' }, { status: 429, headers: rateLimitHeaders(pdfRl) })
 
   const { id } = await params
 

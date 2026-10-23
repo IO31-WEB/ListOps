@@ -21,6 +21,7 @@ const isPublicRoute = createRouteMatcher([
   '/dmca',
   '/unsubscribe(.*)',
   '/age-blocked',
+  '/account-closed',
   '/api/unsubscribe',
   '/api/csp-report',
   '/api/cron/(.*)', // protected by CRON_SECRET inside each handler

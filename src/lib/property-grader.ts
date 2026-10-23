@@ -11,6 +11,7 @@
  * it represents the realistic customer draw for most retail/commercial uses.
  */
 
+import { INJECTION_GUARD } from '@/lib/prompt-safety'
 import Anthropic from '@anthropic-ai/sdk'
 import type {
   PropertyConsumerSpend,
@@ -340,6 +341,7 @@ Respond in this exact JSON format (no markdown, no prose outside JSON):
   const response = await anthropic.messages.create({
     model: 'claude-sonnet-5',
     max_tokens: 800,
+    system: INJECTION_GUARD,
     messages: [{ role: 'user', content: prompt }],
   })
 

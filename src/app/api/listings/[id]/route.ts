@@ -5,6 +5,7 @@ import { rateLimitListingWrite, rateLimitHeaders } from '@/lib/ratelimit'
 import { ListingInputSchema, UuidSchema } from '@/lib/listing-schemas'
 import { getUserWithDetails } from '@/lib/user-service'
 import { deleteOwnListing, getOwnListing, updateListing } from '@/lib/listing-service'
+import { logAudit } from '@/lib/audit'
 
 type Ctx = { params: Promise<{ id: string }> }
 
@@ -52,11 +53,12 @@ export async function PUT(request: NextRequest, ctx: Ctx) {
   }
 }
 
-export async function DELETE(_req: NextRequest, ctx: Ctx) {
+export async function DELETE(req: NextRequest, ctx: Ctx) {
   try {
-    const { user, id } = await resolve(ctx)
+    const { userId, user, id } = await resolve(ctx)
     const ok = await deleteOwnListing(user.id, id)
     if (!ok) throw new ApiError(404, 'Not found')
+    await logAudit({ action: 'listing.deleted', actorClerkId: userId, targetUserId: user.id, resourceType: 'listing', resourceId: id, request: req })
     return NextResponse.json({ ok: true })
   } catch (err) {
     return handleApiError(err, { route: 'listings/[id] DELETE' })

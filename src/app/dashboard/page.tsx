@@ -248,7 +248,7 @@ export default async function DashboardPage() {
           {
             title: planTier === 'free' ? 'Upgrade to Starter' : planTier === 'starter' ? 'Upgrade to Pro' : 'Manage Team',
             desc: planTier === 'free'
-              ? 'Get Brand Kit, 5 campaigns/month, and remove ListOps branding.'
+              ? 'Get Brand Kit, email templates, photo captions and more campaigns each month.'
               : planTier === 'starter'
               ? 'Unlock unlimited campaigns, social scheduling & listing microsites.'
               : 'Add agents to your workspace for shared campaigns.',

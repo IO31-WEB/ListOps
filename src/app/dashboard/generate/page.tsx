@@ -41,7 +41,7 @@ const RECOMMENDED_PHOTOS = 5
 const STEPS: GenStep[] = [
   { id: 'listing', label: 'Analyzing your photos & building listing copy', status: 'pending' },
   { id: 'social',  label: 'Writing 6-week social calendar (FB, IG, TikTok…)', status: 'pending' },
-  { id: 'email',   label: 'Writing email sequences & drip campaigns',         status: 'pending' },
+  { id: 'email',   label: 'Writing email templates',         status: 'pending' },
   { id: 'video',   label: 'Writing reel scripts & virtual tour narration',    status: 'pending' },
   { id: 'saving',  label: 'Saving campaign to your account',                  status: 'pending' },
 ]

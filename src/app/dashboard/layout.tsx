@@ -13,8 +13,9 @@ export default async function DashboardLayout({ children }: { children: React.Re
   // Age / terms gate (server-enforced). Selects 2 columns only, so it is a ~1ms indexed lookup.
   const user = await db.query.users.findFirst({
     where: eq(users.clerkId, userId),
-    columns: { ageConfirmedAt: true, ageBlockedAt: true },
+    columns: { ageConfirmedAt: true, ageBlockedAt: true, deletedAt: true },
   })
+  if (user?.deletedAt) redirect('/account-closed')
   if (user?.ageBlockedAt) redirect('/age-blocked')
   if (!user?.ageConfirmedAt) redirect('/confirm-age')
 

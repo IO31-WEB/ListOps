@@ -1,3 +1,5 @@
+import { OmPdfBody } from '@/lib/commercial-schemas'
+import { rateLimitPdf, rateLimitHeaders } from '@/lib/ratelimit'
 import { auth } from '@clerk/nextjs/server'
 import { NextRequest, NextResponse } from 'next/server'
 import { PDFDocument, rgb, StandardFonts, PDFPage, PDFFont } from 'pdf-lib'
@@ -45,6 +47,8 @@ export async function POST(req: NextRequest) {
   try {
     const { userId } = await auth()
     if (!userId) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
+    const pdfRl = await rateLimitPdf(userId)
+    if (!pdfRl.success) return NextResponse.json({ error: 'Too many PDF requests. Please wait a few minutes.' }, { status: 429, headers: rateLimitHeaders(pdfRl) })
 
     const dbUser = await getUserWithDetails(userId)
     if (!dbUser?.organization) {
@@ -56,17 +60,9 @@ export async function POST(req: NextRequest) {
       return NextResponse.json({ error: 'Commercial plan required' }, { status: 403 })
     }
 
-    const { sections, propertyType, askingPrice, capRate, reportId } = await req.json() as {
-      sections: Record<string, string>
-      propertyType?: string
-      askingPrice?: string
-      capRate?: string
-      reportId?: string
-    }
-
-    if (!sections || Object.keys(sections).length === 0) {
-      return NextResponse.json({ error: 'sections required' }, { status: 400 })
-    }
+    const parsed = OmPdfBody.safeParse(await req.json().catch(() => null))
+    if (!parsed.success) return NextResponse.json({ error: 'Invalid request' }, { status: 400 })
+    const { sections, propertyType, askingPrice, capRate, reportId } = parsed.data
 
     const pdfBytes = await buildOM({ sections, propertyType, askingPrice, capRate });
 

@@ -16,6 +16,7 @@ import { ApiError, handleApiError, readJson, requireUserId } from '@/lib/api-uti
 import { getOrCreateUser } from '@/lib/user-service'
 import { TERMS_VERSION } from '@/lib/legal'
 import { captureError } from '@/lib/monitoring'
+import { logAudit } from '@/lib/audit'
 
 const Schema = z.object({ adult: z.boolean(), acceptTerms: z.boolean() })
 
@@ -49,6 +50,7 @@ export async function POST(request: NextRequest) {
         // Not fatal: the account is already blocked in our DB and every API rejects it.
         captureError(err, { context: 'delete_underage_clerk_user' })
       }
+      await logAudit({ action: 'user.age_blocked', actorClerkId: clerkId, targetUserId: user.id, request })
       return NextResponse.json({ blocked: true })
     }
 
@@ -61,6 +63,7 @@ export async function POST(request: NextRequest) {
       .set({ ageConfirmedAt: now, termsAcceptedAt: now, termsVersion: TERMS_VERSION })
       .where(eq(users.id, user.id))
 
+    await logAudit({ action: 'user.age_confirmed', actorClerkId: clerkId, targetUserId: user.id, request, metadata: { termsVersion: TERMS_VERSION } })
     return NextResponse.json({ ok: true })
   } catch (err) {
     return handleApiError(err, { route: 'user/confirm-age' })

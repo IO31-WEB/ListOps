@@ -80,6 +80,11 @@ export async function POST(request: NextRequest) {
   if (file.size > MAX_PDF_SIZE_BYTES) {
     return NextResponse.json({ error: 'File exceeds 20 MB limit' }, { status: 413 })
   }
+  // Don't trust the client-declared type: a real PDF starts with "%PDF-".
+  const magic = new Uint8Array(await file.slice(0, 5).arrayBuffer())
+  if (String.fromCharCode(...magic) !== '%PDF-') {
+    return NextResponse.json({ error: 'That file is not a valid PDF' }, { status: 400 })
+  }
 
   const arrayBuffer = await file.arrayBuffer()
   const buffer = Buffer.from(arrayBuffer)

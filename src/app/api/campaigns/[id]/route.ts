@@ -23,7 +23,7 @@ export async function GET(
     if (ageMs > 10 * 60 * 1000) {
       try {
         await db.update(campaigns)
-          .set({ status: 'failed', updatedAt: new Date() })
+          .set({ status: 'failed', failureReason: 'Timed out', updatedAt: new Date() })
           .where(eq(campaigns.id, campaign.id))
         campaign.status = 'failed'
       } catch { /* non-fatal */ }

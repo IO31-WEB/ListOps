@@ -123,6 +123,22 @@ export const rateLimitGenerate = (userId: string) =>
 export const rateLimitAi = (userId: string, bucket: string, perHour: number) =>
   limit({ name: `ai-${bucket}`, limit: perHour, windowSeconds: 60 * 60, failClosed: true }, userId)
 
+/** Stripe checkout / portal session creation. */
+export const rateLimitBilling = (userId: string) =>
+  limit({ name: 'billing', limit: 10, windowSeconds: 60 * 60, failClosed: true }, userId)
+
+/** PDF rendering launches a headless browser — expensive. */
+export const rateLimitPdf = (userId: string) =>
+  limit({ name: 'pdf', limit: 10, windowSeconds: 10 * 60, failClosed: true }, userId)
+
+/** Referral-code redemption (stops brute-forcing codes). */
+export const rateLimitReferral = (userId: string) =>
+  limit({ name: 'referral', limit: 10, windowSeconds: 60 * 60, failClosed: true }, userId)
+
+/** Admin mutations: generous for a human, tiny for a stolen session. */
+export const rateLimitAdmin = (adminClerkId: string) =>
+  limit({ name: 'admin', limit: 60, windowSeconds: 10 * 60, failClosed: true }, adminClerkId)
+
 /** Outreach email sends: 10 batches / day / user (each batch capped at 100 recipients in the route). */
 export const rateLimitEmailSend = (userId: string) =>
   limit({ name: 'email-send', limit: 10, windowSeconds: 24 * 60 * 60, failClosed: true }, userId)

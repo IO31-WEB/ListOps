@@ -36,9 +36,6 @@ const FEATURE_COMPARISON = [
   { category: 'Brand & Customization', features: [
     { name: 'Brand kit (logo, colors, photo)', free: false, starter: true, pro: true, brokerage: true },
     { name: 'Custom agent tagline & persona', free: false, starter: true, pro: true, brokerage: true },
-    { name: 'Remove ListOps branding', free: false, starter: true, pro: true, brokerage: true },
-    { name: 'White-label all outputs', free: false, starter: false, pro: false, brokerage: true },
-    { name: 'Custom app name & logo', free: false, starter: false, pro: false, brokerage: true },
   ]},
   { category: 'Publishing & Distribution', features: [
     { name: 'Copy to clipboard', free: true, starter: true, pro: true, brokerage: true },
@@ -49,14 +46,13 @@ const FEATURE_COMPARISON = [
   { category: 'Team & Admin', features: [
     { name: 'Agent seats', free: '1', starter: '1', pro: '3', brokerage: '25' },
     { name: 'Analytics dashboard', free: false, starter: false, pro: false, brokerage: true },
-    { name: 'Compliance & audit logs', free: false, starter: false, pro: false, brokerage: true },
-    { name: 'Admin dashboard', free: false, starter: false, pro: false, brokerage: true },
-    { name: 'CSV/PDF export', free: false, starter: false, pro: false, brokerage: true },
+    { name: 'Team activity log', free: false, starter: false, pro: false, brokerage: true },
+    { name: 'Agent performance dashboard', free: false, starter: false, pro: false, brokerage: true },
+    { name: 'CSV export of all team campaigns', free: false, starter: false, pro: false, brokerage: true },
     { name: 'Priority support (Slack)', free: false, starter: false, pro: false, brokerage: true },
   ]},
   { category: 'Performance', features: [
-    { name: 'Generation speed', free: 'Standard', starter: 'Standard', pro: 'Priority (<30s)', brokerage: 'Priority (<30s)' },
-    { name: 'Campaign history', free: '7 days', starter: '30 days', pro: 'Unlimited', brokerage: 'Unlimited' },
+    { name: 'Campaign history', free: true, starter: true, pro: true, brokerage: true },
   ]},
 ]
 

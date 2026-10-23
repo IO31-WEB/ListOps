@@ -102,7 +102,8 @@ export const users = pgTable('users', {
 
   // Legal gates (server-enforced; see lib/age.ts)
   ageConfirmedAt: timestamp('age_confirmed_at'),   // user attested they are 18+
-  ageBlockedAt: timestamp('age_blocked_at'),       // user said they are under 18 -> account blocked
+  ageBlockedAt: timestamp('age_blocked_at'),
+  deletedAt: timestamp('deleted_at'),              // soft delete (account closed); content is purged after 30 days by cron/retention       // user said they are under 18 -> account blocked
   termsAcceptedAt: timestamp('terms_accepted_at'),
   termsVersion: text('terms_version'),
 
@@ -235,6 +236,8 @@ export const campaigns = pgTable('campaigns', {
 
   status: campaignStatusEnum('status').notNull().default('generating'),
   generationMs: integer('generation_ms'),
+  failureReason: text('failure_reason'),            // short, user-safe reason (set when status='failed')
+  refundedAt: timestamp('refunded_at'),            // set when quota for this generation was refunded (prevents double refund)
 
   facebookPosts: jsonb('facebook_posts').$type<Array<{
     week: number; theme: string; copy: string; hashtags: string[]
@@ -496,4 +499,54 @@ export const listingUploads = pgTable('listing_uploads', {
 }, (t) => ({
   createdIdx: index('listing_uploads_created_idx').on(t.createdAt),
   userIdx: index('listing_uploads_user_idx').on(t.userId),
+}))
+
+
+// ── AI usage ledger (durable spend history for the admin overview) ───────────────
+// Redis holds the live caps; this table is the permanent record. Costs are ESTIMATES (see lib/ai-budget.ts).
+export const aiUsage = pgTable('ai_usage', {
+  id: uuid('id').primaryKey().defaultRandom(),
+  clerkId: text('clerk_id').notNull(),
+  kind: text('kind').notNull(), // 'generate' | 'teaser' | 'regenerate' | ...
+  inputTokens: integer('input_tokens').notNull().default(0),
+  outputTokens: integer('output_tokens').notNull().default(0),
+  costUsd: numeric('cost_usd', { precision: 10, scale: 4 }).notNull().default('0'),
+  createdAt: timestamp('created_at').notNull().defaultNow(),
+}, (t) => ({
+  createdIdx: index('ai_usage_created_idx').on(t.createdAt),
+  clerkIdx: index('ai_usage_clerk_idx').on(t.clerkId, t.createdAt),
+}))
+
+
+// ── Processed Stripe webhook event ids (idempotency: Stripe delivers events at-least-once) ──
+export const stripeEvents = pgTable('stripe_events', {
+  id: text('id').primaryKey(), // evt_...
+  type: text('type').notNull(),
+  createdAt: timestamp('created_at').notNull().defaultNow(),
+})
+
+
+// ── Scheduled outreach follow-ups (sequence emails 2..N). Email #1 is sent immediately by the send route. ──
+// A daily cron (/api/cron/send-outreach) sends whatever is due. Rows never contain secrets; recipients who
+// unsubscribe are skipped at send time via email_suppressions.
+export const outreachEmails = pgTable('outreach_emails', {
+  id: uuid('id').primaryKey().defaultRandom(),
+  userId: uuid('user_id').notNull().references(() => users.id, { onDelete: 'cascade' }),
+  reportId: uuid('report_id').notNull(),
+  batchId: uuid('batch_id').notNull(),
+  recipientEmail: text('recipient_email').notNull(),
+  recipientName: text('recipient_name'),
+  stepIndex: integer('step_index').notNull(),
+  subject: text('subject').notNull(),
+  body: text('body').notNull(),
+  sendAt: timestamp('send_at').notNull(),
+  status: text('status').$type<'pending' | 'sending' | 'sent' | 'failed' | 'skipped' | 'cancelled'>().notNull().default('pending'),
+  skipReason: text('skip_reason'),
+  attempts: integer('attempts').notNull().default(0),
+  sentAt: timestamp('sent_at'),
+  createdAt: timestamp('created_at').notNull().defaultNow(),
+}, (t) => ({
+  dueIdx: index('outreach_due_idx').on(t.status, t.sendAt),
+  userReportIdx: index('outreach_user_report_idx').on(t.userId, t.reportId),
+  uniq: uniqueIndex('outreach_batch_recipient_step_idx').on(t.batchId, t.recipientEmail, t.stepIndex),
 }))

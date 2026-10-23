@@ -69,15 +69,6 @@ export const BLOG_POSTS: BlogPost[] = [
         content: 'The first 72 hours are the highest-leverage window you have. Buyer attention and algorithm reach peak immediately after a new listing hits. Don\'t waste it.',
       },
       {
-        type: 'stat-grid',
-        stats: [
-          { value: '72 hrs', label: 'Peak buyer attention window after go-live' },
-          { value: '4×', label: 'More showing requests for listings with video vs. photos only' },
-          { value: '63%', label: 'Of buyers find their home on mobile' },
-          { value: '2.3×', label: 'Higher engagement for posts with neighborhood context' },
-        ],
-      },
-      {
         type: 'ul',
         items: [
           'Facebook post (200 words) — story-led, ends with a showing CTA',
@@ -149,7 +140,7 @@ export const BLOG_POSTS: BlogPost[] = [
       },
       {
         type: 'callout',
-        content: 'The agents who implement this full checklist consistently see 15–20% faster days-on-market compared to single-channel approaches — and significantly higher list-to-sale price ratios. The work is real, but it\'s systematic. The right tools make it faster.',
+        content: 'The agents who implement this full checklist tend to get more visibility and more consistent buyer interest than they do from single-channel approaches. The work is real, but it\'s systematic. The right tools make it faster.',
       },
     ],
     cta: {
@@ -258,15 +249,6 @@ export const BLOG_POSTS: BlogPost[] = [
         content: 'The agents winning on social aren\'t grinding out content manually — they have systems. They batch-create content for each listing when the ideas are fresh, schedule it over six weeks, and then focus on engagement and relationships instead of staring at a blank post composer.',
       },
       {
-        type: 'stat-grid',
-        stats: [
-          { value: '3–4×', label: 'Higher reach for Reels vs. static posts (Instagram 2025)' },
-          { value: '6 weeks', label: 'Optimal campaign window per listing' },
-          { value: '78%', label: 'Of buyers follow at least one agent on social before contacting' },
-          { value: '23 min', label: 'Average time agents spend on social content per day' },
-        ],
-      },
-      {
         type: 'h2',
         content: 'The 6-Week Content Calendar Framework',
       },
@@ -287,7 +269,7 @@ export const BLOG_POSTS: BlogPost[] = [
       },
       {
         type: 'callout',
-        content: 'The agents who run this framework consistently see 40–60% more engagement per listing than those who post ad hoc. The key is consistency — different angle, same listing, six weeks.',
+        content: 'The agents who run this framework tend to see steadier engagement per listing than those who post ad hoc. The key is consistency — different angle, same listing, six weeks.',
       },
     ],
     cta: {
@@ -374,15 +356,6 @@ export const BLOG_POSTS: BlogPost[] = [
       {
         type: 'p',
         content: 'There\'s a meaningful difference between using a general-purpose AI and a tool built specifically for real estate marketing. The outputs aren\'t even in the same category.',
-      },
-      {
-        type: 'stat-grid',
-        stats: [
-          { value: '6 hrs', label: 'Average time per listing saved with AI-assisted marketing' },
-          { value: '90 sec', label: 'Time to generate a complete campaign with ListOps' },
-          { value: '40+', label: 'Marketing assets generated per listing' },
-          { value: '3.2×', label: 'Higher engagement for AI-assisted vs. DIY social content' },
-        ],
       },
       {
         type: 'h2',
@@ -493,10 +466,6 @@ export const BLOG_POSTS: BlogPost[] = [
         content: 'The best listing descriptions have a primary tone (usually the most likely buyer) but contain enough specifics to catch the eye of secondary buyer types. Consider writing tone variants for your social content — luxury angle, first-time buyer angle, investor angle — while keeping your MLS description focused.',
       },
       {
-        type: 'blockquote',
-        content: '"We stopped writing one generic description per listing and started writing the primary MLS copy plus 3 tone variants for social. Showing requests went up 40% on the next listing." — Broker, Scottsdale AZ',
-      },
-      {
         type: 'h2',
         content: 'SEO in Listing Descriptions: What Matters',
       },
@@ -525,15 +494,6 @@ export const BLOG_POSTS: BlogPost[] = [
       {
         type: 'p',
         content: 'For social media, shorter is almost always better. Facebook: 150–200 words. Instagram caption: 80–120 words. The full story lives on your microsite — the social posts are the trailer.',
-      },
-      {
-        type: 'stat-grid',
-        stats: [
-          { value: '68%', label: 'Of buyers say the listing description influenced their showing decision' },
-          { value: '400–600', label: 'Optimal word count for a full MLS description' },
-          { value: '12 words', label: 'Maximum effective headline length' },
-          { value: '3×', label: 'More showing requests for listings with neighborhood context' },
-        ],
       },
       {
         type: 'callout',
@@ -627,15 +587,6 @@ export const BLOG_POSTS: BlogPost[] = [
           'Questions outperform statements for drip emails — "Ready to see it this weekend?"',
           'First-name personalization adds 2–4% open rate when the list is warm',
           'Never use "FREE" or excessive exclamation points — they trigger spam filters',
-        ],
-      },
-      {
-        type: 'stat-grid',
-        stats: [
-          { value: '36:1', label: 'Average ROI on email marketing (DMA)' },
-          { value: '19.7%', label: 'Average real estate email open rate' },
-          { value: '45%+', label: 'Open rate for annual client anniversary emails' },
-          { value: '8', label: 'Optimal number of buyer drip emails over 30 days' },
         ],
       },
       {
@@ -749,15 +700,6 @@ export const BLOG_POSTS: BlogPost[] = [
       {
         type: 'p',
         content: 'Before your next listing appointment, do this: pull up your last three listings and count how many pieces of content you published for each one. How many Facebook posts? How many emails? Did you do a microsite? Did you run TikToks? If the answer is "not many," that\'s your answer for why you\'re losing presentations.',
-      },
-      {
-        type: 'stat-grid',
-        stats: [
-          { value: '16%', label: 'Of sellers who chose another agent cited price as primary reason' },
-          { value: '80%+', label: 'Close rate for agents with documented marketing process' },
-          { value: '3×', label: 'More listing appointments won with visual marketing proof' },
-          { value: '6 hrs', label: 'Average prep time agents save per listing with AI tools' },
-        ],
       },
       {
         type: 'h2',
@@ -937,15 +879,6 @@ export const BLOG_POSTS: BlogPost[] = [
       {
         type: 'p',
         content: 'Automated AI social posting tools that "post for you" without review — they consistently produce low-quality content and can post at the wrong moment (right after a price reduction, for example). Any tool that promises "done-for-you" marketing without you touching the output is one bad post away from a PR problem.',
-      },
-      {
-        type: 'stat-grid',
-        stats: [
-          { value: '$847', label: 'Average monthly tool spend for top-producing agents' },
-          { value: '3', label: 'Core tools that drive 80% of marketing ROI for most agents' },
-          { value: '90 sec', label: 'Campaign generation time with purpose-built AI tools' },
-          { value: '6 hrs', label: 'Average weekly time saved with right tool stack' },
-        ],
       },
       {
         type: 'callout',

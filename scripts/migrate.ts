@@ -54,6 +54,7 @@ async function migrate() {
       "age_blocked_at" timestamp,
       "terms_accepted_at" timestamp,
       "terms_version" text,
+      "deleted_at" timestamp,
       "created_at" timestamp NOT NULL DEFAULT now(),
       "updated_at" timestamp NOT NULL DEFAULT now()
     )
@@ -142,6 +143,43 @@ async function migrate() {
     )
   `
   await sql`
+    CREATE TABLE IF NOT EXISTS "stripe_events" (
+      "id" text PRIMARY KEY,
+      "type" text NOT NULL,
+      "created_at" timestamp NOT NULL DEFAULT now()
+    )
+  `
+  await sql`
+    CREATE TABLE IF NOT EXISTS "outreach_emails" (
+      "id" uuid PRIMARY KEY DEFAULT gen_random_uuid() NOT NULL,
+      "user_id" uuid NOT NULL REFERENCES "users"("id") ON DELETE CASCADE,
+      "report_id" uuid NOT NULL,
+      "batch_id" uuid NOT NULL,
+      "recipient_email" text NOT NULL,
+      "recipient_name" text,
+      "step_index" integer NOT NULL,
+      "subject" text NOT NULL,
+      "body" text NOT NULL,
+      "send_at" timestamp NOT NULL,
+      "status" text NOT NULL DEFAULT 'pending',
+      "skip_reason" text,
+      "attempts" integer NOT NULL DEFAULT 0,
+      "sent_at" timestamp,
+      "created_at" timestamp NOT NULL DEFAULT now()
+    )
+  `
+  await sql`
+    CREATE TABLE IF NOT EXISTS "ai_usage" (
+      "id" uuid PRIMARY KEY DEFAULT gen_random_uuid() NOT NULL,
+      "clerk_id" text NOT NULL,
+      "kind" text NOT NULL,
+      "input_tokens" integer NOT NULL DEFAULT 0,
+      "output_tokens" integer NOT NULL DEFAULT 0,
+      "cost_usd" numeric(10,4) NOT NULL DEFAULT 0,
+      "created_at" timestamp NOT NULL DEFAULT now()
+    )
+  `
+  await sql`
     CREATE TABLE IF NOT EXISTS "email_suppressions" (
       "email" text PRIMARY KEY,
       "reason" text NOT NULL DEFAULT 'unsubscribe',
@@ -165,6 +203,8 @@ async function migrate() {
       "brand_kit_id" uuid REFERENCES "brand_kits"("id"),
       "status" text NOT NULL DEFAULT 'generating',
       "generation_ms" integer,
+      "failure_reason" text,
+      "refunded_at" timestamp,
       "facebook_posts" jsonb,
       "instagram_posts" jsonb,
       "email_just_listed" text,

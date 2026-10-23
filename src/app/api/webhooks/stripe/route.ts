@@ -13,7 +13,7 @@ import { NextRequest, NextResponse } from 'next/server'
 import { stripe } from '@/lib/stripe'
 import { headers } from 'next/headers'
 import { db } from '@/lib/db'
-import { organizations, subscriptions } from '@/lib/db/schema'
+import { organizations, subscriptions, stripeEvents } from '@/lib/db/schema'
 import { eq } from 'drizzle-orm'
 import { syncSubscription, downgradeToFree } from '@/lib/user-service'
 import { trackPlanUpgraded } from '@/lib/posthog'
@@ -101,6 +101,12 @@ export async function POST(request: NextRequest) {
     console.error('Webhook signature verification failed:', err)
     return NextResponse.json({ error: 'Invalid signature' }, { status: 400 })
   }
+
+  // IDEMPOTENCY: Stripe delivers events at-least-once (retries on timeouts / 5xx). Claim the event id first; if it
+  // was already claimed, acknowledge without re-running side effects. The claim is released on failure (below) so
+  // Stripe's retry still gets processed.
+  const claimed = await db.insert(stripeEvents).values({ id: event.id, type: event.type }).onConflictDoNothing().returning({ id: stripeEvents.id })
+  if (claimed.length === 0) return NextResponse.json({ received: true, duplicate: true })
 
   try {
     switch (event.type) {
@@ -235,6 +241,7 @@ export async function POST(request: NextRequest) {
   } catch (err) {
     console.error('Webhook handler error:', err)
     captureError(err, { eventType: event.type, eventId: event.id })
+    await db.delete(stripeEvents).where(eq(stripeEvents.id, event.id)).catch(() => {}) // release claim so the retry is processed
     return NextResponse.json({ error: 'Webhook handler failed' }, { status: 500 })
   }
 }

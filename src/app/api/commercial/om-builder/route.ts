@@ -1,4 +1,6 @@
+import { INJECTION_GUARD, sanitizeForPrompt } from '@/lib/prompt-safety'
 import { auth } from '@clerk/nextjs/server'
+import { OmBuilderBody } from '@/lib/commercial-schemas'
 import { guardAi } from '@/lib/ai-guard'
 import { NextRequest, NextResponse } from 'next/server'
 import Anthropic from '@anthropic-ai/sdk'
@@ -58,8 +60,9 @@ export async function POST(req: NextRequest) {
       return NextResponse.json({ error: 'Commercial plan required' }, { status: 403 })
     }
 
-    const { reportId, propertyType, askingPrice, capRate } = await req.json()
-    if (!reportId) return NextResponse.json({ error: 'reportId required' }, { status: 400 })
+    const parsed = OmBuilderBody.safeParse(await req.json().catch(() => null))
+    if (!parsed.success) return NextResponse.json({ error: 'Invalid request' }, { status: 400 })
+    const { reportId, propertyType, askingPrice, capRate } = parsed.data
 
     const [report] = await db
       .select()
@@ -105,6 +108,7 @@ async function generateSection(
 ): Promise<string> {
   const msg = await anthropic.messages.create({
     model: COMMERCIAL_MODEL,
+    system: INJECTION_GUARD,
     max_tokens: 600,
     messages: [{
       role: 'user',
@@ -127,10 +131,10 @@ function buildContext(
   meta: { propertyType?: string; askingPrice?: string; capRate?: string }
 ): string {
   const lines: string[] = [
-    `Property: ${report.propertyAddress}${report.propertyCity ? `, ${report.propertyCity}` : ''}${report.propertyState ? `, ${report.propertyState}` : ''}`,
-    `Property Type: ${meta.propertyType ?? 'Commercial'}`,
-    ...(meta.askingPrice ? [`Asking Price: ${meta.askingPrice}`] : []),
-    ...(meta.capRate ? [`Cap Rate: ${meta.capRate}`] : []),
+    `Property: ${sanitizeForPrompt(report.propertyAddress, 160)}${report.propertyCity ? `, ${sanitizeForPrompt(report.propertyCity, 80)}` : ''}${report.propertyState ? `, ${sanitizeForPrompt(report.propertyState, 4)}` : ''}`,
+    `Property Type: ${sanitizeForPrompt(meta.propertyType ?? 'Commercial', 80)}`,
+    ...(meta.askingPrice ? [`Asking Price: ${sanitizeForPrompt(meta.askingPrice, 80)}`] : []),
+    ...(meta.capRate ? [`Cap Rate: ${sanitizeForPrompt(meta.capRate, 80)}`] : []),
     `Overall Grade: ${grade.overallGrade} (score: ${grade.overallScore}/100)`,
     `Traffic Grade: ${grade.trafficGrade} (score: ${grade.trafficScore})`,
     `Consumer Spend Grade: ${grade.consumerSpendGrade} (score: ${grade.consumerSpendScore})`,

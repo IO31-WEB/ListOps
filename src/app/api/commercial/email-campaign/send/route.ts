@@ -1,6 +1,7 @@
 // src/app/api/commercial/email-campaign/send/route.ts
 /**
- * Sends email #1 of an outreach sequence to a list of prospects.
+ * Sends email #1 of an outreach sequence to a list of prospects NOW, and schedules emails 2..N (sent by the daily cron,
+ * see lib/outreach.ts). GET = status counts for a report, DELETE = cancel pending follow-ups.
  *
  * Compliance + abuse controls (all enforced server-side):
  *  - every message goes through sendEmail({ kind: 'marketing' }), which REFUSES to send without a postal
@@ -12,8 +13,8 @@ import { auth } from '@clerk/nextjs/server'
 import { NextRequest, NextResponse } from 'next/server'
 import { z } from 'zod'
 import { db } from '@/lib/db'
-import { siteReports } from '@/lib/db/schema'
-import { eq, and } from 'drizzle-orm'
+import { outreachEmails, siteReports, users } from '@/lib/db/schema'
+import { eq, and, count } from 'drizzle-orm'
 import { getUserWithDetails } from '@/lib/user-service'
 import { canAccess } from '@/lib/plans'
 import type { PlanTier } from '@/lib/plans'
@@ -22,6 +23,8 @@ import { rateLimitEmailSend, rateLimitHeaders } from '@/lib/ratelimit'
 import { sendEmail, postalAddress, oneLine } from '@/lib/email'
 import { normalizeEmail } from '@/lib/unsubscribe'
 import { assertAdult } from '@/lib/age'
+import { logAudit } from '@/lib/audit'
+import { randomUUID } from 'crypto'
 
 const BodySchema = z.object({
   reportId: z.string().uuid(),
@@ -79,6 +82,11 @@ export async function POST(req: NextRequest) {
       return true
     })
 
+    const batchId = randomUUID()
+    const now = Date.now()
+    const followUps = sequence.filter(e => e !== firstEmail)
+    const scheduleRows: Array<typeof outreachEmails.$inferInsert> = []
+
     let sent = 0, suppressed = 0, failed = 0
     for (const prospect of unique) {
       const result = await sendEmail({
@@ -94,22 +102,40 @@ export async function POST(req: NextRequest) {
           { name: 'report_id', value: reportId },
         ],
       })
-      if (result.ok) sent++
+      if (result.ok) {
+        sent++
+        // Email #1 went out -> schedule the rest of the sequence for this prospect (sent by the daily cron).
+        followUps.forEach(step => {
+          scheduleRows.push({
+            userId: dbUser.id, reportId, batchId, recipientEmail: normalizeEmail(prospect.email), recipientName: prospect.name ?? null,
+            stepIndex: sequence.indexOf(step),
+            subject: personalize(step.subject, prospect, report), body: personalize(step.body, prospect, report),
+            sendAt: new Date(now + Math.max(1, step.sendDay) * 24 * 60 * 60 * 1000),
+          })
+        })
+      }
       else if (result.reason === 'suppressed') suppressed++
       else failed++
     }
 
+    for (let i = 0; i < scheduleRows.length; i += 200) {
+      await db.insert(outreachEmails).values(scheduleRows.slice(i, i + 200)).onConflictDoNothing()
+    }
+
+    await logAudit({ action: 'outreach.batch_sent', actorClerkId: userId, targetUserId: dbUser.id, resourceType: 'site_report', request: req, metadata: { reportId, recipients: unique.length, sent, suppressed, failed, scheduledFollowUps: scheduleRows.length } })
     return NextResponse.json({
       sent,
       skippedUnsubscribed: suppressed,
       failed,
       sequenceLength: sequence.length,
-      // NOTE: follow-up emails (day 1+) are NOT scheduled automatically — only email #1 is sent here.
+      scheduledFollowUps: scheduleRows.length,
       message:
         `Email 1 sent to ${sent} prospect${sent !== 1 ? 's' : ''}` +
         (suppressed ? `; ${suppressed} skipped because they previously unsubscribed` : '') +
         (failed ? `; ${failed} failed to send` : '') +
-        `. Follow-up emails in the sequence are not sent automatically yet.`,
+        (scheduleRows.length
+          ? `. ${scheduleRows.length} follow-up email${scheduleRows.length !== 1 ? 's are' : ' is'} scheduled and will send automatically (once a day, around 9–10 am US Eastern). Anyone who unsubscribes is skipped, and you can cancel the follow-ups at any time.`
+          : '.'),
     })
   } catch (err) {
     return handleApiError(err, { route: 'email-campaign/send' })
@@ -125,4 +151,49 @@ function personalize(
     .replace(/\[Your Name\]/g, prospect.name ?? 'Prospective Buyer')
     .replace(/\[Recipient Name\]/g, prospect.name ?? 'there')
     .replace(/\[Property Address\]/g, String(report.propertyAddress ?? ''))
+}
+
+const ReportQuery = z.object({ reportId: z.string().uuid(), email: z.string().trim().toLowerCase().email().optional() })
+
+async function currentDbUserId(): Promise<string> {
+  const { userId } = await auth()
+  if (!userId) throw new ApiError(401, 'Unauthorized')
+  const u = await db.query.users.findFirst({ where: eq(users.clerkId, userId), columns: { id: true } })
+  if (!u) throw new ApiError(404, 'Account not found')
+  return u.id
+}
+
+/** GET ?reportId= -> how many follow-ups are pending / sent / skipped / cancelled for this report (own rows only). */
+export async function GET(req: NextRequest) {
+  try {
+    const dbUserId = await currentDbUserId()
+    const { reportId } = ReportQuery.parse(Object.fromEntries(new URL(req.url).searchParams))
+    const rows = await db.select({ status: outreachEmails.status, n: count() }).from(outreachEmails)
+      .where(and(eq(outreachEmails.userId, dbUserId), eq(outreachEmails.reportId, reportId)))
+      .groupBy(outreachEmails.status)
+    const counts: Record<string, number> = {}
+    rows.forEach(r => { counts[r.status] = Number(r.n) })
+    return NextResponse.json({ counts })
+  } catch (err) {
+    return handleApiError(err, { route: 'email-campaign/send GET' })
+  }
+}
+
+/** DELETE ?reportId=[&email=] -> cancel all PENDING follow-ups for the report (or just one recipient, e.g. someone who replied). */
+export async function DELETE(req: NextRequest) {
+  try {
+    const { userId } = await auth()
+    const dbUserId = await currentDbUserId()
+    const { reportId, email } = ReportQuery.parse(Object.fromEntries(new URL(req.url).searchParams))
+    const cancelled = await db.update(outreachEmails).set({ status: 'cancelled', skipReason: 'cancelled by sender' })
+      .where(and(
+        eq(outreachEmails.userId, dbUserId), eq(outreachEmails.reportId, reportId), eq(outreachEmails.status, 'pending'),
+        ...(email ? [eq(outreachEmails.recipientEmail, normalizeEmail(email))] : []),
+      ))
+      .returning({ id: outreachEmails.id })
+    await logAudit({ action: 'outreach.cancelled', actorClerkId: userId!, targetUserId: dbUserId, resourceType: 'site_report', request: req, metadata: { reportId, cancelled: cancelled.length, singleRecipient: !!email } })
+    return NextResponse.json({ cancelled: cancelled.length })
+  } catch (err) {
+    return handleApiError(err, { route: 'email-campaign/send DELETE' })
+  }
 }

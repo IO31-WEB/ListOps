@@ -41,18 +41,6 @@ export default function SignUpPage() {
             ))}
           </ul>
 
-          <div className="mt-10 bg-slate-800/60 rounded-xl p-5 border border-slate-700">
-            <p className="text-slate-300 text-sm italic mb-3">
-              "I used to spend 3 hours on marketing per listing. Now it takes about 2 minutes."
-            </p>
-            <div className="flex items-center gap-2">
-              <div className="w-8 h-8 rounded-full bg-amber-500/20 flex items-center justify-center text-xs font-bold text-amber-400">SM</div>
-              <div>
-                <div className="text-white text-xs font-semibold">Sarah M.</div>
-                <div className="text-slate-500 text-xs">REALTOR® • Austin, TX</div>
-              </div>
-            </div>
-          </div>
         </div>
 
         <div className="relative text-xs text-slate-600">

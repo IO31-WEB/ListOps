@@ -3,6 +3,7 @@ import { redirect } from 'next/navigation'
 import Link from 'next/link'
 import { BarChart2, TrendingUp, Eye, FileText, Clock, Zap, Lock, ArrowRight } from 'lucide-react'
 import { getDashboardStats } from '@/lib/user-service'
+import { getOrgAgentStats, getTeamAdminContext } from '@/lib/team-data'
 
 export const metadata = { title: 'Analytics' }
 
@@ -15,6 +16,9 @@ export default async function AnalyticsPage() {
 
   const { planTier, totalCampaigns, campaignsThisMonth, micrositeViews, avgGenTimeMs, recentCampaigns } = stats
   const isBrokerage = ['brokerage', 'enterprise'].includes(planTier)
+  // Team analytics: plan + owner/admin role verified server-side; scoped to the caller's own organization.
+  const teamCtx = isBrokerage ? await getTeamAdminContext() : null
+  const agentStats = teamCtx ? await getOrgAgentStats(teamCtx.orgId) : []
 
   return (
     <div className="max-w-5xl mx-auto space-y-6">
@@ -29,7 +33,7 @@ export default async function AnalyticsPage() {
           { label: 'Total Campaigns', value: totalCampaigns, icon: FileText, color: 'text-blue-600', bg: 'bg-blue-50' },
           { label: 'This Month', value: campaignsThisMonth, icon: TrendingUp, color: 'text-green-600', bg: 'bg-green-50' },
           { label: 'Microsite Views', value: micrositeViews.toLocaleString(), icon: Eye, color: 'text-purple-600', bg: 'bg-purple-50' },
-          { label: 'Avg. Gen Time', value: avgGenTimeMs > 0 ? `${Math.round(avgGenTimeMs / 1000)}s` : '~58s', icon: Clock, color: 'text-amber-600', bg: 'bg-amber-50' },
+          { label: 'Avg. Gen Time', value: avgGenTimeMs > 0 ? `${Math.round(avgGenTimeMs / 1000)}s` : '—', icon: Clock, color: 'text-amber-600', bg: 'bg-amber-50' },
         ].map(stat => (
           <div key={stat.label} className="bg-white rounded-xl p-5 border border-slate-200">
             <div className={`w-9 h-9 ${stat.bg} rounded-lg flex items-center justify-center mb-3`}>
@@ -94,6 +98,27 @@ export default async function AnalyticsPage() {
       </div>
 
       {/* Brokerage Analytics — locked for lower tiers */}
+      {teamCtx && (
+        <div className="bg-white border border-slate-200 rounded-2xl p-6">
+          <div className="flex items-center justify-between mb-4">
+            <h2 className="font-display text-lg font-semibold text-slate-900">Agent performance</h2>
+            <a href="/api/team/export" className="text-sm font-medium text-amber-700 underline">Export all campaigns (CSV)</a>
+          </div>
+          <div className="overflow-x-auto">
+            <table className="w-full text-sm">
+              <thead><tr className="text-left text-xs text-slate-500"><th className="py-2 pr-4">Agent</th><th className="py-2 pr-4">Role</th><th className="py-2 pr-4">Campaigns (all-time)</th><th className="py-2 pr-4">Last 30 days</th><th className="py-2 pr-4">Failed (30d)</th><th className="py-2 pr-4">Microsite views</th><th className="py-2">Last campaign</th></tr></thead>
+              <tbody>{agentStats.map(a => (
+                <tr key={a.id} className="border-t border-slate-100">
+                  <td className="py-2 pr-4">{[a.firstName, a.lastName].filter(Boolean).join(' ') || a.email}<div className="text-xs text-slate-400">{a.email}</div></td>
+                  <td className="py-2 pr-4 capitalize">{a.role}</td><td className="py-2 pr-4">{a.total}</td><td className="py-2 pr-4">{a.last30}</td>
+                  <td className="py-2 pr-4">{a.failed30}</td><td className="py-2 pr-4">{a.views}</td>
+                  <td className="py-2">{a.lastAt ? new Date(a.lastAt).toISOString().slice(0, 10) : '—'}</td>
+                </tr>))}</tbody>
+            </table>
+          </div>
+        </div>
+      )}
+
       {!isBrokerage && (
         <div className="bg-white rounded-2xl border border-slate-200 overflow-hidden">
           <div className="px-6 py-4 border-b border-slate-100">

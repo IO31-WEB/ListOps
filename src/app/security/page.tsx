@@ -8,7 +8,7 @@ export const metadata: Metadata = {
 
 const practices = [
   { icon: '🔐', title: 'Encryption in transit & at rest', body: 'All data is encrypted using TLS 1.3 in transit and AES-256 at rest. Your listing data, brand assets, and personal information are never stored in plaintext.' },
-  { icon: '🏦', title: 'SOC 2-grade infrastructure', body: 'We run on Vercel and Neon PostgreSQL — both maintain SOC 2 Type II compliance. Your data lives in US-based data centers with 99.9% uptime SLAs.' },
+  { icon: '🏦', title: 'Established infrastructure providers', body: 'We run on Vercel and Neon PostgreSQL, whose platforms maintain SOC 2 Type II attestations, in US-based data centers. ListOps itself has not been independently audited or certified (for example, SOC 2 or ISO 27001).' },
   { icon: '🔑', title: 'Authentication via Clerk', body: 'We use Clerk for authentication, which supports MFA, passkeys, and SSO. We never store your password — credentials are handled entirely by Clerk\'s secure systems.' },
   { icon: '💳', title: 'Payments via Stripe', body: 'All billing is processed by Stripe. ListOps never sees or stores your card number. Stripe is PCI DSS Level 1 certified.' },
   { icon: '🚫', title: 'No data selling', body: 'Your listing data, client information, and brand assets are never sold or shared with third parties for advertising purposes.' },

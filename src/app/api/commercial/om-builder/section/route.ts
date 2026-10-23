@@ -1,4 +1,6 @@
+import { INJECTION_GUARD, sanitizeForPrompt } from '@/lib/prompt-safety'
 import { auth } from '@clerk/nextjs/server'
+import { OmSectionBody } from '@/lib/commercial-schemas'
 import { guardAi } from '@/lib/ai-guard'
 import { NextRequest, NextResponse } from 'next/server'
 import Anthropic from '@anthropic-ai/sdk'
@@ -38,15 +40,13 @@ export async function POST(req: NextRequest) {
       return NextResponse.json({ error: 'Commercial plan required' }, { status: 403 })
     }
 
-    const { reportId, section, propertyType, askingPrice, capRate } = await req.json()
+    const parsed = OmSectionBody.safeParse(await req.json().catch(() => null))
+    if (!parsed.success) return NextResponse.json({ error: 'Invalid request' }, { status: 400 })
+    const { reportId, section, propertyType, askingPrice, capRate } = parsed.data
 
-    if (!reportId || !section) {
-      return NextResponse.json({ error: 'reportId and section required' }, { status: 400 })
-    }
-
-    const prompt = SECTION_PROMPTS[section]
+    const prompt = Object.prototype.hasOwnProperty.call(SECTION_PROMPTS, section) ? SECTION_PROMPTS[section] : undefined
     if (!prompt) {
-      return NextResponse.json({ error: `Unknown section: ${section}` }, { status: 400 })
+      return NextResponse.json({ error: 'Unknown section' }, { status: 400 })
     }
 
     const [report] = await db
@@ -66,10 +66,10 @@ export async function POST(req: NextRequest) {
     if (!grade) return NextResponse.json({ error: 'Grade required' }, { status: 400 })
 
     const contextLines = [
-      `Property: ${report.propertyAddress}${report.propertyCity ? `, ${report.propertyCity}` : ''}${report.propertyState ? `, ${report.propertyState}` : ''}`,
-      `Property Type: ${propertyType ?? 'Commercial'}`,
-      ...(askingPrice ? [`Asking Price: ${askingPrice}`] : []),
-      ...(capRate ? [`Cap Rate: ${capRate}`] : []),
+      `Property: ${sanitizeForPrompt(report.propertyAddress, 160)}${report.propertyCity ? `, ${sanitizeForPrompt(report.propertyCity, 80)}` : ''}${report.propertyState ? `, ${sanitizeForPrompt(report.propertyState, 4)}` : ''}`,
+      `Property Type: ${sanitizeForPrompt(propertyType ?? 'Commercial', 80)}`,
+      ...(askingPrice ? [`Asking Price: ${sanitizeForPrompt(askingPrice, 80)}`] : []),
+      ...(capRate ? [`Cap Rate: ${sanitizeForPrompt(capRate, 80)}`] : []),
       `Overall Grade: ${grade.overallGrade} (score: ${grade.overallScore}/100)`,
       ...(grade.aiSummary ? [`AI Summary: ${grade.aiSummary}`] : []),
       ...(Array.isArray(grade.aiStrengths) ? [`Strengths: ${(grade.aiStrengths as string[]).join('; ')}`] : []),
@@ -78,6 +78,7 @@ export async function POST(req: NextRequest) {
 
     const msg = await anthropic.messages.create({
       model: COMMERCIAL_MODEL,
+      system: INJECTION_GUARD,
       max_tokens: 600,
       messages: [{
         role: 'user',

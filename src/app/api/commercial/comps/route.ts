@@ -1,3 +1,4 @@
+import { INJECTION_GUARD, sanitizeForPrompt } from '@/lib/prompt-safety'
 import { auth } from '@clerk/nextjs/server'
 import { guardAi } from '@/lib/ai-guard'
 import { NextRequest, NextResponse } from 'next/server'
@@ -56,6 +57,7 @@ export async function POST(req: NextRequest) {
 
     const msg = await anthropic.messages.create({
       model: COMMERCIAL_MODEL,
+      system: INJECTION_GUARD,
       max_tokens: 900,
       messages: [{
         role: 'user',
@@ -107,7 +109,7 @@ Rules:
 
 function buildContext(report: Record<string, unknown>, grade: Record<string, unknown>): string {
   const lines = [
-    `Property: ${report.propertyAddress}${report.propertyCity ? `, ${report.propertyCity}` : ''}${report.propertyState ? `, ${report.propertyState}` : ''}${report.propertyZip ? ` ${report.propertyZip}` : ''}`,
+    `Property: ${sanitizeForPrompt(report.propertyAddress, 160)}${report.propertyCity ? `, ${sanitizeForPrompt(report.propertyCity, 80)}` : ''}${report.propertyState ? `, ${sanitizeForPrompt(report.propertyState, 4)}` : ''}${report.propertyZip ? ` ${sanitizeForPrompt(report.propertyZip, 12)}` : ''}`,
     `Overall Grade: ${grade.overallGrade} (score: ${grade.overallScore}/100)`,
   ]
 

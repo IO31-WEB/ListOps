@@ -14,6 +14,7 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { auth } from '@clerk/nextjs/server'
 import { guardAi } from '@/lib/ai-guard'
+import { INJECTION_GUARD, sanitizeForPrompt, untrusted, flagInjection } from '@/lib/prompt-safety'
 import Anthropic from '@anthropic-ai/sdk'
 import { db } from '@/lib/db'
 import { campaigns } from '@/lib/db/schema'
@@ -47,23 +48,23 @@ const RequestSchema = z.object({
 // ── Section → prompt builder ───────────────────────────────────
 
 function buildSectionPrompt(section: SectionKey, listing: any, planTier: PlanTier, brandKit?: any): string {
-  const address = [listing.address, listing.city, listing.state].filter(Boolean).join(', ')
+  const address = sanitizeForPrompt([listing.address, listing.city, listing.state].filter(Boolean).join(', '), 200)
   const price = listing.price ? `$${Number(listing.price).toLocaleString()}` : 'Price upon request'
   const beds = listing.bedrooms ?? 0
   const baths = listing.bathrooms ?? 0
   const sqft = listing.sqft ?? 0
-  const description = listing.description ?? ''
-  const city = listing.city ?? ''
-  const state = listing.state ?? ''
+  const description = untrusted('description', listing.description, 4000)
+  const city = sanitizeForPrompt(listing.city, 80)
+  const state = sanitizeForPrompt(listing.state, 4)
 
   const hasBrandKit = canAccessFeature(planTier, 'brand_kit') && !!brandKit
-  const agentName = hasBrandKit ? (brandKit?.agentName || 'Your Agent') : 'Your Agent'
-  const agentPhone = hasBrandKit ? (brandKit?.agentPhone || '') : ''
-  const agentEmail = hasBrandKit ? (brandKit?.agentEmail || '') : ''
-  const agentTitle = hasBrandKit ? (brandKit?.agentTitle || 'REALTOR®') : 'REALTOR®'
-  const brokerageName = hasBrandKit ? (brandKit?.brokerageName || '') : ''
-  const tone = hasBrandKit ? (brandKit?.tone || 'professional') : 'professional'
-  const tagline = hasBrandKit ? (brandKit?.tagline || '') : ''
+  const agentName = sanitizeForPrompt(hasBrandKit ? (brandKit?.agentName || 'Your Agent') : 'Your Agent', 80)
+  const agentPhone = sanitizeForPrompt(hasBrandKit ? (brandKit?.agentPhone || '') : '', 40)
+  const agentEmail = sanitizeForPrompt(hasBrandKit ? (brandKit?.agentEmail || '') : '', 100)
+  const agentTitle = sanitizeForPrompt(hasBrandKit ? (brandKit?.agentTitle || 'REALTOR®') : 'REALTOR®', 60)
+  const brokerageName = sanitizeForPrompt(hasBrandKit ? (brandKit?.brokerageName || '') : '', 100)
+  const tone = sanitizeForPrompt(hasBrandKit ? (brandKit?.tone || 'professional') : 'professional', 60)
+  const tagline = sanitizeForPrompt(hasBrandKit ? (brandKit?.tagline || '') : '', 160)
   const toneGuides: Record<string, string> = {
     professional: 'authoritative, data-driven, and polished.',
     friendly: 'warm, conversational, and approachable.',
@@ -360,6 +361,7 @@ export async function POST(
     const message = await anthropic.messages.create({
       model: 'claude-sonnet-5',
       max_tokens: 8000,
+      system: INJECTION_GUARD,
       messages: [{ role: 'user', content: prompt }],
     })
 

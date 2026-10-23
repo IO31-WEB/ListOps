@@ -37,7 +37,7 @@ export default function AboutPage() {
         <div style={{ background: 'white', borderRadius: 20, padding: '48px', boxShadow: '0 1px 3px rgba(0,0,0,0.08)', marginBottom: 32 }}>
           <h2 style={{ fontSize: 28, fontWeight: 800, color: '#0f172a', marginBottom: 20 }}>The problem we saw</h2>
           <p style={{ fontSize: 16, color: '#475569', lineHeight: 1.8, marginBottom: 16 }}>
-            The average real estate agent spends 6–8 hours per listing creating marketing content — Facebook posts, Instagram captions, email copy, print flyers. That's time not spent with clients, not spent on prospecting, not spent closing deals.
+            Many real estate agents spend hours on every listing creating marketing content — Facebook posts, Instagram captions, email copy, print flyers. That's time not spent with clients, not spent on prospecting, not spent closing deals.
           </p>
           <p style={{ fontSize: 16, color: '#475569', lineHeight: 1.8, marginBottom: 0 }}>
             The tools that existed were either too generic, too expensive, or required a marketing degree to use. Agents deserved something purpose-built.

@@ -1,3 +1,5 @@
+import { z } from 'zod'
+import { rateLimitBilling, rateLimitHeaders } from '@/lib/ratelimit'
 import { NextRequest, NextResponse } from 'next/server'
 import { auth, currentUser } from '@clerk/nextjs/server'
 import { stripe } from '@/lib/stripe'
@@ -10,7 +12,13 @@ export async function POST(request: NextRequest) {
   const { userId } = await auth()
   if (!userId) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
 
-  const origin = request.headers.get('origin') || process.env.NEXT_PUBLIC_APP_URL || ''
+  // Only trust Origin if it is our own domain or a Vercel preview (it becomes the post-portal redirect target).
+  const appUrl = process.env.NEXT_PUBLIC_APP_URL || ''
+  const reqOrigin = request.headers.get('origin') || ''
+  const origin = reqOrigin === appUrl || /^https:\/\/[a-z0-9-]+\.vercel\.app$/.test(reqOrigin) ? reqOrigin : appUrl
+
+  const rl = await rateLimitBilling(userId)
+  if (!rl.success) return NextResponse.json({ error: 'Too many requests. Please try again later.' }, { status: 429, headers: rateLimitHeaders(rl) })
 
   try {
     const clerkUser = await currentUser()
@@ -52,8 +60,8 @@ export async function POST(request: NextRequest) {
         .where(eq(organizations.id, dbUser.organization.id))
     }
 
-    const body = await request.json().catch(() => ({}))
-    const isCancelFlow = body.flow === 'cancel'
+    const body = z.object({ flow: z.literal('cancel').optional() }).safeParse(await request.json().catch(() => ({})))
+    const isCancelFlow = body.success && body.data.flow === 'cancel'
 
     const sessionParams: any = {
       customer: customerId,
