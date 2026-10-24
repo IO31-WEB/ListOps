@@ -16,6 +16,7 @@ const isPublicRoute = createRouteMatcher([
   '/help(.*)',
   '/affiliates',
   '/l/(.*)',
+  '/flyer/(.*)', // the page does its own auth: signed-in owner OR a short-lived signed print token (PDF renderer)
   '/api/photos/(.*)', // listing photos: public by design, key-validated in the handler
   '/api/webhooks/(.*)',
   '/api/contact',

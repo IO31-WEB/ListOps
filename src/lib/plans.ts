@@ -42,6 +42,13 @@ export const FEATURE_GATES = {
   microsite_copy:       ['starter', 'pro', 'commercial', 'brokerage', 'enterprise'],
   expanded_social:      ['pro', 'commercial', 'brokerage', 'enterprise'],   // TikTok, LinkedIn, X, Stories
   virtual_tour_scripts: ['pro', 'commercial', 'brokerage', 'enterprise'],
+  // Branded Visual Kit + flyers (Round 6)
+  visual_kit:           ['free', 'starter', 'pro', 'commercial', 'brokerage', 'enterprise'], // Instagram square (watermarked on Free)
+  visual_kit_full:      ['starter', 'pro', 'commercial', 'brokerage', 'enterprise'],         // all 6 graphics, no watermark
+  visual_kit_pdf:       ['pro', 'commercial', 'brokerage', 'enterprise'],                    // PDF export of graphics
+  flyer_templates:      ['starter', 'pro', 'commercial', 'brokerage', 'enterprise'],         // Luxury + Modern (Classic is free)
+  flyer_variants:       ['starter', 'pro', 'commercial', 'brokerage', 'enterprise'],         // Open House / Price Improvement flyers
+  flyer_schemes:        ['pro', 'commercial', 'brokerage', 'enterprise'],                    // 5 color schemes
   // Commercial plan gates
   site_analysis:        ['commercial', 'brokerage', 'enterprise'],
   property_grading:     ['commercial', 'brokerage', 'enterprise'],
@@ -110,6 +117,7 @@ export const PLANS: Plan[] = [
       { text: 'Just Listed + Still Available emails', included: true },
       { text: 'Print materials (yard sign, postcard, brochure)', included: true },
       { text: 'Print-ready listing flyer (PDF)', included: true },
+      { text: 'Branded Instagram graphic (PNG, ListOps watermark)', included: true },
       { text: 'Copy to clipboard', included: true },
       { text: 'Brand kit', included: false },
       { text: 'Email templates (8: buyer follow-ups, seller update & more)', included: false },
@@ -139,7 +147,8 @@ export const PLANS: Plan[] = [
       { text: 'Email templates (8: buyer follow-ups, seller update & more)', included: true, highlight: true },
       { text: 'AI photo captions from your uploaded photos', included: true },
       { text: 'Auto-generated listing microsite', included: true },
-      { text: '3 flyer templates (Classic, Luxury, Modern)', included: true },
+      { text: '3 premium flyer templates + Open House & Price Improvement flyers', included: true },
+      { text: 'Full branded visual kit: Instagram square & Stories, Facebook post & cover, open house, price improvement (PNG)', included: true, highlight: true },
       { text: 'Video & reel scripts', included: false },
       { text: 'TikTok, LinkedIn, X, Stories content', included: false },
       { text: 'Virtual tour narration scripts', included: false },
@@ -168,6 +177,7 @@ export const PLANS: Plan[] = [
       { text: 'Hashtag strategy packs (3 sets)', included: true },
       { text: '3 team seats', included: true },
       { text: '3 flyer templates + 5 color schemes', included: true },
+      { text: 'Visual kit PDF export', included: true },
       { text: 'White-label outputs', included: false },
       { text: 'Agent performance analytics', included: false },
     ],

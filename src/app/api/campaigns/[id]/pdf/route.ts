@@ -12,6 +12,11 @@
  */
 
 import { NextRequest, NextResponse } from 'next/server'
+import { createHash } from 'crypto'
+import { z } from 'zod'
+import { readJson } from '@/lib/api-utils'
+import { signPrintToken } from '@/lib/print-token'
+import { SCHEME_IDS } from '@/lib/color-schemes'
 import { auth } from '@clerk/nextjs/server'
 import { db } from '@/lib/db'
 import { campaigns } from '@/lib/db/schema'
@@ -21,8 +26,18 @@ import { rateLimitPdf, rateLimitHeaders } from '@/lib/ratelimit'
 import { uploadToR2 } from '@/lib/r2'
 import { trackFlyerDownloaded } from '@/lib/posthog'
 
+// Flyer options chosen in the flyer toolbar. Plan limits are enforced by the flyer page itself.
+const FlyerOptions = z.object({
+  template: z.enum(['classic', 'luxury', 'modern']).default('classic'),
+  scheme: z.enum(SCHEME_IDS).default('brand'),
+  badge: z.enum(['justListed', 'openHouse', 'priceReduced']).default('justListed'),
+  date: z.string().max(40).optional(),
+  time: z.string().max(40).optional(),
+  was: z.string().regex(/^\d{1,9}$/).optional(),
+}).default({ template: 'classic', scheme: 'brand', badge: 'justListed' })
+
 export async function POST(
-  _req: NextRequest,
+  req: NextRequest,
   { params }: { params: Promise<{ id: string }> }
 ) {
   const { userId } = await auth()
@@ -33,6 +48,16 @@ export async function POST(
   const { id } = await params
 
   try {
+    let opts: z.infer<typeof FlyerOptions>
+    try {
+      const raw = req.headers.get('content-length') === '0' ? undefined : await readJson(req, 4 * 1024).catch(() => undefined)
+      opts = FlyerOptions.parse(raw)
+    } catch {
+      return NextResponse.json({ error: 'Invalid flyer options' }, { status: 400 })
+    }
+    const isDefault = opts.template === 'classic' && opts.scheme === 'brand' && opts.badge === 'justListed'
+    const optKey = createHash('sha1').update(JSON.stringify(opts)).digest('hex').slice(0, 12)
+
     const [campaign, quota] = await Promise.all([
       getCampaign(id, userId),
       checkCampaignQuota(userId),
@@ -42,11 +67,15 @@ export async function POST(
 
     const planTier = quota.planTier
     const appUrl = process.env.NEXT_PUBLIC_APP_URL ?? 'https://listops.io'
-    const flyerUrl = `${appUrl}/flyer/${id}?template=classic`
+    const query = new URLSearchParams({ template: opts.template, scheme: opts.scheme, badge: opts.badge })
+    if (opts.date) query.set('date', opts.date)
+    if (opts.time) query.set('time', opts.time)
+    if (opts.was) query.set('was', opts.was)
+    const flyerUrl = `${appUrl}/flyer/${id}?${query.toString()}`
 
-    // Return cached PDF if already generated
+    // Return the cached PDF only for the default flyer (custom options render fresh).
     const cachedUrl = campaign.pdfUrl ?? campaign.flyerUrl
-    if (cachedUrl?.startsWith('http') && cachedUrl?.includes('r2')) {
+    if (isDefault && cachedUrl?.startsWith('http') && cachedUrl?.includes('r2')) {
       trackFlyerDownloaded({ userId, campaignId: id, template: 'cached', planTier })
       return NextResponse.json({ url: cachedUrl, cached: true, isPdf: true })
     }
@@ -76,7 +105,9 @@ export async function POST(
 
         try {
           const page = await browser.newPage()
-          await page.goto(`${appUrl}/flyer/${id}?template=classic&print=1`, {
+          // The renderer has no Clerk session: a 3-minute signed token authorizes this ONE campaign's flyer page.
+          query.set('pt', signPrintToken(id))
+          await page.goto(`${appUrl}/flyer/${id}?${query.toString()}`, {
             waitUntil: 'networkidle0',
             timeout: 30000,
           })
@@ -112,14 +143,14 @@ export async function POST(
     let pdfUrl: string | null = null
 
     if (pdfBuffer) {
-      const key = `flyers/${id}/listing-flyer.pdf`
+      const key = isDefault ? `flyers/${id}/listing-flyer.pdf` : `flyers/${id}/listing-flyer-${optKey}.pdf`
       pdfUrl = await uploadToR2({
         key,
         body: pdfBuffer,
         contentType: 'application/pdf',
       })
 
-      if (pdfUrl) {
+      if (pdfUrl && isDefault) {
         // FIX: pdfUrl is a proper column in the schema — no `as any` cast needed
         await db
           .update(campaigns)
@@ -133,7 +164,7 @@ export async function POST(
     const finalUrl = pdfUrl ?? flyerUrl
     const isPdf = !!pdfBuffer && !!pdfUrl
 
-    trackFlyerDownloaded({ userId, campaignId: id, template: 'classic', planTier })
+    trackFlyerDownloaded({ userId, campaignId: id, template: opts.template, planTier })
 
     return NextResponse.json({ url: finalUrl, isPdf, cached: false })
   } catch (err) {

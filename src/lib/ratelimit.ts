@@ -131,6 +131,10 @@ export const rateLimitBilling = (userId: string) =>
 export const rateLimitPdf = (userId: string) =>
   limit({ name: 'pdf', limit: 10, windowSeconds: 10 * 60, failClosed: true }, userId)
 
+/** Visual-kit image renders (previews + downloads). Cheaper than a PDF render, but still CPU. */
+export const rateLimitVisualKit = (userId: string) =>
+  limit({ name: 'visual-kit', limit: 120, windowSeconds: 10 * 60, failClosed: true }, userId)
+
 /** Referral-code redemption (stops brute-forcing codes). */
 export const rateLimitReferral = (userId: string) =>
   limit({ name: 'referral', limit: 10, windowSeconds: 60 * 60, failClosed: true }, userId)

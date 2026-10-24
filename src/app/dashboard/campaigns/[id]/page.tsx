@@ -510,7 +510,7 @@ function PrintOfflineSection({ print, campaignId, onRegenerate, regenerating }: 
   return (
     <Section title="Print & Offline" badge="6 formats" icon={Printer} accent="amber" onRegenerate={onRegenerate} regenerating={regenerating}>
       <div className="p-5 border-b border-slate-100 flex items-center justify-between gap-4 flex-wrap bg-amber-50">
-        <div><p className="text-sm font-semibold text-slate-900">Print-Ready Listing Flyer</p><p className="text-xs text-slate-500 mt-0.5">Fully branded with your colors and agent info</p></div>
+        <div><p className="text-sm font-semibold text-slate-900">Print-Ready Listing Flyer</p><p className="text-xs text-slate-500 mt-0.5">Three premium styles, plus Open House and Price Improvement flyers — branded with your colors and agent info</p></div>
         <div className="flex gap-2">
           <a href={`/flyer/${campaignId}`} target="_blank" rel="noopener noreferrer" className="inline-flex items-center gap-2 bg-white border border-slate-200 text-slate-700 text-sm font-semibold px-4 py-2 rounded-xl hover:bg-slate-50 transition-colors"><ExternalLink className="w-4 h-4" />View Flyer</a>
           <button onClick={handlePdf} disabled={downloadingPdf} className="inline-flex items-center gap-2 bg-slate-900 text-white text-sm font-semibold px-4 py-2 rounded-xl hover:bg-slate-800 transition-colors disabled:opacity-60">
@@ -776,12 +776,18 @@ export default function CampaignDetailPage() {
               {campaign.generationMs && <span className="flex items-center gap-1"><Zap className="w-3 h-3" />Generated in {(campaign.generationMs/1000).toFixed(1)}s</span>}
             </div>
           </div>
-          {campaign.micrositeSlug && campaign.micrositePublished && (
-            <a href={`/l/${campaign.micrositeSlug}`} target="_blank" rel="noopener noreferrer"
-              className="inline-flex items-center gap-1.5 text-xs font-medium text-blue-600 bg-blue-50 hover:bg-blue-100 px-3 py-1.5 rounded-lg transition-colors flex-shrink-0">
-              <Eye className="w-3.5 h-3.5" />View Microsite ({campaign.micrositeViews ?? 0} views)
-            </a>
-          )}
+          <div className="flex items-center gap-2 flex-wrap flex-shrink-0">
+            <Link href={`/dashboard/campaigns/${campaign.id}/kit`}
+              className="inline-flex items-center gap-1.5 text-xs font-semibold text-white bg-slate-900 hover:bg-slate-800 px-3 py-1.5 rounded-lg transition-colors">
+              <Image className="w-3.5 h-3.5" />Visual Kit
+            </Link>
+            {campaign.micrositeSlug && campaign.micrositePublished && (
+              <a href={`/l/${campaign.micrositeSlug}`} target="_blank" rel="noopener noreferrer"
+                className="inline-flex items-center gap-1.5 text-xs font-medium text-blue-600 bg-blue-50 hover:bg-blue-100 px-3 py-1.5 rounded-lg transition-colors">
+                <Eye className="w-3.5 h-3.5" />View Microsite ({campaign.micrositeViews ?? 0} views)
+              </a>
+            )}
+          </div>
         </div>
       </div>
 
