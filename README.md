@@ -12,7 +12,7 @@ Generate → Brand → Distribute → Measure. Next.js 16 · TypeScript (strict)
 1. **Generate** — The agent enters an address (optionally auto-filled from public records via Realie / RentCast), listing details and **their own photos**. Claude (with Vision on the first four photos) writes a full 6-week campaign.
 2. **Brand** — Logo, headshot, colors, contact info, tagline and disclaimer from the agent's Brand Kit are applied to flyers, graphics and the microsite.
 3. **Distribute** — Ready-to-post graphics (PNG/PDF), premium print flyers, a public listing microsite, outreach emails, and copy-to-clipboard for every post.
-4. **Measure** — Microsite view counts today; form submissions, link clicks and a seller report are next.
+4. **Capture & measure** — Every microsite has Schedule a Showing / Request Info forms that land in a leads inbox with source tracking. Microsite view counts today; link clicks and a seller report are next.
 
 There is **no MLS connection**. Data comes from what the agent types, optional public-record enrichment, and photos the agent uploads.
 
@@ -42,6 +42,10 @@ There is **no MLS connection**. Data comes from what the agent types, optional p
 | **Premium print flyers** | 3 designs (Heritage, Maison, Atelier), letter size, Just Listed / Open House / Price Improvement variants, PDF download | Free: Heritage + Just Listed · Starter+: all designs & variants · Pro+: color schemes |
 | Brand kit | Logo, headshot, colors, tone, contact, tagline, disclaimer, brokerage logo | Starter+ |
 | Listing microsite | Public page at `/l/<slug>`; publish/unpublish; view counter; same slug is written into generated posts/emails | Starter+ |
+| **Microsite lead capture** | Schedule a Showing + Request More Info forms on every microsite; instant email alert to the agent (reply goes straight to the lead); leads inbox at `/dashboard/leads` with New / Contacted / Closed status; source tracking from `?utm_source=` / `?src=` and the referrer; consent text stored with each lead; honeypot + minimum-fill-time + link-spam checks, per-IP and per-listing rate limits, duplicate suppression | Starter+ |
+| Lead CSV export | Spreadsheet-safe CSV of your leads | Pro+ |
+| Lead webhook | Signed `POST` per new lead (Zapier "Catch Hook", Make, n8n, your CRM) with test button; https-only, private/internal hosts blocked | Pro+ |
+| Lead SMS alert | Text to your own mobile on each lead. **Code is shipped but inactive until the Twilio env vars are set** | Pro+ (when enabled) |
 | Outreach email | Compliant sender (unsubscribe, suppression list), scheduled follow-ups | Commercial+ |
 | Team | Seat invites (Pro+ seats); team activity log, CSV export and per-agent analytics (Brokerage) | Pro+ / Brokerage |
 
@@ -55,14 +59,14 @@ Admin portal (`/admin`, allow-listed, audited) · age gate (18+) · soft-delete 
 Built in this order (see [Roadmap](#roadmap)):
 
 1. ~~Branded Visual Kit~~ — **shipped** (above)
-2. Lead capture on every microsite — Schedule a Showing / Request Info forms, instant email (optional SMS) to the agent, leads dashboard with source tracking, CSV export, webhook/Zapier-ready endpoint, spam protection + consent text
+2. ~~Lead capture on every microsite~~ — **shipped** (above)
 3. Persistent brand + brokerage compliance profiles — required disclaimers, locked fields for brokerage admins, missing-branding warnings, Fair Housing language scanner with one-click rewrites
 4. Listing performance dashboard + seller report — microsite views, form submissions, link clicks, campaign status; shareable branded report; real data only
 5. Social post scheduling — Meta Business Suite / Instagram Graph API (Buffer as interim), calendar + queue + publish status; copy/export remains the fallback
 
 After those: unique QR codes on print materials with scan analytics; Seller Approval Portal.
 
-Not built (and not claimed): direct social publishing, CRM sync, microsite lead forms, link-click tracking, seller reports, custom domains, SSO/SCIM.
+Not built (and not claimed): direct social publishing, native CRM sync (use the webhook), webhook retries, auto-reply to the lead, link-click tracking, seller reports, custom domains, SSO/SCIM.
 
 ---
 
@@ -79,6 +83,8 @@ Not built (and not claimed): direct social publishing, CRM sync, microsite lead 
 | Visual Kit — all 6 graphics, no watermark | ❌ | ✅ | ✅ | ✅ | ✅ |
 | Visual Kit PDF export | ❌ | ❌ | ✅ | ✅ | ✅ |
 | Brand kit, drip templates, photo captions, microsite | ❌ | ✅ | ✅ | ✅ | ✅ |
+| Microsite lead forms + leads inbox + email alerts | ❌ | ✅ | ✅ | ✅ | ✅ |
+| Lead CSV export, webhook, SMS alert (SMS needs Twilio) | ❌ | ❌ | ✅ | ✅ | ✅ |
 | Video, TikTok, LinkedIn, X, Stories, hashtag packs | ❌ | ❌ | ✅ | ✅ | ✅ |
 | Commercial site analysis & grading | ❌ | ❌ | ❌ | ✅ | ✅ |
 | Team seats | 1 | 1 | 3 | 3 | 25 |
@@ -117,6 +123,15 @@ Enterprise is contact-sales and has no self-serve plan. Annual prices: Starter $
 
 ---
 
+## How Lead Capture Works
+
+- Public form → `POST /api/l/[slug]/lead` (no login). Order: per-IP limit → per-listing limit → zod validation (consent required) → bot checks (bots get a fake success) → published-microsite check → owner plan gate → 10-minute duplicate check → insert → respond. Email / SMS / webhook delivery runs **after** the response (`after()`), and the lead is already saved, so a failed alert never loses a lead; failures show on the lead in the dashboard.
+- Tables: `leads`, `lead_settings` (migration `drizzle/0010_leads.sql`). The visitor's IP is stored only as a salted hash. Leads are deleted with the campaign/account.
+- Webhook payload: `{ event, id, createdAt, type, name, email, phone, message, preferredDate, preferredTime, consent, source, property, campaignId }`. Headers: `X-ListOps-Event`, `X-ListOps-Timestamp`, `X-ListOps-Signature: sha256=<HMAC-SHA256(secret, timestamp + "." + body)>`. One attempt, 5 s timeout, redirects not followed.
+- Code: `src/lib/leads/` (sanitize, input, csv, webhook, message, sms, service), `src/components/microsite/lead-form.tsx`, `src/app/dashboard/leads/`.
+
+---
+
 ## Setup
 
 ```bash
@@ -138,6 +153,7 @@ Key environment variables (full list with comments in `.env.example`):
 | Storage | `R2_ACCOUNT_ID`, `R2_ACCESS_KEY_ID`, `R2_SECRET_ACCESS_KEY`, `R2_BUCKET_NAME`, `NEXT_PUBLIC_R2_PUBLIC_URL` (brand assets only) |
 | Email | `RESEND_API_KEY`, `RESEND_FROM_EMAIL`, `MAIL_FOOTER_ADDRESS`, `UNSUBSCRIBE_SECRET` |
 | Ops | `UPSTASH_REDIS_REST_URL/TOKEN`, `CRON_SECRET`, `SENTRY_DSN`, `NEXT_PUBLIC_POSTHOG_KEY`, `NEXT_PUBLIC_APP_URL` |
+| Optional (SMS lead alerts) | `TWILIO_ACCOUNT_SID`, `TWILIO_AUTH_TOKEN`, `TWILIO_FROM_NUMBER` |
 | Optional | `PRINT_TOKEN_SECRET` (defaults to `CLERK_SECRET_KEY`), `CSP_ENFORCE`, `STRIPE_REQUIRE_TOS`, `DMCA_AGENT_*` |
 
 Listing photos need R2 **read + write** credentials; the bucket does not have to be public for photos, flyers or graphics.
@@ -150,7 +166,7 @@ Listing photos need R2 **read + write** credentials; the bucket does not have to
 ## Roadmap
 
 1. ✅ One-click Branded Visual Kit
-2. Lead capture on every microsite
+2. ✅ Lead capture on every microsite
 3. Brand + brokerage compliance profiles, Fair Housing scanner
 4. Listing performance dashboard + seller report
 5. Social post scheduling (Meta / Instagram Graph API; Buffer interim)

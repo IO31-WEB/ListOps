@@ -6,6 +6,10 @@ import { campaigns } from '@/lib/db/schema'
 import { and, desc, eq } from 'drizzle-orm'
 import { trackMicrositeViewed } from '@/lib/posthog'
 import { headers } from 'next/headers'
+import { canAccess } from '@/lib/plans'
+import { getPlanTierForUserId } from '@/lib/user-service'
+import { consentText } from '@/lib/leads/sanitize'
+import { LeadForm } from '@/components/microsite/lead-form'
 
 export default async function MicrositePage({ params }: { params: Promise<{ slug: string }> }) {
   const { slug } = await params
@@ -45,6 +49,9 @@ export default async function MicrositePage({ params }: { params: Promise<{ slug
     referrer: hdrs.get('referer') ?? undefined,
   })
 
+  const ownerPlan = await getPlanTierForUserId(campaign.agentId)
+  const leadsOn = canAccess(ownerPlan, 'lead_capture')
+  const showMark = !canAccess(ownerPlan, 'remove_branding')
   const listing = normalizeListing(campaign.listing)
   const bk = campaign.brandKit as any
   const address = listing ? [listing.address, listing.city, listing.state].filter(Boolean).join(', ') : 'Property'
@@ -156,11 +163,16 @@ export default async function MicrositePage({ params }: { params: Promise<{ slug
           </div>
         )}
 
-        {/* CTA */}
-        {(agentPhone || agentEmail) && (
+        {/* CTA / lead capture */}
+        {(leadsOn || agentPhone || agentEmail) && (
           <div style={{ textAlign: 'center', marginBottom: 48 }}>
-            <div style={{ fontFamily: 'Arial, sans-serif', fontSize: 22, fontWeight: 800, color: primaryColor, marginBottom: 8 }}>Schedule a Showing</div>
-            <div style={{ fontFamily: 'Georgia, serif', fontSize: 15, color: '#64748b', marginBottom: 24, fontStyle: 'italic' }}>Homes like this don't last — contact us today.</div>
+            <div style={{ fontFamily: 'Arial, sans-serif', fontSize: 22, fontWeight: 800, color: primaryColor, marginBottom: 8 }}>{leadsOn ? 'Interested in this home?' : 'Schedule a Showing'}</div>
+            <div style={{ fontFamily: 'Georgia, serif', fontSize: 15, color: '#64748b', marginBottom: 24, fontStyle: 'italic' }}>Homes like this don&apos;t last — contact us today.</div>
+            {leadsOn && (
+              <div style={{ maxWidth: 560, margin: '0 auto 24px' }}>
+                <LeadForm slug={slug} address={address} agentName={agentName} consent={consentText(agentName)} primary={primaryColor} accent={accentColor} />
+              </div>
+            )}
             <div style={{ display: 'flex', gap: 12, justifyContent: 'center', flexWrap: 'wrap' }}>
               {agentPhone && (
                 <a href={`tel:${agentPhone.replace(/\D/g, '')}`}
@@ -168,8 +180,8 @@ export default async function MicrositePage({ params }: { params: Promise<{ slug
                   📞 {agentPhone}
                 </a>
               )}
-              {agentEmail && (
-                <a href={`mailto:${agentEmail}?subject=Showing Request: ${address}`}
+              {agentEmail && !leadsOn && (
+                <a href={`mailto:${agentEmail}?subject=${encodeURIComponent(`Showing Request: ${address}`)}`}
                   style={{ background: 'white', color: primaryColor, border: `2px solid ${primaryColor}`, padding: '15px 36px', borderRadius: 12, fontSize: 15, fontWeight: 700, textDecoration: 'none', fontFamily: 'Arial, sans-serif', display: 'inline-block' }}>
                   ✉️ Email Agent
                 </a>
@@ -211,9 +223,9 @@ export default async function MicrositePage({ params }: { params: Promise<{ slug
           )}
         </div>
 
-        {!bk?.brokerageName && (
-          <div style={{ textAlign: 'center', marginTop: 40, fontFamily: 'Arial, sans-serif', fontSize: 10, color: '#e2e8f0', letterSpacing: 1 }}>
-            POWERED BY CAMPAIGNAI
+        {showMark && (
+          <div style={{ textAlign: 'center', marginTop: 40, fontFamily: 'Arial, sans-serif', fontSize: 10, color: '#94a3b8', letterSpacing: 1 }}>
+            <a href="https://listops.io" style={{ color: 'inherit', textDecoration: 'none' }}>POWERED BY LISTOPS</a>
           </div>
         )}
       </div>

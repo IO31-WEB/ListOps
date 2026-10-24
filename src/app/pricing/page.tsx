@@ -51,6 +51,8 @@ const FEATURE_CATEGORIES = [
     features: [
       { name: 'Copy to clipboard',                            free: true,    starter: true,    pro: true,        brokerage: true },
       { name: 'Auto-generated listing microsite',             free: false,   starter: true,    pro: true,        brokerage: true },
+      { name: 'Lead forms (Schedule a Showing / Request Info) + email alerts', free: false, starter: true, pro: true, brokerage: true },
+      { name: 'Lead CSV export + Zapier-ready webhook',       free: false,   starter: false,   pro: true,        brokerage: true },
       { name: 'Microsite publish / unpublish',                free: false,   starter: true,    pro: true,        brokerage: true },
       { name: 'Microsite view analytics',                     free: false,   starter: true,    pro: true,        brokerage: true },
     ],

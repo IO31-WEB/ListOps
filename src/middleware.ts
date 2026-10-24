@@ -17,6 +17,7 @@ const isPublicRoute = createRouteMatcher([
   '/affiliates',
   '/l/(.*)',
   '/flyer/(.*)', // the page does its own auth: signed-in owner OR a short-lived signed print token (PDF renderer)
+  '/api/l/(.*)', // public microsite lead form (honeypot + rate limits + consent inside the handler)
   '/api/photos/(.*)', // listing photos: public by design, key-validated in the handler
   '/api/webhooks/(.*)',
   '/api/contact',

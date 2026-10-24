@@ -163,6 +163,18 @@ export const rateLimitListingWrite = (userId: string) =>
 export const rateLimitContact = (ip: string) =>
   limit({ name: 'contact', limit: 3, windowSeconds: 60 * 60, failClosed: true }, ip)
 
+/** Public microsite lead form — per visitor IP (a real buyer submits once or twice). */
+export const rateLimitLeadIp = (ip: string) =>
+  limit({ name: 'lead-ip', limit: 6, windowSeconds: 10 * 60, failClosed: true }, ip)
+
+/** Public microsite lead form — per listing, so one flooded listing can't spam an agent's inbox from many IPs. */
+export const rateLimitLeadSlug = (slug: string) =>
+  limit({ name: 'lead-slug', limit: 40, windowSeconds: 60 * 60, failClosed: true }, slug)
+
+/** Signed-in lead tools (settings, test webhook, export). */
+export const rateLimitLeadTools = (userId: string) =>
+  limit({ name: 'lead-tools', limit: 30, windowSeconds: 10 * 60, failClosed: false }, userId)
+
 export const rateLimitAPI = (ip: string) =>
   limit({ name: 'api', limit: 60, windowSeconds: 60, failClosed: false }, ip)
 

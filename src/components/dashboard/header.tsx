@@ -20,6 +20,7 @@ const BREADCRUMBS: Record<string, string> = {
 const SEARCH_LINKS = [
   { label: 'New Campaign', href: '/dashboard/generate', desc: 'Generate a new 6-week campaign' },
   { label: 'My Campaigns', href: '/dashboard/campaigns', desc: 'View all your saved campaigns' },
+  { label: 'Leads', href: '/dashboard/leads', desc: 'Showing and info requests from your microsites' },
   { label: 'Brand Kit', href: '/dashboard/brand', desc: 'Update your logo, colors, and agent info' },
   { label: 'Billing & Plans', href: '/dashboard/billing', desc: 'Upgrade or manage your subscription' },
   { label: 'Team', href: '/dashboard/team', desc: 'Invite and manage team members' },

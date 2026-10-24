@@ -49,6 +49,11 @@ export const FEATURE_GATES = {
   flyer_templates:      ['starter', 'pro', 'commercial', 'brokerage', 'enterprise'],         // Luxury + Modern (Classic is free)
   flyer_variants:       ['starter', 'pro', 'commercial', 'brokerage', 'enterprise'],         // Open House / Price Improvement flyers
   flyer_schemes:        ['pro', 'commercial', 'brokerage', 'enterprise'],                    // 5 color schemes
+  // Microsite lead capture (Round 7)
+  lead_capture:         ['starter', 'pro', 'commercial', 'brokerage', 'enterprise'],         // forms on the microsite + leads inbox + email alert
+  lead_export:          ['pro', 'commercial', 'brokerage', 'enterprise'],                    // CSV export
+  lead_webhook:         ['pro', 'commercial', 'brokerage', 'enterprise'],                    // signed webhook (Zapier "Catch Hook" ready)
+  lead_sms:             ['pro', 'commercial', 'brokerage', 'enterprise'],                    // SMS alert to the agent (needs Twilio configured)
   // Commercial plan gates
   site_analysis:        ['commercial', 'brokerage', 'enterprise'],
   property_grading:     ['commercial', 'brokerage', 'enterprise'],
@@ -123,6 +128,7 @@ export const PLANS: Plan[] = [
       { text: 'Email templates (8: buyer follow-ups, seller update & more)', included: false },
       { text: 'AI photo captions (per room)', included: false },
       { text: 'Listing microsite', included: false },
+      { text: 'Lead capture forms + leads inbox', included: false },
       { text: 'Video & reel scripts', included: false },
       { text: 'TikTok, LinkedIn, X, Stories content', included: false },
       { text: 'White-label outputs', included: false },
@@ -147,6 +153,7 @@ export const PLANS: Plan[] = [
       { text: 'Email templates (8: buyer follow-ups, seller update & more)', included: true, highlight: true },
       { text: 'AI photo captions from your uploaded photos', included: true },
       { text: 'Auto-generated listing microsite', included: true },
+      { text: 'Lead capture on every microsite (Schedule a Showing + Request Info) with instant email alerts', included: true, highlight: true },
       { text: '3 premium flyer templates + Open House & Price Improvement flyers', included: true },
       { text: 'Full branded visual kit: Instagram square & Stories, Facebook post & cover, open house, price improvement (PNG)', included: true, highlight: true },
       { text: 'Video & reel scripts', included: false },
@@ -178,6 +185,7 @@ export const PLANS: Plan[] = [
       { text: '3 team seats', included: true },
       { text: '3 flyer templates + 5 color schemes', included: true },
       { text: 'Visual kit PDF export', included: true },
+      { text: 'Lead CSV export + Zapier-ready webhook', included: true },
       { text: 'White-label outputs', included: false },
       { text: 'Agent performance analytics', included: false },
     ],

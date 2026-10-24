@@ -261,6 +261,18 @@ export async function checkCampaignQuota(clerkId: string): Promise<{
   return { allowed: limit === 'unlimited' || effectiveUsed < limit, used: effectiveUsed, limit, planTier: plan, resetsAt: nextReset }
 }
 
+/**
+ * Plan tier for a user by DB id. Read-only, no Clerk sync — for PUBLIC pages/routes (microsite lead forms)
+ * where the visitor has no session and we only need "what has the owner paid for".
+ */
+export async function getPlanTierForUserId(userId: string): Promise<PlanTier> {
+  const user = await db.query.users.findFirst({
+    where: eq(users.id, userId),
+    with: { organization: { with: { subscriptions: true } } },
+  })
+  return (user?.organization?.subscriptions?.[0]?.plan ?? 'free') as PlanTier
+}
+
 // ── Atomic quota gate + increment ─────────────────────────────
 // FIX: Replaces the separate checkCampaignQuota + incrementCampaignUsage pattern
 // that had a TOCTOU race condition allowing quota bypass.

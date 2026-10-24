@@ -550,3 +550,63 @@ export const outreachEmails = pgTable('outreach_emails', {
   userReportIdx: index('outreach_user_report_idx').on(t.userId, t.reportId),
   uniq: uniqueIndex('outreach_batch_recipient_step_idx').on(t.batchId, t.recipientEmail, t.stepIndex),
 }))
+
+
+// ── Leads captured on listing microsites (Round 7) ─────────────────────────────────────────────────
+// One row per "Schedule a Showing" / "Request Info" submission. Contains a third party's contact details, so:
+// rows are only ever read by the owning agent, cascade-delete with the campaign/agent, and the IP is stored hashed.
+export const leads = pgTable('leads', {
+  id: uuid('id').primaryKey().defaultRandom(),
+  campaignId: uuid('campaign_id').notNull().references(() => campaigns.id, { onDelete: 'cascade' }),
+  agentId: uuid('agent_id').notNull().references(() => users.id, { onDelete: 'cascade' }),
+  listingId: uuid('listing_id').references(() => listings.id, { onDelete: 'set null' }),
+
+  kind: text('kind').$type<'showing' | 'info'>().notNull(),
+  status: text('status').$type<'new' | 'contacted' | 'closed'>().notNull().default('new'),
+
+  name: text('name').notNull(),
+  email: text('email').notNull(),            // lower-cased
+  phone: text('phone'),
+  message: text('message'),
+  preferredDate: text('preferred_date'),     // YYYY-MM-DD
+  preferredTime: text('preferred_time'),     // morning | afternoon | evening | anytime
+
+  // Source tracking (all optional, all sanitized + length-capped before insert)
+  source: text('source'),                    // utm_source / ?src= (e.g. "instagram"), else "direct"
+  medium: text('medium'),
+  campaignTag: text('campaign_tag'),
+  referrerHost: text('referrer_host'),
+
+  // Consent record (what the person agreed to, and when)
+  consentText: text('consent_text').notNull(),
+  consentAt: timestamp('consent_at').notNull().defaultNow(),
+
+  ipHash: text('ip_hash'),                   // sha256(ip + salt) — dedupe/abuse forensics, never the raw IP
+  delivery: jsonb('delivery').$type<{
+    email?: 'sent' | 'failed' | 'skipped'
+    sms?: 'sent' | 'failed' | 'skipped'
+    webhook?: 'sent' | 'failed' | 'skipped'
+  }>().default({}),
+
+  createdAt: timestamp('created_at').notNull().defaultNow(),
+}, (t) => ({
+  agentCreatedIdx: index('leads_agent_created_idx').on(t.agentId, t.createdAt),
+  campaignIdx: index('leads_campaign_idx').on(t.campaignId),
+  dedupeIdx: index('leads_dedupe_idx').on(t.campaignId, t.email, t.kind, t.createdAt),
+}))
+
+// Per-agent lead delivery preferences (one row per agent).
+export const leadSettings = pgTable('lead_settings', {
+  userId: uuid('user_id').primaryKey().references(() => users.id, { onDelete: 'cascade' }),
+  notifyEmail: text('notify_email'),         // null = use brand-kit agent email, then account email
+  smsEnabled: boolean('sms_enabled').notNull().default(false),
+  smsPhone: text('sms_phone'),               // E.164, the agent's OWN number
+  webhookUrl: text('webhook_url'),           // https only; validated (no private/internal hosts)
+  webhookSecret: text('webhook_secret'),     // HMAC signing secret shown to the owner
+  updatedAt: timestamp('updated_at').notNull().defaultNow(),
+})
+
+export const leadRelations = relations(leads, ({ one }) => ({
+  campaign: one(campaigns, { fields: [leads.campaignId], references: [campaigns.id] }),
+  listing: one(listings, { fields: [leads.listingId], references: [listings.id] }),
+}))
