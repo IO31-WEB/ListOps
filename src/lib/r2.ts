@@ -48,13 +48,10 @@ export async function uploadToR2(opts: {
 
     const url = `${R2_ENDPOINT}/${BUCKET}/${opts.key}`
     const res = await client.fetch(url, {
-  method: 'PUT',
-  headers: {
-    'Content-Type': opts.contentType,
-    'Content-Length': String(opts.body.byteLength),
-  },
-  body: opts.body,
-})
+      method: 'PUT',
+      headers: { 'Content-Type': opts.contentType },
+      body: opts.body,
+    })
 
     if (!res.ok) {
       console.error('[r2] Upload failed:', res.status, await res.text())
