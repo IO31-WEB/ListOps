@@ -1,12 +1,13 @@
 'use client'
 
+import { LogoMark } from '@/components/ui/logo'
 import { getBillingInfo } from '@/lib/billing-client'
 import { useState, useEffect } from 'react'
 import Link from 'next/link'
 import { usePathname } from 'next/navigation'
 import { UserButton } from '@clerk/nextjs'
 import {
-  House, Zap, LayoutDashboard, FolderOpen, Plus, Palette,
+  Zap, LayoutDashboard, FolderOpen, Plus, Palette,
   CreditCard, Users, BarChart2, Settings, ChevronLeft, Gift,
   ChevronRight, Menu, X, HelpCircle, Building2
 } from 'lucide-react'
@@ -63,16 +64,12 @@ export function DashboardSidebar() {
       <div className={cn('flex items-center py-5 px-4 border-b border-slate-100', collapsed ? 'justify-center' : 'justify-between')}>
         {!collapsed && (
           <Link href="/dashboard" className="flex items-center gap-2.5">
-            <div className="w-8 h-8 bg-slate-900 rounded-lg flex items-center justify-center flex-shrink-0">
-              <House className="w-4 h-4 text-amber-400" />
-            </div>
+            <LogoMark className="w-8 h-8 flex-shrink-0" />
             <span className="font-display font-semibold text-slate-900">ListOps</span>
           </Link>
         )}
         {collapsed && (
-          <div className="w-8 h-8 bg-slate-900 rounded-lg flex items-center justify-center">
-            <House className="w-4 h-4 text-amber-400" />
-          </div>
+          <LogoMark className="w-8 h-8" />
         )}
         <button
           onClick={() => setCollapsed(!collapsed)}

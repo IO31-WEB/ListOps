@@ -1,4 +1,5 @@
 /** POST /api/listings -> create a listing (agent-entered, optionally pre-filled by enrichment). */
+import { normalizeListing } from '@/lib/address'
 import { NextRequest, NextResponse } from 'next/server'
 import { ApiError, handleApiError, readJson, requireUserId } from '@/lib/api-utils'
 import { rateLimitListingWrite, rateLimitHeaders } from '@/lib/ratelimit'
@@ -14,7 +15,7 @@ export async function GET() {
     if (!user) throw new ApiError(404, 'Account not found')
     const rows = await listOwnListings(user.id)
     return NextResponse.json({
-      listings: rows.map(r => ({ id: r.id, address: r.address, city: r.city, state: r.state, createdAt: r.createdAt })),
+      listings: rows.map(r => ({ id: r.id, ...normalizeListing({ address: r.address, city: r.city, state: r.state }), createdAt: r.createdAt })),
     })
   } catch (err) {
     return handleApiError(err, { route: 'listings GET' })

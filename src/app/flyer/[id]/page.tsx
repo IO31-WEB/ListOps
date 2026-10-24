@@ -1,4 +1,6 @@
 import { auth } from '@clerk/nextjs/server'
+import { normalizeListing } from '@/lib/address'
+import { resolveListingPhotos } from '@/lib/photos'
 import { PrintButton } from './print-button'
 import { redirect } from 'next/navigation'
 import { getCampaign, checkCampaignQuota } from '@/lib/user-service'
@@ -33,7 +35,7 @@ export default async function FlyerPage({
   if (!campaign) redirect('/dashboard/campaigns')
 
   const planTier = quota.planTier
-  const listing = campaign.listing
+  const listing = normalizeListing(campaign.listing)
   const address = listing
     ? [listing.address, listing.city, listing.state].filter(Boolean).join(', ')
     : 'Property Address'
@@ -44,7 +46,7 @@ export default async function FlyerPage({
   const baths = listing?.bathrooms ?? 0
   const sqft = listing?.sqft?.toLocaleString() ?? ''
   const yearBuilt = (listing as any)?.yearBuilt ?? ''
-  const photos = (listing?.photos as string[]) ?? []
+  const photos = resolveListingPhotos(campaign.listing)
   const description = listing?.description ?? ''
   const agentName = campaign.brandKit?.agentName ?? ''
   const agentTitle = (campaign.brandKit as any)?.agentTitle ?? 'REALTOR®'

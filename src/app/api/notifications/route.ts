@@ -5,6 +5,7 @@
  * Pulls from real DB data — recent campaigns, plan changes, etc.
  */
 
+import { formatStreet } from '@/lib/address'
 import { NextResponse } from 'next/server'
 import { auth } from '@clerk/nextjs/server'
 import { db } from '@/lib/db'
@@ -41,7 +42,7 @@ export async function GET() {
     })
 
     for (const campaign of recentCampaigns) {
-      const address = campaign.listing?.address ?? 'Your listing'
+      const address = campaign.listing?.address ? formatStreet(campaign.listing.address) : 'Your listing'
       notifications.push({
         id: `campaign_${campaign.id}`,
         type: 'success',

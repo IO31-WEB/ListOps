@@ -1,10 +1,12 @@
 'use client'
 
+import { LogoMark } from '@/components/ui/logo'
 import { getBillingInfo } from '@/lib/billing-client'
 import { RenewalNotice } from '@/components/billing/renewal-notice'
 import { useState, useEffect } from 'react'
-import { Check, X, Zap, CreditCard, AlertCircle, Star, Shield, ArrowRight, Loader2, ChevronDown, ChevronUp, Building2, Users, Lock } from 'lucide-react'
-import { PLANS, ENTERPRISE_PLAN } from '@/lib/plans'
+import { Check, X, CreditCard, AlertCircle, Star, Shield, ArrowRight, Loader2, ChevronDown, ChevronUp, Building2, Users, Lock } from 'lucide-react'
+import { PLANS, ENTERPRISE_PLAN, comparePlan } from '@/lib/plans'
+import { PlanBadge } from '@/components/billing/plan-badge'
 import { formatCurrency } from '@/lib/utils'
 import toast from 'react-hot-toast'
 import Link from 'next/link'
@@ -100,10 +102,7 @@ export default function BillingPage() {
   const handleUpgrade = async (planId: string) => {
     if (planId === billingInfo?.planTier) return
 
-    const tiers = ['free', 'starter', 'pro', 'brokerage']
-    const currentIdx = tiers.indexOf(billingInfo?.planTier ?? 'free')
-    const targetIdx = tiers.indexOf(planId)
-    const isDowngrade = targetIdx < currentIdx
+    const isDowngrade = comparePlan(billingInfo?.planTier ?? 'free', planId) === 'downgrade'
 
     if (planId === 'free') {
       if (!billingInfo?.planTier || billingInfo.planTier === 'free') {
@@ -174,14 +173,13 @@ export default function BillingPage() {
 
   const currentPlan = billingInfo?.planTier ?? 'free'
 
-  const getPlanCTA = (planId: string) => {
-    if (planId === currentPlan) return 'Current Plan'
-    if (planId === 'free') return currentPlan !== 'free' ? 'Downgrade' : 'Current'
-    const tierOrder = ['free', 'starter', 'pro', 'brokerage', 'enterprise']
-    const currentIdx = tierOrder.indexOf(currentPlan)
-    const planIdx = tierOrder.indexOf(planId)
-    if (planIdx < currentIdx) return 'Downgrade'
-    return planId === 'brokerage' ? 'Start 14-Day Trial' : 'Upgrade Now'
+  // Label comes from the price-ranked comparison in lib/plans.ts (Upgrade / Downgrade / Current Plan).
+  // The checkout, portal and cancel flows are unchanged — only the wording is derived differently.
+  const getPlanCTA = (planId: string, planName: string) => {
+    const change = comparePlan(currentPlan, planId)
+    if (change === 'current') return 'Current Plan'
+    if (change === 'downgrade') return 'Downgrade'
+    return `Upgrade to ${planName}`
   }
 
   return (
@@ -207,7 +205,7 @@ export default function BillingPage() {
           <div>
             <div className="flex items-center gap-3 mb-3">
               <div className="w-10 h-10 bg-amber-100 rounded-xl flex items-center justify-center">
-                <Zap className="w-5 h-5 text-amber-700" />
+                <LogoMark className="w-6 h-6" />
               </div>
               <div>
                 <div className="text-xs text-slate-500 font-medium uppercase tracking-wider">Current Plan</div>
@@ -279,7 +277,8 @@ export default function BillingPage() {
           const isCurrent = plan.id === currentPlan
           const isDark = plan.highlighted || isCurrent   // dark bg card = white text
           const price = annual ? (plan.yearlyPrice ?? 0) : (plan.monthlyPrice ?? 0)
-          const cta = getPlanCTA(plan.id)
+          const cta = getPlanCTA(plan.id, plan.name)
+          const isDowngradeCta = cta === 'Downgrade'
           const isLoading = loading === plan.id
 
           return (
@@ -296,13 +295,9 @@ export default function BillingPage() {
               }`}
             >
               {/* Badges */}
-              <div className="flex items-center justify-between mb-3 h-6">
-                {plan.badge && (
-                  <span className={`text-xs font-semibold px-2.5 py-1 rounded-full ${plan.highlighted ? 'bg-amber-400 text-slate-900' : 'bg-slate-100 text-slate-700'}`}>
-                    {plan.badge}
-                  </span>
-                )}
-                {isCurrent && <span className="text-xs font-semibold text-amber-300 bg-amber-400/20 border border-amber-400/40 px-2.5 py-1 rounded-full ml-auto">✓ Current Plan</span>}
+              <div className="flex flex-wrap items-center gap-2 mb-3 min-h-6">
+                {plan.badge && <PlanBadge tone={plan.highlighted ? 'highlight' : 'neutral'}>{plan.badge}</PlanBadge>}
+                {isCurrent && <PlanBadge tone="currentOnDark">✓ Current Plan</PlanBadge>}
               </div>
 
               <div className={`font-display text-xl font-semibold mb-1 ${isDark ? 'text-white' : 'text-slate-900'}`}>
@@ -350,7 +345,7 @@ export default function BillingPage() {
                 className={`w-full text-center text-sm font-semibold py-3 rounded-xl transition-all flex items-center justify-center gap-2 ${
                   isCurrent
                     ? 'bg-amber-100 text-amber-800 cursor-default'
-                    : cta === 'Downgrade'
+                    : isDowngradeCta
                     ? 'bg-slate-100 text-slate-600 hover:bg-slate-200 cursor-pointer'
                     : plan.highlighted
                     ? 'bg-amber-400 text-slate-900 hover:bg-amber-300'
@@ -359,7 +354,7 @@ export default function BillingPage() {
               >
                 {isLoading ? <Loader2 className="w-4 h-4 animate-spin" /> : cta}
               </button>
-              {plan.id !== 'free' && !isCurrent && cta !== 'Downgrade' && (
+              {plan.id !== 'free' && !isCurrent && !isDowngradeCta && (
                 <RenewalNotice
                   className="mt-3"
                   dark={isDark}

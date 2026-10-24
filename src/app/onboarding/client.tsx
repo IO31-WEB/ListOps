@@ -1,8 +1,9 @@
 'use client'
 
+import { LogoMark } from '@/components/ui/logo'
 import { useState } from 'react'
 import { useRouter } from 'next/navigation'
-import { House, ArrowRight, Check } from 'lucide-react'
+import { ArrowRight, Check } from 'lucide-react'
 import toast from 'react-hot-toast'
 
 const STEPS = [
@@ -77,9 +78,7 @@ export default function OnboardingClient() {
         </div>
 
         <div className="bg-white rounded-2xl border border-slate-200 shadow-sm p-8">
-          <div className="w-12 h-12 bg-slate-900 rounded-2xl flex items-center justify-center mb-6">
-            <House className="w-6 h-6 text-amber-400" />
-          </div>
+          <LogoMark className="w-12 h-12 mb-6" />
 
           <h2 className="font-display text-2xl font-semibold text-slate-900 mb-1">{STEPS[step - 1].title}</h2>
           <p className="text-slate-500 text-sm mb-8">{STEPS[step - 1].desc}</p>

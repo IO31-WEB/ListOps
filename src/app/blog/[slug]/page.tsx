@@ -1,7 +1,8 @@
 import type { Metadata } from 'next'
+import { LogoMark } from '@/components/ui/logo'
 import { notFound } from 'next/navigation'
 import Link from 'next/link'
-import { House, ArrowRight, ArrowLeft, Clock, Tag, Check } from 'lucide-react'
+import { ArrowRight, ArrowLeft, Clock, Tag, Check } from 'lucide-react'
 import { BLOG_POSTS, getPost, getRelatedPosts, type BlogSection } from '@/lib/blog-posts'
 
 interface Props {
@@ -162,9 +163,7 @@ export default async function BlogPostPage({ params }: Props) {
       <nav className="fixed top-0 inset-x-0 z-50 glass border-b border-amber-100/60">
         <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 h-16 flex items-center justify-between">
           <Link href="/" className="flex items-center gap-2.5">
-            <div className="w-8 h-8 bg-slate-900 rounded-lg flex items-center justify-center">
-              <House className="w-4 h-4 text-amber-400" />
-            </div>
+            <LogoMark className="w-8 h-8" />
             <span className="font-display font-semibold text-slate-900 text-lg">ListOps</span>
           </Link>
           <div className="flex items-center gap-3">
@@ -272,9 +271,7 @@ export default async function BlogPostPage({ params }: Props) {
       <footer className="border-t border-slate-200 py-8 px-4">
         <div className="max-w-6xl mx-auto flex flex-col sm:flex-row items-center justify-between gap-4">
           <div className="flex items-center gap-2">
-            <div className="w-6 h-6 bg-slate-900 rounded flex items-center justify-center">
-              <House className="w-3 h-3 text-amber-400" />
-            </div>
+            <LogoMark className="w-6 h-6" />
             <span className="text-sm font-semibold text-slate-600">ListOps</span>
           </div>
           <div className="flex items-center gap-6 text-xs text-slate-400">

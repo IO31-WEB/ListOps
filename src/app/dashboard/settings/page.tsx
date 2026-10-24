@@ -1,7 +1,7 @@
 'use client'
 
 import { useState, useEffect } from 'react'
-import { Save, Loader2, Check, User, Bell, Lock, Globe, Shield, Zap, AlertTriangle } from 'lucide-react'
+import { Save, Loader2, Check, User, Bell, Lock, Globe, Shield, Gift, AlertTriangle } from 'lucide-react'
 import toast from 'react-hot-toast'
 import Link from 'next/link'
 import { useClerk } from '@clerk/nextjs'
@@ -178,7 +178,7 @@ export default function SettingsPage() {
       {/* Referral program */}
       <div className="bg-white rounded-2xl border border-slate-200 p-6">
         <div className="flex items-center gap-2 mb-3">
-          <Zap className="w-4 h-4 text-amber-600" />
+          <Gift className="w-4 h-4 text-amber-600" />
           <h2 className="font-display font-semibold text-slate-900">Referral Program</h2>
         </div>
         <p className="text-sm text-slate-600 mb-4">

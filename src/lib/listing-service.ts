@@ -5,7 +5,8 @@
 import { and, desc, eq } from 'drizzle-orm'
 import { db } from '@/lib/db'
 import { campaigns, listings, listingUploads } from '@/lib/db/schema'
-import { getR2Url, deleteFromR2 } from '@/lib/r2'
+import { deleteFromR2 } from '@/lib/r2'
+import { photoUrl } from '@/lib/photos'
 import { inArray } from 'drizzle-orm'
 import { assertOwnPhotoKeys, type ListingInput } from '@/lib/listing-schemas'
 
@@ -25,7 +26,7 @@ function toRow(clerkId: string, input: ListingInput) {
     description: input.description ?? null,
     features: input.features,
     photoKeys: keys,
-    photos: keys.map(getR2Url),
+    photos: keys.map(photoUrl),
     source: input.source,
     enrichmentProvider: input.enrichmentProvider ?? null,
     updatedAt: new Date(),

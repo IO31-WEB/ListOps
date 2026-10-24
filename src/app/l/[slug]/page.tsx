@@ -1,17 +1,33 @@
-import { notFound } from 'next/navigation'
+import { notFound, permanentRedirect } from 'next/navigation'
+import { normalizeListing } from '@/lib/address'
+import { resolveListingPhotos } from '@/lib/photos'
 import { db } from '@/lib/db'
 import { campaigns } from '@/lib/db/schema'
-import { eq } from 'drizzle-orm'
+import { and, desc, eq } from 'drizzle-orm'
 import { trackMicrositeViewed } from '@/lib/posthog'
 import { headers } from 'next/headers'
 
 export default async function MicrositePage({ params }: { params: Promise<{ slug: string }> }) {
   const { slug } = await params
 
-  const campaign = await db.query.campaigns.findFirst({
+  let campaign = await db.query.campaigns.findFirst({
     where: eq(campaigns.micrositeSlug, slug),
     with: { listing: true, brandKit: true },
   })
+
+  // Legacy links: copy generated before the canonical-slug fix points at /l/listing-<listingId>.
+  // Resolve it to that listing's newest PUBLISHED microsite and redirect to the real URL, so old posts/emails still work.
+  if (!campaign) {
+    const m = /^listing-([0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12})$/i.exec(slug)
+    if (m) {
+      const live = await db.query.campaigns.findFirst({
+        where: and(eq(campaigns.listingId, m[1].toLowerCase()), eq(campaigns.micrositePublished, true)),
+        orderBy: [desc(campaigns.createdAt)],
+        columns: { micrositeSlug: true },
+      })
+      if (live?.micrositeSlug) permanentRedirect(`/l/${live.micrositeSlug}`)
+    }
+  }
 
   if (!campaign || !campaign.micrositePublished) notFound()
 
@@ -29,7 +45,7 @@ export default async function MicrositePage({ params }: { params: Promise<{ slug
     referrer: hdrs.get('referer') ?? undefined,
   })
 
-  const listing = campaign.listing
+  const listing = normalizeListing(campaign.listing)
   const bk = campaign.brandKit as any
   const address = listing ? [listing.address, listing.city, listing.state].filter(Boolean).join(', ') : 'Property'
   const streetAddress = listing?.address ?? address
@@ -38,7 +54,7 @@ export default async function MicrositePage({ params }: { params: Promise<{ slug
   const beds = listing?.bedrooms ?? 0
   const baths = listing?.bathrooms ?? 0
   const sqft = listing?.sqft?.toLocaleString() ?? ''
-  const photos = (listing?.photos as string[]) ?? []
+  const photos = resolveListingPhotos(campaign.listing)
   const description = listing?.description ?? ''
   const primaryColor = bk?.primaryColor ?? '#1e3a5f'
   const accentColor = bk?.accentColor ?? '#c9a84c'
@@ -130,9 +146,11 @@ export default async function MicrositePage({ params }: { params: Promise<{ slug
             </div>
             <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(250px, 1fr))', gap: 12 }}>
               {photos.slice(1, 9).map((photo, i) => (
-                // eslint-disable-next-line @next/next/no-img-element
-                <img key={i} src={photo} alt={`${address} — photo ${i + 2}`}
-                  style={{ width: '100%', aspectRatio: '4/3', objectFit: 'cover', borderRadius: 12, display: 'block' }} />
+                <a key={i} href={photo} target="_blank" rel="noopener noreferrer" style={{ display: 'block' }}>
+                  {/* eslint-disable-next-line @next/next/no-img-element */}
+                  <img src={photo} alt={`${address} — photo ${i + 2}`} loading="lazy"
+                    style={{ width: '100%', aspectRatio: '4/3', objectFit: 'cover', borderRadius: 12, display: 'block' }} />
+                </a>
               ))}
             </div>
           </div>

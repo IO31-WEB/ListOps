@@ -17,6 +17,7 @@ const routes = walk(API_DIR).map(p => ({ path: relative(API_DIR, p), src: readFi
 
 // Routes that are intentionally callable without a Clerk session, and how they are protected instead.
 const PUBLIC: Record<string, string> = {
+  'photos/[...key]/route.ts': 'public listing photos; strict key-shape validation, random unguessable keys',
   'contact/route.ts': 'honeypot + per-IP rate limit',
   'unsubscribe/route.ts': 'HMAC-signed token',
   'csp-report/route.ts': 'browser reports; rate-limited, size-capped',

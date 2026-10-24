@@ -13,7 +13,8 @@ import { ApiError, handleApiError, requireUserId } from '@/lib/api-utils'
 import { rateLimitUpload, rateLimitHeaders } from '@/lib/ratelimit'
 import { dimensionsOk, sniffImage } from '@/lib/image-validate'
 import { and, count, eq, gte } from 'drizzle-orm'
-import { uploadToR2, getR2Url } from '@/lib/r2'
+import { uploadToR2 } from '@/lib/r2'
+import { photoUrl } from '@/lib/photos'
 import { photoKeyPrefix } from '@/lib/listing-schemas'
 import { getUserWithDetails } from '@/lib/user-service'
 import { assertAdult } from '@/lib/age'
@@ -66,7 +67,7 @@ export async function POST(request: NextRequest) {
     // Track the upload so photos that never get attached to a listing can be cleaned up (cron/cleanup-uploads).
     await db.insert(listingUploads).values({ key, userId: user.id, bytes: bytes.byteLength }).onConflictDoNothing()
 
-    return NextResponse.json({ key, url: getR2Url(key) }, { status: 201 })
+    return NextResponse.json({ key, url: photoUrl(key) }, { status: 201 })
   } catch (err) {
     return handleApiError(err, { route: 'uploads/listing-photo' })
   }

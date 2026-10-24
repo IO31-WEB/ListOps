@@ -1,6 +1,7 @@
 import { SignUp } from '@clerk/nextjs'
+import { LogoMark } from '@/components/ui/logo'
 import Link from 'next/link'
-import { House, Check } from 'lucide-react'
+import { Check } from 'lucide-react'
 import { AgeGate } from '@/components/auth/age-gate'
 
 export default function SignUpPage() {
@@ -13,9 +14,7 @@ export default function SignUpPage() {
 
         <div className="relative">
           <Link href="/" className="flex items-center gap-2.5">
-            <div className="w-9 h-9 bg-amber-500 rounded-xl flex items-center justify-center">
-              <House className="w-4.5 h-4.5 text-slate-900" />
-            </div>
+            <LogoMark className="w-9 h-9" tone="light" />
             <span className="font-display font-semibold text-white text-xl">ListOps</span>
           </Link>
         </div>
@@ -52,9 +51,7 @@ export default function SignUpPage() {
       <div className="flex-1 flex flex-col items-center justify-center px-4 py-16">
         {/* Mobile logo */}
         <Link href="/" className="flex lg:hidden items-center gap-2.5 mb-10">
-          <div className="w-9 h-9 bg-slate-900 rounded-xl flex items-center justify-center">
-            <House className="w-4.5 h-4.5 text-amber-400" />
-          </div>
+          <LogoMark className="w-9 h-9" />
           <span className="font-display font-semibold text-slate-900 text-xl">ListOps</span>
         </Link>
         <AgeGate>

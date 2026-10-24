@@ -1,9 +1,11 @@
 'use client'
 
+import { LogoMark } from '@/components/ui/logo'
 import { useState } from 'react'
 import Link from 'next/link'
 import { RenewalNotice } from '@/components/billing/renewal-notice'
-import { House, ArrowRight, Check, X, HelpCircle } from 'lucide-react'
+import { PlanBadge } from '@/components/billing/plan-badge'
+import { ArrowRight, Check, X, HelpCircle } from 'lucide-react'
 import { PLANS, ENTERPRISE_PLAN } from '@/lib/plans'
 import { formatCurrency } from '@/lib/utils'
 
@@ -91,9 +93,7 @@ export default function PricingPage() {
       <nav className="fixed top-0 inset-x-0 z-50 glass border-b border-amber-100/60">
         <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 h-16 flex items-center justify-between">
           <Link href="/" className="flex items-center gap-2.5">
-            <div className="w-8 h-8 bg-slate-900 rounded-lg flex items-center justify-center">
-              <House className="w-4 h-4 text-amber-400" />
-            </div>
+            <LogoMark className="w-8 h-8" />
             <span className="font-display font-semibold text-slate-900 text-lg">ListOps</span>
           </Link>
           <div className="flex items-center gap-3">
@@ -143,9 +143,7 @@ export default function PricingPage() {
                 <div key={plan.id} className={`rounded-2xl flex flex-col relative overflow-hidden ${plan.highlighted ? 'bg-slate-900 text-white ring-2 ring-amber-400' : 'bg-white border border-slate-200'}`}>
                   {plan.badge && (
                     <div className="absolute top-4 right-4">
-                      <span className={`text-xs font-bold px-2.5 py-1 rounded-full ${plan.highlighted ? 'bg-amber-400 text-slate-900' : 'bg-amber-100 text-amber-700'}`}>
-                        {plan.badge}
-                      </span>
+                      <PlanBadge tone={plan.highlighted ? 'highlight' : 'neutral'}>{plan.badge}</PlanBadge>
                     </div>
                   )}
 

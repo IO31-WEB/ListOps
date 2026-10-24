@@ -10,7 +10,10 @@ export default function OpengraphImage() {
     (
       <div style={{ width: '100%', height: '100%', display: 'flex', flexDirection: 'column', justifyContent: 'center', padding: 80, background: '#0f172a', color: '#fff' }}>
         <div style={{ display: 'flex', alignItems: 'center', gap: 16, fontSize: 36, fontWeight: 700 }}>
-          <div style={{ width: 56, height: 56, borderRadius: 14, background: '#f59e0b', display: 'flex', alignItems: 'center', justifyContent: 'center', color: '#0f172a', fontSize: 34 }}>L</div>
+          <svg width="56" height="56" viewBox="0 0 24 24" fill="none" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+            <path d="M3 9.5L12 3l9 6.5V20a1 1 0 0 1-1 1H4a1 1 0 0 1-1-1V9.5z" fill="#f8fafc" stroke="#f8fafc" />
+            <path d="M9 21V12h6v9" fill="#f59e0b" stroke="#f59e0b" />
+          </svg>
           ListOps
         </div>
         <div style={{ fontSize: 76, fontWeight: 700, lineHeight: 1.05, marginTop: 48, maxWidth: 980 }}>

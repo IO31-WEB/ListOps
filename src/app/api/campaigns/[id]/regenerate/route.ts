@@ -11,6 +11,7 @@
  *   video | microsite | photoCaptions
  */
 
+import { normalizeListing } from '@/lib/address'
 import { NextRequest, NextResponse } from 'next/server'
 import { auth } from '@clerk/nextjs/server'
 import { guardAi } from '@/lib/ai-guard'
@@ -340,7 +341,7 @@ export async function POST(
     if (!campaign) return NextResponse.json({ error: 'Campaign not found' }, { status: 404 })
 
     // Build listing context from the joined listing row
-    const listing = (campaign as any).listing
+    const listing = normalizeListing((campaign as any).listing)
     const listingContext = {
       address: listing?.address ?? '',
       city: listing?.city ?? '',

@@ -1,4 +1,5 @@
 import Link from 'next/link'
+import { formatStreet, formatCity } from '@/lib/address'
 import { notFound } from 'next/navigation'
 import { requireAdminPage } from '@/lib/admin'
 import { getUserDetail } from '@/lib/admin-data'
@@ -44,7 +45,7 @@ export default async function AdminUserDetail({ params }: { params: Promise<{ id
             <tbody>{d.recentCampaigns.map(c => (
               <tr key={c.id}>
                 <td className={td}>{fmtDate(c.createdAt)}</td>
-                <td className={td}>{[c.address, c.city].filter(Boolean).join(', ') || '—'}</td>
+                <td className={td}>{[formatStreet(c.address), formatCity(c.city)].filter(Boolean).join(', ') || '—'}</td>
                 <td className={td}><Badge tone={statusTone(c.status)}>{c.status}</Badge></td>
                 <td className={td}>{c.generationMs ? `${Math.round(c.generationMs / 1000)}s` : '—'}</td>
                 <td className={td}>{c.failureReason ?? ''} {c.refundedAt && <Badge tone="green">refunded {fmtDate(c.refundedAt)}</Badge>}</td>

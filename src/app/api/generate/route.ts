@@ -28,7 +28,9 @@ import { assertBudgetAvailable, recordSpend } from '@/lib/ai-budget'
 import { getOwnListing } from '@/lib/listing-service'
 import { assertAdult } from '@/lib/age'
 import { INJECTION_GUARD, sanitizeForPrompt, untrusted, flagInjection } from '@/lib/prompt-safety'
-import { getR2Url } from '@/lib/r2'
+import { getFromR2 } from '@/lib/r2'
+import { photoUrl } from '@/lib/photos'
+import { formatStreet, formatCity, formatState } from '@/lib/address'
 import { dimensionsOk, sniffImage } from '@/lib/image-validate'
 import { captureError, trackGenerationCost } from '@/lib/monitoring'
 import { trackCampaignGenerated } from '@/lib/posthog'
@@ -65,10 +67,11 @@ function listingToPromptShape(row: any, user: any) {
     listPrice: row.price ? Number(row.price) : 0,
     remarks: row.description ?? '',
     address: {
-      deliveryLine: sanitizeForPrompt(row.address, 120),
-      line1: sanitizeForPrompt(row.address, 120),
-      city: sanitizeForPrompt(row.city, 80),
-      state: sanitizeForPrompt(row.state, 4),
+      // Normalized (title case, uppercase state) even for rows saved before server-side normalization existed.
+      deliveryLine: sanitizeForPrompt(formatStreet(row.address), 120),
+      line1: sanitizeForPrompt(formatStreet(row.address), 120),
+      city: sanitizeForPrompt(formatCity(row.city), 80),
+      state: sanitizeForPrompt(formatState(row.state), 4),
       postalCode: sanitizeForPrompt(row.zip, 12),
     },
     property: {
@@ -86,19 +89,19 @@ function listingToPromptShape(row: any, user: any) {
       contact: { office: user?.phone ?? '' },
     },
     // URLs are rebuilt from storage KEYS we generated — never from client-supplied URLs
-    photos: photoKeys.map(getR2Url),
+    photoKeys,
+    photos: photoKeys.map(photoUrl),
   }
 }
 
-// Fetch a photo for Claude Vision. SSRF-safe: callers only pass URLs derived from our own
-// storage keys, and we re-verify the host here as defense in depth.
-async function fetchPhotoAsBase64(url: string): Promise<{ data: string; mediaType: 'image/jpeg' | 'image/png' | 'image/webp' } | null> {
+// Fetch a photo for Claude Vision straight from R2 (S3 API, our credentials) by storage KEY.
+// This no longer depends on the bucket being public or on NEXT_PUBLIC_R2_PUBLIC_URL, and keys come only from
+// our own DB row (validated at save time), so there is no SSRF surface.
+async function fetchPhotoAsBase64(key: string): Promise<{ data: string; mediaType: 'image/jpeg' | 'image/png' | 'image/webp' } | null> {
   try {
-    const base = process.env.NEXT_PUBLIC_R2_PUBLIC_URL
-    if (!base || !url.startsWith(base + '/')) return null
-    const res = await fetch(url, { signal: AbortSignal.timeout(8000), redirect: 'error' })
-    if (!res.ok) return null
-    const buf = new Uint8Array(await res.arrayBuffer())
+    const obj = await getFromR2(key)
+    if (!obj) return null
+    const buf = new Uint8Array(obj.body)
     if (buf.byteLength > MAX_VISION_BYTES) return null
     const kind = sniffImage(buf)
     if (!kind || !dimensionsOk(buf)) return null // never send Claude an image it will reject (would fail the whole generation)
@@ -106,6 +109,12 @@ async function fetchPhotoAsBase64(url: string): Promise<{ data: string; mediaTyp
   } catch {
     return null
   }
+}
+
+// The ONE link written into every generated post/email. It is the campaign's real microsite slug (assigned before
+// the prompts are built), so it is identical to the URL the microsite serves once the agent publishes it.
+function canonicalListingUrl(slug: string): string {
+  return `${(process.env.NEXT_PUBLIC_APP_URL || 'https://listops.io').replace(/\/+$/, '')}/l/${slug}`
 }
 
 // ── Shared field derivation ─────────────────────────────────────
@@ -148,7 +157,7 @@ function deriveSharedFields(listing: any, planTier: PlanTier, brandKit?: any, us
     ? `Agent: ${agentName} — do not mention ListOps in any outputs`
     : 'Presented by ListOps'
 
-  const listingUrl = `${process.env.NEXT_PUBLIC_APP_URL || 'https://listops.io'}/l/listing-${listing.listingId}`
+  const listingUrl = canonicalListingUrl(listing.micrositeSlug)
 
   const toneGuides: Record<string, string> = {
     professional: 'authoritative, data-driven, and polished.',
@@ -381,7 +390,7 @@ function buildProPrompt(listing: any, planTier: PlanTier, brandKit?: any, userAi
   const toneGuide = toneGuides[tone] ?? toneGuides['professional']
   const agentSigParts = [agentName, agentTitle, brokerageName, agentPhone].filter(Boolean)
   const agentSignature = agentSigParts.join(' | ')
-  const listingUrl = `${process.env.NEXT_PUBLIC_APP_URL || 'https://listops.io'}/l/listing-${listing.listingId}`
+  const listingUrl = canonicalListingUrl(listing.micrositeSlug)
 
   return `You are a senior real estate marketing strategist. Generate Pro-tier social and video content for this listing. Return ONLY valid JSON — no markdown, no code fences.
 
@@ -527,19 +536,22 @@ export async function POST(request: NextRequest) {
     const startMs = Date.now()
     const isDemo = false
 
-    const listingData = listingToPromptShape(listingRow, user)
+    const baseShape = listingToPromptShape(listingRow, user)
     // Observe (never block): report likely prompt-injection attempts — field names + pattern ids only.
     flagInjection(
       { description: listingRow.description, features: listingRow.features, agentName: brandKit?.agentName, tagline: brandKit?.tagline, brokerage: brandKit?.brokerageName },
       { userId, listingId: listingRow.id }
     )
-    const address = [listingData.address.deliveryLine, listingData.address.city, listingData.address.state].filter(Boolean).join(', ')
+    const address = [baseShape.address.deliveryLine, baseShape.address.city, baseShape.address.state].filter(Boolean).join(', ')
     const listingRecord = listingRow
+
+    // Canonical microsite slug — fixed NOW so the link inside the generated copy and the live microsite URL are the same.
+    const micrositeSlug = `${slugify(address)}-${Date.now()}`
+    const listingData = { ...baseShape, micrositeSlug }
 
     // Create campaign record
     // FIX: Write campaignRecordId to outer scope immediately so the catch block
     // can mark it 'failed' even if the error happens deep in the try block.
-    const micrositeSlug = `${slugify(address)}-${Date.now()}`
     let campaignRecord: any
     // Close out dead 'generating' rows for this listing first, so a crashed earlier run can't block this one.
     await db.update(campaigns)
@@ -568,14 +580,13 @@ export async function POST(request: NextRequest) {
     // photoCaptions) — each with its own comfortably-sized budget.
     const socialPromptText = buildSocialPrompt(listingData, planTier, brandKit, (user as any).aiPersona)
     const listingPromptText = buildListingContentPrompt(listingData, planTier, brandKit, (user as any).aiPersona)
-    const rawPhotos: string[] = listingData.photos ?? []
     // Cap photos — each base64 image adds ~1.5-3k input tokens with diminishing copy quality returns
-    const photoUrls = rawPhotos.slice(0, MAX_VISION_PHOTOS)
+    const visionKeys = (listingData.photoKeys ?? []).slice(0, MAX_VISION_PHOTOS)
 
     // Fetch photos in parallel (best-effort — failures are silently dropped)
     const photoBlocks: Anthropic.ImageBlockParam[] = []
-    if (photoUrls.length > 0) {
-      const fetched = await Promise.all(photoUrls.map(fetchPhotoAsBase64))
+    if (visionKeys.length > 0) {
+      const fetched = await Promise.all(visionKeys.map(fetchPhotoAsBase64))
       for (let i = 0; i < fetched.length; i++) {
         const photo = fetched[i]
         if (photo) {

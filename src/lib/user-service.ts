@@ -9,6 +9,8 @@
  *    consumeCampaignQuota() is the gate used by the generate route.
  */
 
+import { normalizeListing } from '@/lib/address'
+import { resolveListingPhotos } from '@/lib/photos'
 import { db } from './db'
 import { users, organizations, brandKits, subscriptions, campaigns, auditLogs } from './db/schema'
 import { eq, and, desc, count, sql } from 'drizzle-orm'
@@ -418,7 +420,7 @@ export async function getUserCampaigns(clerkId: string, page = 1, pageLimit = 20
   ])
 
   return {
-    campaigns: allCampaigns,
+    campaigns: allCampaigns.map(c => ({ ...c, listing: normalizeListing(c.listing) })),
     total: totalResult[0]?.count ?? 0,
     pages: Math.ceil((totalResult[0]?.count ?? 0) / safeLimit),
   }
@@ -427,10 +429,13 @@ export async function getUserCampaigns(clerkId: string, page = 1, pageLimit = 20
 export async function getCampaign(campaignId: string, clerkId: string) {
   const user = await db.query.users.findFirst({ where: eq(users.clerkId, clerkId) })
   if (!user) return null
-  return db.query.campaigns.findFirst({
+  const row = await db.query.campaigns.findFirst({
     where: and(eq(campaigns.id, campaignId), eq(campaigns.agentId, user.id)),
     with: { listing: true, brandKit: true },
   })
+  if (!row) return row
+  // Display-time normalization: title-case address, and photo URLs derived from storage KEYS (never stale stored URLs).
+  return { ...row, listing: row.listing ? { ...normalizeListing(row.listing), photos: resolveListingPhotos(row.listing) } : row.listing }
 }
 
 export async function getTeamMembers(orgId: string) {

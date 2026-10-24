@@ -1,4 +1,5 @@
 import Link from 'next/link'
+import { formatStreet, formatCity } from '@/lib/address'
 import { requireAdminPage } from '@/lib/admin'
 import { getRecentFailures } from '@/lib/admin-data'
 import { Badge, Card, fmtDate, td, th } from '../_lib'
@@ -17,7 +18,7 @@ export default async function AdminFailures() {
             <tr key={f.id}>
               <td className={td}>{fmtDate(f.createdAt)}</td>
               <td className={td}>{f.userId ? <Link prefetch={false} className="text-amber-700 underline" href={`/admin/users/${f.userId}`}>{f.email}</Link> : '—'}</td>
-              <td className={td}>{[f.address, f.city].filter(Boolean).join(', ') || '—'}</td>
+              <td className={td}>{[formatStreet(f.address), formatCity(f.city)].filter(Boolean).join(', ') || '—'}</td>
               <td className={td}>{f.generationMs ? `${Math.round(f.generationMs / 1000)}s` : '—'}</td>
               <td className={td}>{f.failureReason ?? <span className="text-slate-400">not recorded (older than this feature)</span>} {f.refundedAt && <Badge tone="green">refunded</Badge>}</td>
             </tr>))}</tbody></table>

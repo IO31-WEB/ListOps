@@ -1,4 +1,5 @@
 import Link from 'next/link'
+import { formatListingAddress } from '@/lib/address'
 import { notFound } from 'next/navigation'
 import { requireAdminPage } from '@/lib/admin'
 import { getViewAsUser } from '@/lib/admin-data'
@@ -33,7 +34,7 @@ export default async function ViewAsUser({ params }: { params: Promise<{ id: str
           <div className="space-y-4">{d.campaignViews.map(c => (
             <div key={c.id} className="rounded-lg border border-slate-200 p-4">
               <div className="flex flex-wrap items-center gap-2">
-                <strong className="text-sm">{[c.listing?.address, c.listing?.city, c.listing?.state].filter(Boolean).join(', ') || 'Untitled listing'}</strong>
+                <strong className="text-sm">{formatListingAddress(c.listing) || 'Untitled listing'}</strong>
                 <Badge tone={statusTone(c.status)}>{c.status}</Badge>
                 <span className="text-xs text-slate-500">{fmtDate(c.createdAt)}</span>
               </div>

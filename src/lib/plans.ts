@@ -255,3 +255,20 @@ export const ENTERPRISE_PLAN = {
     ],
   })
 })()
+
+// ── Plan comparison (single source of truth for Upgrade / Downgrade labels) ───
+// Rank is by monthly price, NOT by a hard-coded tier list: the old list omitted 'commercial', so every
+// Commercial card compared as index -1 and was labelled "Downgrade" for everyone. Enterprise (custom pricing,
+// not in PLANS) ranks above everything.
+export function planRank(id: string): number {
+  if (id === 'enterprise') return Number.MAX_SAFE_INTEGER
+  const p = PLANS.find(x => x.id === id)
+  return p?.monthlyPrice ?? 0
+}
+
+export type PlanChange = 'current' | 'upgrade' | 'downgrade'
+
+export function comparePlan(currentId: string, targetId: string): PlanChange {
+  if (currentId === targetId) return 'current'
+  return planRank(targetId) > planRank(currentId) ? 'upgrade' : 'downgrade'
+}

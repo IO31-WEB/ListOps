@@ -9,7 +9,8 @@
 
 const R2_ENDPOINT = `https://${process.env.R2_ACCOUNT_ID}.r2.cloudflarestorage.com`
 const BUCKET = process.env.R2_BUCKET_NAME ?? 'listops-assets'
-const PUBLIC_URL = process.env.NEXT_PUBLIC_R2_PUBLIC_URL ?? ''
+// Trailing slashes are stripped so a value like "https://assets.listops.io/" can't produce "//" URLs.
+const PUBLIC_URL = (process.env.NEXT_PUBLIC_R2_PUBLIC_URL ?? '').trim().replace(/\/+$/, '')
 
 function isConfigured() {
   return !!(
@@ -87,6 +88,38 @@ export async function deleteFromR2(key: string): Promise<boolean> {
   }
 }
 
+/**
+ * Direct public-bucket URL. Used ONLY for brand-kit assets (logos/headshots).
+ * Listing photos go through lib/photos.ts (same-origin /api/photos/...), which does not depend on
+ * the bucket being public.
+ */
 export function getR2Url(key: string) {
   return `${PUBLIC_URL}/${key}`
+}
+
+/**
+ * Read an object straight from R2 with our credentials (S3 API) — works whether or not the bucket
+ * has public access enabled. Returns null when missing/unconfigured. Never throws.
+ */
+export async function getFromR2(key: string): Promise<{ body: ArrayBuffer; contentType: string | null } | null> {
+  if (!isConfigured()) return null
+  try {
+    const { AwsClient } = (() => { try { return require('aws4fetch') } catch { return { AwsClient: null } } })()
+    if (!AwsClient) return null
+    const client = new AwsClient({
+      accessKeyId: process.env.R2_ACCESS_KEY_ID!,
+      secretAccessKey: process.env.R2_SECRET_ACCESS_KEY!,
+      service: 's3',
+      region: 'auto',
+    })
+    const res = await client.fetch(`${R2_ENDPOINT}/${BUCKET}/${key}`, { method: 'GET', signal: AbortSignal.timeout(10000) })
+    if (!res.ok) {
+      if (res.status !== 404) console.error('[r2] Get failed:', res.status)
+      return null
+    }
+    return { body: await res.arrayBuffer(), contentType: res.headers.get('content-type') }
+  } catch (err) {
+    console.error('[r2] Get error:', err)
+    return null
+  }
 }

@@ -16,6 +16,7 @@ const isPublicRoute = createRouteMatcher([
   '/help(.*)',
   '/affiliates',
   '/l/(.*)',
+  '/api/photos/(.*)', // listing photos: public by design, key-validated in the handler
   '/api/webhooks/(.*)',
   '/api/contact',
   '/dmca',

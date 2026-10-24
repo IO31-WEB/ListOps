@@ -5,6 +5,7 @@
  */
 
 import { z } from 'zod'
+import { titleCaseAddress } from '@/lib/address'
 
 /** Strip control chars (keep \n and \t), normalize whitespace, trim. */
 export function cleanText(s: string): string {
@@ -19,6 +20,10 @@ export function cleanText(s: string): string {
 /** Single-line fields (address, city...) additionally lose angle brackets. */
 const line = (min: number, max: number) =>
   z.string().transform(s => cleanText(s).replace(/[<>]/g, '').replace(/\s+/g, ' ')).pipe(z.string().min(min).max(max))
+
+/** Same as `line`, plus title-case normalization — applied server-side regardless of what the client sent. */
+const addrLine = (min: number, max: number) =>
+  z.string().transform(s => titleCaseAddress(cleanText(s).replace(/[<>]/g, ''))).pipe(z.string().min(min).max(max))
 
 const optLine = (max: number) =>
   z.string().transform(s => cleanText(s).replace(/[<>]/g, '').replace(/\s+/g, ' ')).pipe(z.string().max(max)).optional()
@@ -35,8 +40,8 @@ export const PROPERTY_TYPES = [
 const currentYear = new Date().getFullYear()
 
 export const ListingInputSchema = z.object({
-  address: line(3, 120),
-  city: line(1, 80),
+  address: addrLine(3, 120),
+  city: addrLine(1, 80),
   state: z.string().transform(s => s.trim().toUpperCase()).pipe(z.enum(US_STATES)),
   zip: z.string().regex(/^\d{5}(-\d{4})?$/).optional().or(z.literal('').transform(() => undefined)),
   price: z.number().int().min(0).max(500_000_000).nullable().optional(),
@@ -69,7 +74,12 @@ export const UuidSchema = z.string().uuid()
 export function photoKeyPrefix(userId: string) {
   return `listings/${userId}/`
 }
-const KEY_RE = /^listings\/[A-Za-z0-9_-]{5,64}\/[A-Za-z0-9_-]{10,40}\.(jpg|png|webp)$/
+export const KEY_RE = /^listings\/[A-Za-z0-9_-]{5,64}\/[A-Za-z0-9_-]{10,40}\.(jpg|png|webp)$/
+
+/** True only for keys our upload route could have generated (used by the public photo route). */
+export function isListingPhotoKey(k: string): boolean {
+  return KEY_RE.test(k)
+}
 
 export function assertOwnPhotoKeys(userId: string, keys: string[]): string[] {
   const prefix = photoKeyPrefix(userId)

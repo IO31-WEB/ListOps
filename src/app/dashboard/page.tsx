@@ -1,4 +1,5 @@
 import { auth } from '@clerk/nextjs/server'
+import { LogoMark } from '@/components/ui/logo'
 import { redirect } from 'next/navigation'
 import Link from 'next/link'
 import { Plus, TrendingUp, Zap, ArrowRight, Clock, FileText, BarChart2, Palette, Users, CheckCircle, AlertTriangle } from 'lucide-react'
@@ -45,7 +46,7 @@ export default async function DashboardPage() {
         <div className="relative flex flex-col sm:flex-row items-start sm:items-center justify-between gap-5">
           <div>
             <div className="flex items-center gap-2 mb-2">
-              <Zap className="w-4 h-4 text-amber-400" />
+              <LogoMark className="w-5 h-5" tone="light" />
               <span className="text-amber-400 text-xs font-semibold uppercase tracking-widest">ListOps</span>
               <span className="text-xs text-slate-500 capitalize bg-slate-800 px-2 py-0.5 rounded-full ml-1">{planTier} plan</span>
             </div>

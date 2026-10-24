@@ -1,4 +1,5 @@
 /** GET /api/team/export — CSV of every campaign created by the signed-in admin's organization (Brokerage+, owner/admin only). */
+import { formatStreet, formatCity, formatState } from '@/lib/address'
 import { NextResponse } from 'next/server'
 import { getOrgCampaignExportRows, getTeamAdminContext, csvCell } from '@/lib/team-data'
 import { rateLimitPdf, rateLimitHeaders } from '@/lib/ratelimit'
@@ -14,7 +15,7 @@ export async function GET() {
     const rows = await getOrgCampaignExportRows(ctx.orgId)
     const head = ['Created (UTC)', 'Agent', 'Address', 'City', 'State', 'List price', 'Status', 'Microsite published', 'Microsite views']
     const lines = [head.join(',')].concat(
-      rows.map(r => [r.createdAt, r.agentEmail, r.address, r.city, r.state, r.price, r.status, r.micrositePublished ? 'yes' : 'no', r.views ?? 0].map(csvCell).join(','))
+      rows.map(r => [r.createdAt, r.agentEmail, formatStreet(r.address), formatCity(r.city), formatState(r.state), r.price, r.status, r.micrositePublished ? 'yes' : 'no', r.views ?? 0].map(csvCell).join(','))
     )
     return new NextResponse('\uFEFF' + lines.join('\r\n'), {
       headers: {

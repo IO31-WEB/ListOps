@@ -1,5 +1,6 @@
 import Link from 'next/link'
-import { House, ArrowRight, CheckCircle, Zap, Users, TrendingUp, Shield, Clock } from 'lucide-react'
+import { LogoMark } from '@/components/ui/logo'
+import { ArrowRight, CheckCircle, Users, TrendingUp, Shield, Clock } from 'lucide-react'
 import { PLANS } from '@/lib/plans'
 import { formatCurrency } from '@/lib/utils'
 
@@ -11,9 +12,7 @@ export default function HomePage() {
         <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
           <div className="flex items-center justify-between h-16">
             <Link href="/" className="flex items-center gap-2.5">
-              <div className="w-8 h-8 bg-slate-900 rounded-lg flex items-center justify-center">
-                <House className="w-4 h-4 text-amber-400" />
-              </div>
+              <LogoMark className="w-8 h-8" />
               <span className="font-display font-semibold text-slate-900 text-lg">ListOps</span>
             </Link>
 
@@ -250,9 +249,7 @@ export default function HomePage() {
           <div className="grid sm:grid-cols-2 lg:grid-cols-4 gap-8 mb-12">
             <div>
               <div className="flex items-center gap-2 mb-4">
-                <div className="w-7 h-7 bg-amber-500 rounded-lg flex items-center justify-center">
-                  <Zap className="w-3.5 h-3.5 text-slate-900" />
-                </div>
+                <LogoMark className="w-7 h-7" tone="light" />
                 <span className="font-display font-semibold text-white">ListOps</span>
               </div>
               <p className="text-sm leading-relaxed">AI-powered marketing campaigns for real estate agents. Built from your listing and photos, Claude AI-powered.</p>

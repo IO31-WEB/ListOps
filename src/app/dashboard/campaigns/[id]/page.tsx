@@ -12,6 +12,8 @@ import {
   Globe2, Send, RefreshCw,
 } from 'lucide-react'
 import toast from 'react-hot-toast'
+import { PhotoLightbox, PhotoThumb } from '@/components/ui/photo-lightbox'
+import { formatListingAddress } from '@/lib/address'
 
 // ── Types ──────────────────────────────────────────────────────
 
@@ -603,6 +605,8 @@ function MicrositeCopySection({ micrositeCopy, micrositeSlug, micrositePublished
           <div className={`w-2 h-2 rounded-full ${micrositePublished ? 'bg-green-500' : 'bg-slate-400'}`} />
           <span className="text-sm font-semibold text-slate-900">{micrositePublished ? 'Microsite is live' : 'Microsite is unpublished'}</span>
           {micrositePublished && micrositeSlug && <a href={`/l/${micrositeSlug}`} target="_blank" rel="noopener noreferrer" className="text-xs text-blue-600 hover:underline flex items-center gap-1"><Eye className="w-3 h-3" />View live</a>}
+          {micrositeSlug && <span className="text-xs text-slate-500 font-mono break-all">listops.io/l/{micrositeSlug}</span>}
+          {micrositeSlug && <CopyButton text={`https://listops.io/l/${micrositeSlug}`} label="Copy link" />}
         </div>
         <button onClick={onToggle} disabled={publishing}
           className={`inline-flex items-center gap-1.5 text-xs font-semibold px-3 py-1.5 rounded-lg transition-colors ${micrositePublished ? 'bg-slate-200 text-slate-700 hover:bg-slate-300' : 'bg-green-600 text-white hover:bg-green-700'}`}>
@@ -626,7 +630,7 @@ function MicrositeCopySection({ micrositeCopy, micrositeSlug, micrositePublished
 
 // ── Section 7: Photo Captions ──────────────────────────────────
 
-function PhotoCaptionsSection({ captions, photos, onRegenerate, regenerating }: { captions: PhotoCaption[]; photos: string[]; onRegenerate?: () => void; regenerating?: boolean }) {
+function PhotoCaptionsSection({ captions, photos, onOpenPhoto, onRegenerate, regenerating }: { captions: PhotoCaption[]; photos: string[]; onOpenPhoto: (i: number) => void; onRegenerate?: () => void; regenerating?: boolean }) {
   return (
     <Section title="Photo Captions" badge={`${captions.length} photos`} icon={Camera} accent="rose" onRegenerate={onRegenerate} regenerating={regenerating}>
       <p className="text-xs text-slate-400 italic px-5 py-3 border-b border-slate-100">Alt text, Instagram captions, story overlay text, and staging tips for each photo.</p>
@@ -635,7 +639,7 @@ function PhotoCaptionsSection({ captions, photos, onRegenerate, regenerating }: 
           <div key={i} className="p-5">
             <div className="flex gap-4">
               {photos[i]
-                ? <a href={photos[i]} target="_blank" rel="noopener noreferrer" className="w-20 h-20 rounded-xl overflow-hidden bg-slate-100 flex-shrink-0 hover:opacity-80 transition-opacity"><img src={photos[i]} alt={cap.altText} className="w-full h-full object-cover" /></a>
+                ? <button type="button" onClick={() => onOpenPhoto(i)} aria-label={`View photo ${i + 1} full size`} className="w-20 h-20 rounded-xl overflow-hidden bg-slate-100 flex-shrink-0 cursor-zoom-in hover:opacity-80 transition-opacity"><PhotoThumb src={photos[i]} alt={cap.altText} className="w-full h-full object-cover" /></button>
                 : <div className="w-20 h-20 rounded-xl bg-slate-100 flex-shrink-0 flex items-center justify-center"><Camera className="w-6 h-6 text-slate-300" /></div>
               }
               <div className="flex-1 space-y-2 min-w-0">
@@ -663,6 +667,7 @@ export default function CampaignDetailPage() {
   const [campaign, setCampaign] = useState<Campaign | null>(null)
   const [loading, setLoading] = useState(true)
   const [publishing, setPublishing] = useState(false)
+  const [lightbox, setLightbox] = useState<number | null>(null)
   const [planTier, setPlanTier] = useState<string>('free')
   const [regenerating, setRegenerating] = useState<string | null>(null)  // section key being regenerated
 
@@ -729,7 +734,7 @@ export default function CampaignDetailPage() {
   if (loading) return <div className="flex items-center justify-center h-64"><Loader2 className="w-8 h-8 text-amber-400 animate-spin" /></div>
   if (!campaign) return null
 
-  const address = [campaign.listing?.address, campaign.listing?.city, campaign.listing?.state].filter(Boolean).join(', ')
+  const address = formatListingAddress(campaign.listing)
   const photos = (campaign.listing?.photos ?? []) as string[]
   const isPro = ['pro', 'commercial', 'brokerage', 'enterprise'].includes(planTier)
   const isStarter = ['starter', 'pro', 'commercial', 'brokerage', 'enterprise'].includes(planTier)
@@ -787,10 +792,12 @@ export default function CampaignDetailPage() {
           {photos.length > 0 && <span className="text-xs text-slate-500 bg-slate-100 px-2 py-0.5 rounded-full">{photos.length} photos</span>}
         </div>
         {photos.length > 0
-          ? <div className="p-4 grid grid-cols-2 sm:grid-cols-3 gap-3">{photos.slice(0,6).map((photo,i) => <a key={i} href={photo} target="_blank" rel="noopener noreferrer" className="aspect-video rounded-xl overflow-hidden bg-slate-100 block hover:opacity-90 transition-opacity"><img src={photo} alt={`Photo ${i+1}`} className="w-full h-full object-cover" /></a>)}</div>
+          ? <div className="p-4 grid grid-cols-2 sm:grid-cols-3 gap-3">{photos.map((photo,i) => <button key={i} type="button" onClick={() => setLightbox(i)} aria-label={`View photo ${i+1} full size`} className="aspect-video rounded-xl overflow-hidden bg-slate-100 block cursor-zoom-in hover:opacity-90 transition-opacity"><PhotoThumb src={photo} alt={`Photo ${i+1}`} className="w-full h-full object-cover" /></button>)}</div>
           : <div className="p-8 text-center"><div className="text-4xl mb-3">🏡</div><p className="text-sm font-semibold text-slate-500 mb-1">No photos available</p><p className="text-xs text-slate-400">Photos you upload with your listing will appear here.</p></div>
         }
       </div>
+
+      <PhotoLightbox photos={photos} index={lightbox} onChange={setLightbox} />
 
       {/* 1. Listing Copy */}
       {campaign.listingCopy
@@ -830,7 +837,7 @@ export default function CampaignDetailPage() {
 
       {/* 7. Photo Captions */}
       {campaign.photoCaptions && campaign.photoCaptions.length > 0
-        ? <PhotoCaptionsSection captions={campaign.photoCaptions} photos={photos} onRegenerate={() => handleRegenerate('photoCaptions')} regenerating={regenerating === 'photoCaptions'} />
+        ? <PhotoCaptionsSection captions={campaign.photoCaptions} photos={photos} onOpenPhoto={setLightbox} onRegenerate={() => handleRegenerate('photoCaptions')} regenerating={regenerating === 'photoCaptions'} />
         : null}
     </div>
   )

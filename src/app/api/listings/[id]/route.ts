@@ -1,4 +1,6 @@
 /** GET / PUT / DELETE /api/listings/:id — always scoped to the signed-in agent. */
+import { normalizeListing } from '@/lib/address'
+import { resolveListingPhotos } from '@/lib/photos'
 import { NextRequest, NextResponse } from 'next/server'
 import { ApiError, handleApiError, readJson, requireUserId } from '@/lib/api-utils'
 import { rateLimitListingWrite, rateLimitHeaders } from '@/lib/ratelimit'
@@ -27,11 +29,11 @@ export async function GET(_req: NextRequest, ctx: Ctx) {
     // Whitelist the response — never return rawData / enrichmentData wholesale
     return NextResponse.json({
       listing: {
-        id: row.id, address: row.address, city: row.city, state: row.state, zip: row.zip,
+        id: row.id, ...normalizeListing({ address: row.address, city: row.city, state: row.state }), zip: row.zip,
         price: row.price ? Number(row.price) : null, bedrooms: row.bedrooms,
         bathrooms: row.bathrooms ? Number(row.bathrooms) : null, sqft: row.sqft, yearBuilt: row.yearBuilt,
         propertyType: row.propertyType, description: row.description, features: row.features ?? [],
-        photos: row.photos ?? [], photoKeys: row.photoKeys ?? [], source: row.source,
+        photos: resolveListingPhotos(row), photoKeys: row.photoKeys ?? [], source: row.source,
       },
     })
   } catch (err) {
