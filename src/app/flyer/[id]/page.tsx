@@ -79,6 +79,10 @@ export default async function FlyerPage({
   const eventTime = short(sp.time, 40)
 
   const listing = normalizeListing(campaign.listing)
+
+  // v13: commercial campaigns reuse these templates with CRE stats and the generated one-sheet copy (never beds/baths).
+  const cre = campaign.campaignType === 'commercial' ? readCommercial((campaign.listing as any)?.commercial) : null
+  const crePrint = (campaign.analytics as any)?.commercial?.print as { oneSheetBody?: string } | undefined
   // Brokerage compliance (locked fields + required disclaimer) is applied here, so it can't be bypassed by editing the URL.
   const bk = canAccess(planTier, 'brand_kit') ? await loadEffectiveBrandKit(campaign.brandKit as any, campaign.agentId) : null
   const address = listing ? [listing.address, listing.city, listing.state].filter(Boolean).join(', ') : 'Property Address'
@@ -95,10 +99,6 @@ export default async function FlyerPage({
   const photos = ((listing?.photos as string[]) ?? []).slice(0, 6)
   const description = clip((cre ? crePrint?.oneSheetBody : '') || listing?.description || '', template === 'modern' ? 520 : 600)
   const features = (((listing as any)?.features as string[] | undefined) ?? []).slice(0, 6)
-
-  // v13: commercial campaigns reuse these templates with CRE stats and the generated one-sheet copy (never beds/baths).
-  const cre = campaign.campaignType === 'commercial' ? readCommercial((campaign.listing as any)?.commercial) : null
-  const crePrint = (campaign.analytics as any)?.commercial?.print as { oneSheetBody?: string } | undefined
 
   const agentName = bk?.agentName ?? ''
   const agentTitle = bk?.agentTitle ?? 'REALTOR®'
