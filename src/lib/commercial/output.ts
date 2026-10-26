@@ -56,34 +56,60 @@ export interface NormalizedCommercial {
 
 export class CommercialOutputError extends Error {}
 
-export function normalizeCommercial(offeringRaw: unknown, outreachRaw: unknown, opts: { includeOm: boolean }): NormalizedCommercial {
-  const o = OfferingReply.safeParse(offeringRaw)
-  const s = OutreachReply.safeParse(outreachRaw)
-  if (!o.success || !s.success) throw new CommercialOutputError('malformed reply')
-  const a = o.data, b = s.data
+export interface NormalizedOffering {
+  headline: string; headlineVariations: string[]; teaser: string
+  onePager: CommercialPackage['onePager']; narrative: string; print: CommercialPackage['print']
+  omSections: CommercialPackage['omSections']; micrositeCopy: Record<string, string> | null
+}
+export interface NormalizedOutreach {
+  linkedin: NormalizedCommercial['linkedin']; facebookPosts: NormalizedCommercial['facebookPosts']; emailSequence: CommercialPackage['emailSequence']
+}
+
+export function normalizeOffering(raw: unknown, opts: { includeOm: boolean }): NormalizedOffering {
+  const o = OfferingReply.safeParse(raw)
+  if (!o.success) throw new CommercialOutputError('malformed reply')
+  const a = o.data
   if (!a.teaser || !a.onePager.summary || !a.narrative) throw new CommercialOutputError('missing offering copy')
-
-  const linkedin = b.linkedin.filter(p => p.post).map((p, i) => ({ week: p.week ?? i + 1, theme: p.theme, post: p.post, hashtags: p.hashtags }))
-  const facebookPosts = b.facebook.filter(p => p.copy).map((p, i) => ({ week: p.week ?? i + 1, theme: p.theme, copy: p.copy, hashtags: p.hashtags }))
-  const emails = b.emailSequence.filter(e => e.subject && e.body)
-    .map((e, i) => ({ sendDay: e.sendDay ?? [0, 3, 7, 14][i] ?? 14, purpose: e.purpose, subject: e.subject, body: e.body }))
-    .sort((x, y) => x.sendDay - y.sendDay)
-  if (linkedin.length < 3 || facebookPosts.length < 3 || emails.length < 3) throw new CommercialOutputError('missing social or email content')
-
-  const pkg: CommercialPackage = {
-    version: 1,
+  const ms = a.micrositeCopy ? Object.fromEntries(Object.entries(a.micrositeCopy).filter(([, v]) => typeof v === 'string' && v)) as Record<string, string> : null
+  return {
     headline: a.headline, headlineVariations: a.headlineVariations, teaser: a.teaser,
     onePager: { summary: a.onePager.summary, highlights: a.onePager.highlights, locationOverview: a.onePager.locationOverview, financialSummary: a.onePager.financialSummary ?? '' },
-    narrative: a.narrative,
-    print: a.print,
+    narrative: a.narrative, print: a.print,
     omSections: opts.includeOm && a.omSections && a.omSections.length > 0 ? a.omSections : null,
-    emailSequence: emails,
+    micrositeCopy: ms && Object.keys(ms).length ? ms : null,
   }
-  const ms = a.micrositeCopy ? Object.fromEntries(Object.entries(a.micrositeCopy).filter(([, v]) => typeof v === 'string' && v)) as Record<string, string> : null
-  const listingCopy = {
+}
+
+export function normalizeOutreach(raw: unknown): NormalizedOutreach {
+  const s = OutreachReply.safeParse(raw)
+  if (!s.success) throw new CommercialOutputError('malformed reply')
+  const b = s.data
+  const linkedin = b.linkedin.filter(p => p.post).map((p, i) => ({ week: p.week ?? i + 1, theme: p.theme, post: p.post, hashtags: p.hashtags }))
+  const facebookPosts = b.facebook.filter(p => p.copy).map((p, i) => ({ week: p.week ?? i + 1, theme: p.theme, copy: p.copy, hashtags: p.hashtags }))
+  const emailSequence = b.emailSequence.filter(e => e.subject && e.body)
+    .map((e, i) => ({ sendDay: e.sendDay ?? [0, 3, 7, 14][i] ?? 14, purpose: e.purpose, subject: e.subject, body: e.body }))
+    .sort((x, y) => x.sendDay - y.sendDay)
+  if (linkedin.length < 3 || facebookPosts.length < 3 || emailSequence.length < 3) throw new CommercialOutputError('missing social or email content')
+  return { linkedin, facebookPosts, emailSequence }
+}
+
+/** Residential-shaped copy so the microsite, approvals and seller report keep working unchanged. */
+export function toListingCopy(a: Pick<NormalizedOffering, 'headline' | 'headlineVariations' | 'teaser' | 'onePager'>): Record<string, unknown> {
+  return {
     headline: a.headline, headlineVariations: a.headlineVariations, fullDescription: a.onePager.summary, bulletPoints: a.onePager.highlights,
     neighborhoodStory: a.onePager.locationOverview, seoMetaTitle: a.headline.slice(0, 70), seoMetaDescription: a.teaser.slice(0, 155),
     spanishDescription: '', toneVariants: { luxury: '', firstTimeBuyer: '', investor: '' },
   }
-  return { pkg, facebookPosts, linkedin, micrositeCopy: ms && Object.keys(ms).length ? ms : null, listingCopy, firstEmail: emails[0].body }
+}
+
+export function normalizeCommercial(offeringRaw: unknown, outreachRaw: unknown, opts: { includeOm: boolean }): NormalizedCommercial {
+  const a = normalizeOffering(offeringRaw, opts)
+  const b = normalizeOutreach(outreachRaw)
+  const pkg: CommercialPackage = {
+    version: 1,
+    headline: a.headline, headlineVariations: a.headlineVariations, teaser: a.teaser,
+    onePager: a.onePager, narrative: a.narrative, print: a.print, omSections: a.omSections,
+    emailSequence: b.emailSequence,
+  }
+  return { pkg, facebookPosts: b.facebookPosts, linkedin: b.linkedin, micrositeCopy: a.micrositeCopy, listingCopy: toListingCopy(a), firstEmail: b.emailSequence[0].body }
 }

@@ -47,10 +47,14 @@ export async function uploadToR2(opts: {
     })
 
     const url = `${R2_ENDPOINT}/${BUCKET}/${opts.key}`
+    // R2 rejects chunked PUTs with 411 MissingContentLength. Pass a plain Uint8Array copy (never a pooled Buffer or a
+    // stream) and state the length explicitly so the runtime can never fall back to Transfer-Encoding: chunked.
+    const bytes = new Uint8Array(opts.body.byteLength)
+    bytes.set(opts.body)
     const res = await client.fetch(url, {
       method: 'PUT',
-      headers: { 'Content-Type': opts.contentType },
-      body: opts.body,
+      headers: { 'Content-Type': opts.contentType, 'Content-Length': String(bytes.byteLength) },
+      body: bytes,
     })
 
     if (!res.ok) {

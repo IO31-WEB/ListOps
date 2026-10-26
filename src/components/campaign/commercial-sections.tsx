@@ -2,7 +2,7 @@
 
 import { useState } from 'react'
 import Link from 'next/link'
-import { Check, Copy, ExternalLink, Lock } from 'lucide-react'
+import { Check, Copy, ExternalLink, Lock, RefreshCw } from 'lucide-react'
 import type { CommercialPackage } from '@/lib/commercial/output'
 
 interface Post { week: number; theme?: string; copy?: string; post?: string; hashtags?: string[] }
@@ -24,13 +24,22 @@ function CopyBtn({ text, label = 'Copy' }: { text: string; label?: string }) {
   )
 }
 
-function Card({ title, badge, children, actions }: { title: string; badge?: string; children: React.ReactNode; actions?: React.ReactNode }) {
+function Card({ title, badge, children, actions, regen }: { title: string; badge?: string; children: React.ReactNode; actions?: React.ReactNode; regen?: { run: () => void; busy: boolean; disabled: boolean } }) {
   return (
     <section className="bg-white rounded-2xl border border-slate-200 overflow-hidden">
       <div className="px-5 py-4 border-b border-slate-100 flex items-center gap-3 flex-wrap">
         <h2 className="font-display font-semibold text-slate-900">{title}</h2>
         {badge && <span className="text-[11px] font-semibold bg-slate-100 text-slate-600 rounded-full px-2 py-0.5">{badge}</span>}
-        <div className="ml-auto flex items-center gap-2">{actions}</div>
+        <div className="ml-auto flex items-center gap-2">
+          {actions}
+          {regen && (
+            <button type="button" onClick={regen.run} disabled={regen.disabled}
+              className="inline-flex items-center gap-1 text-xs font-semibold text-slate-600 hover:text-slate-900 border border-slate-200 rounded-lg px-2.5 py-1 bg-white disabled:opacity-50"
+              aria-label={`Regenerate ${title}`}>
+              <RefreshCw className={`w-3.5 h-3.5 ${regen.busy ? 'animate-spin' : ''}`} />{regen.busy ? 'Regenerating…' : 'Regenerate'}
+            </button>
+          )}
+        </div>
       </div>
       <div className="p-5 space-y-4">{children}</div>
     </section>
@@ -44,9 +53,11 @@ const Block = ({ label, text }: { label: string; text: string }) => text ? (
   </div>
 ) : null
 
-export function CommercialSections({ c, canOm, canSend, publishing, onToggleMicrosite }: {
+export function CommercialSections({ c, canOm, canSend, publishing, onToggleMicrosite, onRegenerate, regenerating, canMicrosite }: {
   c: CommercialCampaignView; canOm: boolean; canSend: boolean; publishing: boolean; onToggleMicrosite: () => void
+  onRegenerate: (section: string) => void; regenerating: string | null; canMicrosite: boolean
 }) {
+  const regen = (key: string) => ({ run: () => onRegenerate(key), busy: regenerating === key, disabled: regenerating !== null })
   const pkg = c.commercial
   if (!pkg) {
     return <div className="bg-white rounded-2xl border border-slate-200 p-8 text-center text-sm text-slate-500">{c.status === 'complete' ? 'This campaign has no commercial package. Generate a new commercial campaign.' : 'The package is still generating or did not finish.'}</div>
@@ -55,7 +66,7 @@ export function CommercialSections({ c, canOm, canSend, publishing, onToggleMicr
 
   return (
     <div className="space-y-4">
-      <Card title="Offering copy" badge="Teaser · One-pager · Narrative" actions={<CopyBtn text={offering} label="Copy one-pager" />}>
+      <Card title="Offering copy" badge="Teaser · One-pager · Narrative" regen={regen('offering')} actions={<CopyBtn text={offering} label="Copy one-pager" />}>
         <Block label="Headline" text={pkg.headline} />
         {pkg.headlineVariations.length > 0 && <Block label="Alternative headlines" text={pkg.headlineVariations.join('\n')} />}
         <Block label="Teaser (email-ready)" text={pkg.teaser} />
@@ -67,28 +78,33 @@ export function CommercialSections({ c, canOm, canSend, publishing, onToggleMicr
       </Card>
 
       {pkg.omSections ? (
-        <Card title="Offering memorandum copy" badge="Sectioned · edit before sending" actions={<CopyBtn text={pkg.omSections.map(s => `${s.title}\n\n${s.body}`).join('\n\n')} label="Copy all" />}>
+        <Card title="Offering memorandum copy" badge="Sectioned · edit before sending" regen={regen('om')} actions={<CopyBtn text={pkg.omSections.map(s => `${s.title}\n\n${s.body}`).join('\n\n')} label="Copy all" />}>
           {pkg.omSections.map(s => <Block key={s.title} label={s.title} text={s.body} />)}
         </Card>
-      ) : !canOm ? (
+      ) : canOm ? (
+        <div className="bg-white rounded-2xl border border-dashed border-slate-300 p-5 flex items-center gap-3 text-sm text-slate-500">
+          No OM sections on this campaign yet.
+          <button type="button" onClick={() => onRegenerate('om')} disabled={regenerating !== null} className="ml-auto text-xs font-semibold border border-slate-200 rounded-lg px-2.5 py-1 bg-white text-slate-700 disabled:opacity-50">{regenerating === 'om' ? 'Generating…' : 'Generate OM sections'}</button>
+        </div>
+      ) : (
         <div className="bg-white rounded-2xl border border-dashed border-slate-300 p-5 flex items-center gap-3 text-sm text-slate-500">
           <Lock className="w-4 h-4 text-slate-300" /> Sectioned OM-style copy is included on Pro and above. <Link href="/dashboard/billing" className="underline font-semibold text-slate-700">See plans</Link>
         </div>
-      ) : null}
+      )}
 
-      <Card title="LinkedIn" badge="6 weeks" actions={<Link href={`/dashboard/social?campaign=${c.id}`} className="text-xs font-semibold underline text-slate-700">Schedule on calendar</Link>}>
+      <Card title="LinkedIn" badge="6 weeks" regen={regen('social')} actions={<Link href={`/dashboard/social?campaign=${c.id}`} className="text-xs font-semibold underline text-slate-700">Schedule on calendar</Link>}>
         {(c.linkedin ?? []).map(p => <Block key={p.week} label={`Week ${p.week}${p.theme ? ` · ${p.theme}` : ''}`} text={[p.post, (p.hashtags ?? []).map(h => `#${h}`).join(' ')].filter(Boolean).join('\n\n')} />)}
       </Card>
-      <Card title="Facebook" badge="6 weeks">
+      <Card title="Facebook" badge="6 weeks" regen={regen('social')}>
         {(c.facebookPosts ?? []).map(p => <Block key={p.week} label={`Week ${p.week}${p.theme ? ` · ${p.theme}` : ''}`} text={[p.copy, (p.hashtags ?? []).map(h => `#${h}`).join(' ')].filter(Boolean).join('\n\n')} />)}
       </Card>
 
-      <Card title="Broker / investor email sequence" badge={`${pkg.emailSequence.length} touches`} actions={<CopyBtn text={pkg.emailSequence.map(e => `Day ${e.sendDay}: ${e.subject}\n\n${e.body}`).join('\n\n---\n\n')} label="Copy all" />}>
+      <Card title="Broker / investor email sequence" badge={`${pkg.emailSequence.length} touches`} regen={regen('emails')} actions={<CopyBtn text={pkg.emailSequence.map(e => `Day ${e.sendDay}: ${e.subject}\n\n${e.body}`).join('\n\n---\n\n')} label="Copy all" />}>
         {pkg.emailSequence.map(e => <Block key={`${e.sendDay}-${e.subject}`} label={`Day ${e.sendDay} · ${e.purpose || 'Email'} · ${e.subject}`} text={e.body} />)}
         <OutreachPanel campaignId={c.id} sequence={pkg.emailSequence} allowed={canSend} />
       </Card>
 
-      <Card title="One-sheet / flyer" badge="Print" actions={<a href={`/flyer/${c.id}`} target="_blank" rel="noopener noreferrer" className="inline-flex items-center gap-1 text-xs font-semibold underline text-slate-700"><ExternalLink className="w-3.5 h-3.5" />Open flyer</a>}>
+      <Card title="One-sheet / flyer" badge="Print" regen={regen('print')} actions={<a href={`/flyer/${c.id}`} target="_blank" rel="noopener noreferrer" className="inline-flex items-center gap-1 text-xs font-semibold underline text-slate-700"><ExternalLink className="w-3.5 h-3.5" />Open flyer</a>}>
         <Block label="Headline" text={pkg.print.oneSheetHeadline} />
         <Block label="Subhead" text={pkg.print.oneSheetSubhead} />
         <Block label="Body" text={pkg.print.oneSheetBody} />
@@ -97,7 +113,7 @@ export function CommercialSections({ c, canOm, canSend, publishing, onToggleMicr
         <p className="text-xs text-slate-400">The flyer page prints these facts with your brand kit, a trackable QR code and the disclaimer. Print or save it as PDF from there.</p>
       </Card>
 
-      <Card title="Teaser page" badge="Microsite"
+      <Card title="Teaser page" badge="Microsite" regen={canMicrosite ? regen('microsite') : undefined}
         actions={<>
           {c.micrositeSlug && c.micrositePublished && <a href={`/l/${c.micrositeSlug}`} target="_blank" rel="noopener noreferrer" className="text-xs font-semibold underline text-slate-700">View page</a>}
           <button type="button" onClick={onToggleMicrosite} disabled={publishing} className="text-xs font-semibold px-3 py-1.5 rounded-lg bg-slate-900 text-white disabled:opacity-50">{publishing ? 'Working…' : c.micrositePublished ? 'Unpublish' : 'Publish'}</button>

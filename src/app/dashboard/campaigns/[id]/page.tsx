@@ -695,6 +695,9 @@ export default function CampaignDetailPage() {
     setRegenerating(section)
     const sectionLabels: Record<string, string> = {
       listingCopy: 'Listing Copy',
+      offering: 'Offering copy',
+      om: 'OM sections',
+      emails: 'Email sequence',
       social: 'Social Calendar',
       email: 'Email Campaigns',
       emailDrip: 'Email Templates',
@@ -829,7 +832,7 @@ export default function CampaignDetailPage() {
       {isCommercial ? (
         <CommercialSections
           c={{ id: campaign.id, status: campaign.status, commercial: (campaign.commercial ?? null) as any, facebookPosts: campaign.facebookPosts as any, linkedin: campaign.linkedin as any, micrositeSlug: campaign.micrositeSlug, micrositePublished: campaign.micrositePublished, micrositeCopy: campaign.micrositeCopy as any }}
-          canOm={isPro} canSend={['commercial', 'brokerage', 'enterprise'].includes(planTier)} publishing={publishing} onToggleMicrosite={toggleMicrosite} />
+          canOm={isPro} canMicrosite={isStarter} onRegenerate={handleRegenerate} regenerating={regenerating} canSend={['commercial', 'brokerage', 'enterprise'].includes(planTier)} publishing={publishing} onToggleMicrosite={toggleMicrosite} />
       ) : (
       <>
       {/* 1. Listing Copy */}

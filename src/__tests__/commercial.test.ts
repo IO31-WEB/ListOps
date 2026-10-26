@@ -3,6 +3,7 @@ import { readFileSync, existsSync } from 'fs'
 import { join } from 'path'
 import { CommercialDetailsSchema, readCommercial, factLines } from '@/lib/commercial/types'
 import { normalizeCommercial, CommercialOutputError } from '@/lib/commercial/output'
+import { applyCommercialSection, sectionSource, COMMERCIAL_SECTIONS } from '@/lib/commercial/regenerate'
 import { canAccess } from '@/lib/plans'
 
 const read = (p: string) => readFileSync(join(process.cwd(), p), 'utf8')
@@ -108,5 +109,66 @@ describe('commercial wiring', () => {
     const l = read('src/components/microsite/lead-form.tsx')
     expect(l).toMatch(/Request Information/)
     expect(l).toMatch(/Schedule a Showing/)
+  })
+})
+
+describe('commercial per-section regeneration', () => {
+  const base = normalizeCommercial(offering, outreach, { includeOm: true })
+  const state = () => ({ facebookPosts: base.facebookPosts, analytics: { listingCopy: base.listingCopy, linkedin: base.linkedin, micrositeCopy: { heroHeadline: 'old' }, commercial: base.pkg } as Record<string, any> })
+  const newOffering = { ...offering, headline: 'New headline', teaser: 'New teaser.', print: { ...offering.print, oneSheetHeadline: 'New print' }, micrositeCopy: { heroHeadline: 'New hero' }, omSections: [{ title: 'New OM', body: 'x' }] }
+  const newOutreach = { linkedin: [1, 2, 3].map(w => ({ week: w, post: `New LI ${w}` })), facebook: [1, 2, 3].map(w => ({ week: w, copy: `New FB ${w}` })), emailSequence: [0, 3, 7].map(d => ({ sendDay: d, subject: `New ${d}`, body: `new body ${d}` })) }
+
+  test('every section maps to one of the two model calls', () => {
+    for (const k of COMMERCIAL_SECTIONS) expect(['offering', 'outreach'].includes(sectionSource(k))).toBe(true)
+    expect(sectionSource('social')).toBe('outreach')
+    expect(sectionSource('emails')).toBe('outreach')
+    expect(sectionSource('print')).toBe('offering')
+  })
+  test('offering replaces only headline/teaser/one-pager/narrative and the residential-shaped copy', () => {
+    const r = applyCommercialSection('offering', newOffering, state(), { includeOm: true })
+    expect(r.analytics.commercial.teaser).toBe('New teaser.')
+    expect((r.analytics.listingCopy as any).headline).toBe('New headline')
+    expect(r.analytics.commercial.print.oneSheetHeadline).toBe('H')
+    expect(r.analytics.commercial.emailSequence).toHaveLength(3)
+    expect(r.analytics.micrositeCopy.heroHeadline).toBe('old')
+    expect(Object.keys(r.core)).toEqual([])
+  })
+  test('print / om / microsite touch only their own field', () => {
+    expect(applyCommercialSection('print', newOffering, state(), { includeOm: true }).analytics.commercial.print.oneSheetHeadline).toBe('New print')
+    expect(applyCommercialSection('om', newOffering, state(), { includeOm: true }).analytics.commercial.omSections[0].title).toBe('New OM')
+    const m = applyCommercialSection('microsite', newOffering, state(), { includeOm: true })
+    expect(m.analytics.micrositeCopy.heroHeadline).toBe('New hero')
+    expect(m.analytics.commercial.teaser).toBe('Teaser text.')
+  })
+  test('om without OM in the reply fails instead of wiping the existing sections', () => {
+    expect(() => applyCommercialSection('om', { ...offering, omSections: [] }, state(), { includeOm: true })).toThrow()
+  })
+  test('social replaces LinkedIn + Facebook; emails replace the sequence and the first-email column', () => {
+    const so = applyCommercialSection('social', newOutreach, state(), { includeOm: true })
+    expect((so.core.facebookPosts as any)[0].copy).toBe('New FB 1')
+    expect(so.analytics.linkedin[0].post).toBe('New LI 1')
+    expect(so.analytics.commercial.emailSequence[0].subject).toBe('First')
+    const em = applyCommercialSection('emails', newOutreach, state(), { includeOm: true })
+    expect(em.core.emailJustListed).toBe('new body 0')
+    expect(em.analytics.commercial.emailSequence.map((e: any) => e.sendDay)).toEqual([0, 3, 7])
+    expect(em.analytics.linkedin[0].post).toBe('Post 1')
+  })
+  test('a bad reply throws and never returns a partial update', () => {
+    expect(() => applyCommercialSection('social', { linkedin: [], facebook: [], emailSequence: [] }, state(), { includeOm: true })).toThrow(CommercialOutputError)
+    expect(() => applyCommercialSection('print', { nope: 1 }, state(), { includeOm: true })).toThrow()
+  })
+  test('the route serves commercial sections and still rejects cross-type sections', () => {
+    const r = read('src/app/api/campaigns/[id]/regenerate/route.ts')
+    expect(r).toMatch(/regenerateCommercial\(/)
+    expect(r).toMatch(/not available for commercial campaigns/)
+    expect(r).toMatch(/commercial_om/)
+  })
+})
+
+describe('R2 upload', () => {
+  test('PUT states Content-Length explicitly (R2 answers 411 to chunked bodies)', () => {
+    const r = read('src/lib/r2.ts')
+    expect(r).toMatch(/'Content-Length': String\(/)
+    expect(r).toMatch(/new Uint8Array\(/)
   })
 })

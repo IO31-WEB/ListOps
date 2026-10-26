@@ -24,6 +24,12 @@ import { getUserWithDetails, getCampaign } from '@/lib/user-service'
 import { canAccessFeature } from '@/lib/stripe'
 import type { PlanTier } from '@/lib/plans'
 import { z } from 'zod'
+import { readCommercial, type CommercialDetails } from '@/lib/commercial/types'
+import { buildOfferingPrompt, buildOutreachPrompt, type CommercialPromptInput } from '@/lib/commercial/prompts'
+import { COMMERCIAL_SECTIONS, applyCommercialSection, sectionSource, type CommercialSection } from '@/lib/commercial/regenerate'
+import { CommercialOutputError } from '@/lib/commercial/output'
+import { getFromR2 } from '@/lib/r2'
+import { sniffImage } from '@/lib/image-validate'
 
 export const maxDuration = 120
 
@@ -42,8 +48,9 @@ const SECTION_KEYS = [
 
 type SectionKey = typeof SECTION_KEYS[number]
 
+// The section list depends on the campaign type, so the body is checked in two steps (shape here, key after the campaign loads).
 const RequestSchema = z.object({
-  section: z.enum(SECTION_KEYS),
+  section: z.string().min(1).max(40),
 })
 
 // ── Section → prompt builder ───────────────────────────────────
@@ -305,6 +312,87 @@ function applyContentToUpdate(section: SectionKey, content: any, existing: any) 
   }
 }
 
+// ── Commercial (v13.1) ─────────────────────────────────────────
+async function regenerateCommercial(a: {
+  section: CommercialSection; campaign: any; user: any; planTier: PlanTier; brandKit: any; details: CommercialDetails
+}) {
+  const { section, campaign, user, planTier, brandKit, details } = a
+  const listing = normalizeListing(campaign.listing) as any
+  const hasKit = canAccessFeature(planTier, 'brand_kit') && !!brandKit
+  const clean = (v: unknown, n: number) => sanitizeForPrompt(v, n)
+  const agentName = clean(hasKit ? (brandKit?.agentName || 'Your Broker') : 'Your Broker', 80)
+  const agentTitle = clean(hasKit ? (brandKit?.agentTitle || '') : '', 60)
+  const brokerageName = clean(hasKit ? (brandKit?.brokerageName || '') : '', 100)
+  const agentPhone = clean(hasKit ? (brandKit?.agentPhone || '') : '', 40)
+  const agentEmail = clean(hasKit ? (brandKit?.agentEmail || '') : '', 100)
+  const tone = clean(hasKit ? (brandKit?.tone || 'professional') : 'professional', 60)
+  const toneGuides: Record<string, string> = {
+    professional: 'authoritative, data-driven, and polished.', friendly: 'warm, conversational, and approachable.',
+    luxury: 'elevated, aspirational, and refined.', energetic: 'enthusiastic, compelling, and urgent.',
+  }
+  const isWhiteLabel = canAccessFeature(planTier, 'white_label') && brandKit?.brokerageName
+  const brandingLine = isWhiteLabel ? `Brokerage: ${brandKit.brokerageName} — remove all ListOps mentions`
+    : planTier !== 'free' ? `Agent: ${agentName} — do not mention ListOps in any outputs` : 'Presented by ListOps'
+  const slug = campaign.micrositeSlug as string | undefined
+  const input: CommercialPromptInput = {
+    address: clean([listing?.address, listing?.city, listing?.state].filter(Boolean).join(', '), 200),
+    city: clean(listing?.city, 80), state: clean(listing?.state, 4),
+    listingUrl: slug ? `${(process.env.NEXT_PUBLIC_APP_URL || 'https://listops.io').replace(/\/+$/, '')}/l/${slug}` : '',
+    agentName, agentTitle, brokerageName, agentPhone, agentEmail, tagline: clean(hasKit ? (brandKit?.tagline || '') : '', 160),
+    agentSignature: [agentName, agentTitle, brokerageName, agentPhone, agentEmail].filter(Boolean).join(' | '),
+    toneGuide: toneGuides[tone] ?? toneGuides.professional, brandingLine,
+    details,
+    sqft: listing?.sqft ? Number(listing.sqft) : null, price: listing?.price ? Number(listing.price) : null, yearBuilt: listing?.yearBuilt ?? null,
+    description: listing?.description ?? '', features: Array.isArray(listing?.features) ? listing.features : [],
+    includeOm: canAccessFeature(planTier, 'commercial_om'),
+  }
+
+  const source = sectionSource(section)
+  const photoBlocks: Anthropic.ImageBlockParam[] = []
+  if (source === 'offering') {
+    const keys: string[] = ((campaign.listing?.photoKeys ?? []) as string[]).slice(0, 4)
+    const got = await Promise.all(keys.map(async k => {
+      try {
+        const o = await getFromR2(k)
+        if (!o || o.body.byteLength > 5 * 1024 * 1024) return null
+        const kind = sniffImage(new Uint8Array(o.body))
+        return kind ? { data: Buffer.from(o.body).toString('base64'), mediaType: kind.mime } : null
+      } catch { return null }
+    }))
+    for (const g of got) if (g) photoBlocks.push({ type: 'image', source: { type: 'base64', media_type: g.mediaType, data: g.data } })
+  }
+  const photoNote = photoBlocks.length ? '\n\nThe attached photos show the property. Use them only to describe what is visibly there. Never infer tenants, occupancy or condition beyond what is visible or stated.' : ''
+  const prompt = (source === 'offering' ? buildOfferingPrompt(input) + photoNote : buildOutreachPrompt(input))
+  const message = await anthropic.messages.create({
+    model: process.env.GENERATION_MODEL || 'claude-sonnet-5',
+    max_tokens: source === 'offering' ? 12000 : 10000,
+    system: INJECTION_GUARD + ' Respond with valid JSON only. Your entire reply must start with "{" and end with "}" — no preamble, no markdown code fences, no closing remarks.',
+    messages: [{ role: 'user', content: [...photoBlocks, { type: 'text', text: prompt }] }],
+  })
+  if (message.stop_reason === 'max_tokens') throw new Error('The AI response was cut off. Please try again.')
+  const raw = message.content.filter((b): b is Anthropic.TextBlock => b.type === 'text').map(b => b.text).join('')
+    .replace(/```json\n?/g, '').replace(/```\n?/g, '').trim()
+  let parsed: unknown
+  try { parsed = JSON.parse(raw) } catch {
+    const m = raw.match(/\{[\s\S]*\}/)
+    if (!m) throw new Error('AI response could not be parsed. Please try again.')
+    try { parsed = JSON.parse(m[0]) } catch { throw new Error('AI response could not be parsed. Please try again.') }
+  }
+  let result: ReturnType<typeof applyCommercialSection>
+  try {
+    result = applyCommercialSection(section, parsed, { facebookPosts: campaign.facebookPosts, analytics: (campaign.analytics ?? {}) as Record<string, any> }, { includeOm: input.includeOm })
+  } catch (e) {
+    if (e instanceof CommercialOutputError) throw new Error('We could not read the AI response. Please try again.')
+    throw e
+  }
+  if (Object.keys(result.core).length > 0) {
+    await db.update(campaigns).set({ ...result.core, updatedAt: new Date() } as any).where(eq(campaigns.id, campaign.id))
+  }
+  await db.update(campaigns).set({ analytics: result.analytics as any, updatedAt: new Date() }).where(eq(campaigns.id, campaign.id))
+  void user
+  return result
+}
+
 // ── POST handler ───────────────────────────────────────────────
 
 export async function POST(
@@ -320,7 +408,7 @@ export async function POST(
 
   try {
     const body = await request.json()
-    const { section } = RequestSchema.parse(body)
+    const { section: rawSection } = RequestSchema.parse(body)
 
     // Auth + plan check
     const user = await getUserWithDetails(userId)
@@ -328,7 +416,16 @@ export async function POST(
 
     const planTier = (user.organization?.plan ?? 'free') as PlanTier
 
+    const isCommercialSection = (COMMERCIAL_SECTIONS as readonly string[]).includes(rawSection)
+    const isResidentialSection = (SECTION_KEYS as readonly string[]).includes(rawSection)
+    if (!isCommercialSection && !isResidentialSection) return NextResponse.json({ error: 'Invalid section specified' }, { status: 400 })
+    // 'print' and 'microsite' exist in both lists; the campaign type decides which one runs (checked after the campaign loads).
+    const section = rawSection as SectionKey
+
     // Section gating
+    if (rawSection === 'om' && !canAccessFeature(planTier, 'commercial_om')) {
+      return NextResponse.json({ error: 'OM sections require Pro or higher.' }, { status: 403 })
+    }
     if (section === 'video' && !canAccessFeature(planTier, 'video_script')) {
       return NextResponse.json({ error: 'Video scripts require Pro or higher.' }, { status: 403 })
     }
@@ -339,10 +436,17 @@ export async function POST(
     // Fetch campaign with listing join — getCampaign validates ownership via agentId
     const campaign = await getCampaign(campaignId, userId)
     if (!campaign) return NextResponse.json({ error: 'Campaign not found' }, { status: 404 })
-    // Commercial packages have a different shape; the residential section prompts here would overwrite them with the wrong content.
+    const details = readCommercial((campaign as any).listing?.commercial)
     if ((campaign as any).campaignType === 'commercial') {
-      return NextResponse.json({ error: 'Section regeneration is not available for commercial campaigns yet. Edit the listing and generate a new campaign instead.' }, { status: 400 })
+      if (!details || !isCommercialSection) {
+        return NextResponse.json({ error: 'That section is not available for commercial campaigns.' }, { status: 400 })
+      }
+      const brandKitC = (campaign as any).brandKit ?? user.brandKit
+      const result = await regenerateCommercial({ section: rawSection as CommercialSection, campaign, user, planTier, brandKit: brandKitC, details })
+      return NextResponse.json({ success: true, section: rawSection, content: { analytics: result.analytics, ...result.core } })
     }
+    // Residential campaigns only accept residential sections.
+    if (!isResidentialSection) return NextResponse.json({ error: 'That section is not available for this campaign.' }, { status: 400 })
 
     // Build listing context from the joined listing row
     const listing = normalizeListing((campaign as any).listing)
