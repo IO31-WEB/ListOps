@@ -8,6 +8,10 @@ import { Zap, Check, AlertTriangle, Loader2, Palette, X, Sparkles, ImagePlus, Tr
 import toast from 'react-hot-toast'
 import Link from 'next/link'
 import { track } from '@/lib/analytics'
+import { scanText, applyRewrites } from '@/lib/compliance/fair-housing'
+import { applyCompliance, type OrgCompliance } from '@/lib/compliance/brand'
+import { brandWarnings } from '@/lib/compliance/warnings'
+import { USE_TYPES, USE_TYPE_LABEL, type UseType } from '@/lib/commercial/types'
 
 type GenStatus = 'idle' | 'generating' | 'error'
 
@@ -35,6 +39,12 @@ const EMPTY_FORM: Form = {
 }
 
 const PROPERTY_TYPES = ['Single Family', 'Condo', 'Townhouse', 'Multi-Family', 'Land', 'Mobile/Manufactured', 'Other']
+type Mode = 'residential' | 'commercial'
+interface CreForm { useType: UseType | ''; offering: 'sale' | 'lease'; units: string; lotAcres: string; priceGuidance: string; noi: string; capRate: string; zoning: string; occupancy: string; brokerRemarks: string }
+const EMPTY_CRE: CreForm = { useType: '', offering: 'sale', units: '', lotAcres: '', priceGuidance: '', noi: '', capRate: '', zoning: '', occupancy: '', brokerRemarks: '' }
+// listing.propertyType values the API accepts for each commercial use type
+const CRE_PROPERTY_TYPE: Record<UseType, string> = { retail: 'Retail', office: 'Office', industrial: 'Industrial', multifamily: 'Multifamily', mixed_use: 'Mixed-use', land: 'Land (commercial)', other: 'Other' }
+
 const MAX_PHOTOS = 20
 const RECOMMENDED_PHOTOS = 5
 
@@ -44,6 +54,14 @@ const STEPS: GenStep[] = [
   { id: 'email',   label: 'Writing email templates',         status: 'pending' },
   { id: 'video',   label: 'Writing reel scripts & virtual tour narration',    status: 'pending' },
   { id: 'saving',  label: 'Saving campaign to your account',                  status: 'pending' },
+]
+
+const COMMERCIAL_STEPS: GenStep[] = [
+  { id: 'offering', label: 'Writing the offering teaser, one-pager and narrative', status: 'pending' },
+  { id: 'social',   label: 'Writing LinkedIn and Facebook posts (6 weeks)',        status: 'pending' },
+  { id: 'email',    label: 'Writing the broker / investor email sequence',         status: 'pending' },
+  { id: 'print',    label: 'Preparing the one-sheet and teaser page copy',         status: 'pending' },
+  { id: 'saving',   label: 'Saving campaign to your account',                      status: 'pending' },
 ]
 
 const STARTER_TIERS = ['starter', 'pro', 'commercial', 'brokerage', 'enterprise']
@@ -134,6 +152,8 @@ function BrandKitPrompt({ onDismiss, onProceed }: { onDismiss: () => void; onPro
 export default function GeneratePage() {
   const router = useRouter()
   const [form, setForm] = useState<Form>(EMPTY_FORM)
+  const [mode, setMode] = useState<Mode>('residential')
+  const [cre, setCre] = useState<CreForm>(EMPTY_CRE)
   const [features, setFeatures] = useState<string[]>([])
   const [featureInput, setFeatureInput] = useState('')
   const [photos, setPhotos] = useState<Photo[]>([])
@@ -155,6 +175,7 @@ export default function GeneratePage() {
 
   useEffect(() => {
     track('generate_page_viewed')
+    if (new URLSearchParams(window.location.search).get('type') === 'commercial') setMode('commercial')
     Promise.all([
       getBillingInfo(),
       fetch('/api/brand-kit').then(r => (r.ok ? r.json() : null)),
@@ -162,7 +183,8 @@ export default function GeneratePage() {
     ])
       .then(([billing, brandKit, enrich]) => {
         const planTier = billing?.planTier ?? 'free'
-        const brandKitComplete = Boolean(brandKit?.brandKit?.agentName?.trim())
+        const eff = applyCompliance(brandKit?.brandKit, (brandKit?.compliance ?? null) as OrgCompliance | null, brandKit?.licenseNumber)
+        const brandKitComplete = !brandWarnings(eff, { licenseNumber: brandKit?.licenseNumber }).some(w => w.level === 'required')
         setBrandKitStatus({ planTier, brandKitComplete })
         if (STARTER_TIERS.includes(planTier) && !brandKitComplete) setShowBrandKitPrompt(true)
         setEnrichEnabled(Boolean(enrich?.enabled))
@@ -171,6 +193,10 @@ export default function GeneratePage() {
     // free object URLs on unmount
     return () => photosRef.current.forEach(p => URL.revokeObjectURL(p.preview))
   }, [])
+
+  const setCreField = (k: keyof CreForm) => (e: React.ChangeEvent<HTMLInputElement | HTMLTextAreaElement | HTMLSelectElement>) =>
+    setCre(prev => ({ ...prev, [k]: e.target.value }))
+  const commercial = mode === 'commercial'
 
   const set = (k: keyof Form) => (e: React.ChangeEvent<HTMLInputElement | HTMLTextAreaElement | HTMLSelectElement>) =>
     setForm(prev => ({ ...prev, [k]: e.target.value }))
@@ -320,6 +346,10 @@ export default function GeneratePage() {
     if (!form.address.trim()) return 'Please enter the property address.'
     if (!form.city.trim()) return 'Please enter the city.'
     if (!/^[A-Za-z]{2}$/.test(form.state.trim())) return 'Please enter a 2-letter state (e.g. SC).'
+    if (commercial) {
+      if (!cre.useType) return 'Choose the property type.'
+      if (!form.sqft.trim() && !cre.units.trim() && !cre.lotAcres.trim()) return 'Enter the size: square feet, units or acres.'
+    }
     if (uploadedKeys.length < 1) return 'Add at least one photo of the property.'
     if (stillUploading) return 'Photos are still uploading — one moment.'
     return null
@@ -328,6 +358,24 @@ export default function GeneratePage() {
   const buildPayload = () => {
     const num = (s: string) => (s.trim() ? Number(s.replace(/[^0-9.]/g, '')) : null)
     const baths = num(form.bathrooms)
+    if (commercial && cre.useType) {
+      const n = (s: string) => (s.trim() ? num(s) : undefined)
+      return {
+        address: form.address.trim(), city: form.city.trim(), state: form.state.trim().toUpperCase(), zip: form.zip.trim() || undefined,
+        price: num(form.price) != null ? Math.round(num(form.price) as number) : null,
+        bedrooms: null, bathrooms: null,
+        sqft: num(form.sqft) != null ? Math.round(num(form.sqft) as number) : null,
+        yearBuilt: num(form.yearBuilt) != null ? Math.round(num(form.yearBuilt) as number) : null,
+        propertyType: CRE_PROPERTY_TYPE[cre.useType],
+        features, description: form.description.trim() || undefined, photoKeys: uploadedKeys, source: 'manual' as const,
+        commercial: {
+          useType: cre.useType, offering: cre.offering,
+          units: n(cre.units) != null ? Math.round(n(cre.units) as number) : undefined, lotAcres: n(cre.lotAcres),
+          priceGuidance: cre.priceGuidance.trim() || undefined, noi: n(cre.noi), capRatePct: n(cre.capRate),
+          zoning: cre.zoning.trim() || undefined, occupancyNotes: cre.occupancy.trim() || undefined, brokerRemarks: cre.brokerRemarks.trim() || undefined,
+        },
+      }
+    }
     return {
       address: form.address.trim(),
       city: form.city.trim(),
@@ -351,12 +399,13 @@ export default function GeneratePage() {
     const problem = validate()
     if (problem) { toast.error(problem); return }
 
-    track('generate_clicked', { photo_count: uploadedKeys.length, enriched: Boolean(enrichedFrom), features: features.length, has_description: Boolean(form.description.trim()) })
+    track('generate_clicked', { type: mode, photo_count: uploadedKeys.length, enriched: Boolean(enrichedFrom), features: features.length, has_description: Boolean(form.description.trim()) })
     setStatus('generating')
     setError('')
-    setSteps(STEPS.map(s => ({ ...s, status: 'pending' })))
+    const stepDefs = commercial ? COMMERCIAL_STEPS : STEPS
+    setSteps(stepDefs.map(s => ({ ...s, status: 'pending' })))
     const startedAt = Date.now()
-    const stepIds = STEPS.map(s => s.id)
+    const stepIds = stepDefs.map(s => s.id)
     let stepIdx = 0
     updateStep(stepIds[0], 'active')
     const timer = setInterval(() => {
@@ -404,13 +453,24 @@ export default function GeneratePage() {
     }
   }
 
-  const canSubmit = !busy && !stillUploading && uploadedKeys.length >= 1 && !!form.address.trim() && !!form.city.trim() && form.state.trim().length === 2
+  const canSubmit = (!commercial || !!cre.useType) && !busy && !stillUploading && uploadedKeys.length >= 1 && !!form.address.trim() && !!form.city.trim() && form.state.trim().length === 2
 
   return (
     <div className="max-w-2xl mx-auto space-y-6">
       <div>
         <h1 className="font-display text-2xl font-semibold text-slate-900">Generate Campaign</h1>
-        <p className="text-sm text-slate-500 mt-1">Enter your listing details and add your photos — we&apos;ll build the full 6-week campaign.</p>
+        <p className="text-sm text-slate-500 mt-1">{commercial
+          ? 'Enter the property and add photos. We\u2019ll write the offering teaser, one-pager, LinkedIn and Facebook posts, a broker/investor email sequence, a one-sheet and a teaser page.'
+          : 'Enter your listing details and add your photos — we\u2019ll build the full 6-week campaign.'}</p>
+      </div>
+
+      <div role="tablist" aria-label="Campaign type" className="inline-flex bg-slate-100 rounded-xl p-1">
+        {(['residential', 'commercial'] as const).map(m => (
+          <button key={m} type="button" role="tab" aria-selected={mode === m} disabled={busy} onClick={() => setMode(m)}
+            className={`px-5 py-2 text-sm font-semibold rounded-lg transition-colors ${mode === m ? 'bg-white text-slate-900 shadow-sm' : 'text-slate-500 hover:text-slate-800'}`}>
+            {m === 'residential' ? 'Residential' : 'Commercial'}
+          </button>
+        ))}
       </div>
 
       {showBrandKitPrompt && brandKitStatus && STARTER_TIERS.includes(brandKitStatus.planTier) && !brandKitStatus.brandKitComplete && (
@@ -435,7 +495,7 @@ export default function GeneratePage() {
           <div className="col-span-2"><label className={labelCls}>ZIP</label>
             <input className={inputCls} value={form.zip} onChange={set('zip')} maxLength={10} inputMode="numeric" disabled={busy} /></div>
         </div>
-        {enrichEnabled && (
+        {enrichEnabled && !commercial && (
           <div className="flex items-center gap-3">
             <button type="button" onClick={handleEnrich} disabled={enriching || busy}
               className="inline-flex items-center gap-2 text-sm font-medium text-slate-700 border border-slate-200 bg-white hover:bg-slate-50 px-4 py-2.5 rounded-xl transition-all disabled:opacity-50">
@@ -445,7 +505,7 @@ export default function GeneratePage() {
             <span className="text-xs text-slate-500">Optional — you can edit everything below.</span>
           </div>
         )}
-        {enrichedFrom && (
+        {enrichedFrom && !commercial && (
           <p className="text-xs text-amber-700 bg-amber-50 border border-amber-200 rounded-lg px-3 py-2">
             Some details were filled from public records. Public records can be outdated — please verify beds, baths and square footage before generating.
           </p>
@@ -454,7 +514,44 @@ export default function GeneratePage() {
 
       {/* 2. Details */}
       <section className="bg-white rounded-2xl border border-slate-200 p-6 space-y-4">
-        <h2 className="text-sm font-semibold text-slate-900">Listing details</h2>
+        <h2 className="text-sm font-semibold text-slate-900">{commercial ? 'Property details' : 'Listing details'}</h2>
+        {commercial && (
+          <div className="grid grid-cols-2 gap-4">
+            <div><label className={labelCls}>Property type <span className="text-red-400">*</span></label>
+              <select className={inputCls} value={cre.useType} onChange={setCreField('useType')} disabled={busy}>
+                <option value="">Select…</option>
+                {USE_TYPES.map(t => <option key={t} value={t}>{USE_TYPE_LABEL[t]}</option>)}
+              </select></div>
+            <div><label className={labelCls}>Offering</label>
+              <select className={inputCls} value={cre.offering} onChange={setCreField('offering')} disabled={busy}>
+                <option value="sale">For sale</option><option value="lease">For lease</option>
+              </select></div>
+            <div><label className={labelCls}>Building size (SF)</label>
+              <input className={inputCls} value={form.sqft} onChange={set('sqft')} placeholder="42000" inputMode="numeric" disabled={busy} /></div>
+            <div><label className={labelCls}>Units <span className="font-normal text-slate-400">(multifamily, hospitality)</span></label>
+              <input className={inputCls} value={cre.units} onChange={setCreField('units')} inputMode="numeric" disabled={busy} /></div>
+            <div><label className={labelCls}>Land (acres)</label>
+              <input className={inputCls} value={cre.lotAcres} onChange={setCreField('lotAcres')} placeholder="2.4" inputMode="decimal" disabled={busy} /></div>
+            <div><label className={labelCls}>{cre.offering === 'lease' ? 'Asking rent' : 'Asking price'} <span className="font-normal text-slate-400">(optional)</span></label>
+              <input className={inputCls} value={form.price} onChange={set('price')} placeholder="3500000" inputMode="numeric" disabled={busy} /></div>
+            <div className="col-span-2"><label className={labelCls}>Price guidance <span className="font-normal text-slate-400">(optional, shown as written)</span></label>
+              <input className={inputCls} value={cre.priceGuidance} onChange={setCreField('priceGuidance')} placeholder="$18/SF NNN · Offers invited · Call for pricing" maxLength={120} disabled={busy} /></div>
+            <div className="col-span-2 text-xs font-semibold text-slate-500 pt-1">Optional details. Leave blank and nothing is invented.</div>
+            <div><label className={labelCls}>NOI (annual $)</label>
+              <input className={inputCls} value={cre.noi} onChange={setCreField('noi')} inputMode="numeric" disabled={busy} /></div>
+            <div><label className={labelCls}>Cap rate (%)</label>
+              <input className={inputCls} value={cre.capRate} onChange={setCreField('capRate')} placeholder="7.1" inputMode="decimal" disabled={busy} /></div>
+            <div><label className={labelCls}>Year built</label>
+              <input className={inputCls} value={form.yearBuilt} onChange={set('yearBuilt')} inputMode="numeric" maxLength={4} disabled={busy} /></div>
+            <div><label className={labelCls}>Zoning / permitted use</label>
+              <input className={inputCls} value={cre.zoning} onChange={setCreField('zoning')} maxLength={80} disabled={busy} /></div>
+            <div className="col-span-2"><label className={labelCls}>Occupancy / lease notes</label>
+              <textarea className={`${inputCls} resize-none`} rows={2} value={cre.occupancy} onChange={setCreField('occupancy')} maxLength={600} disabled={busy} placeholder="e.g. 92% leased, anchor lease through 2031" /></div>
+            <div className="col-span-2"><label className={labelCls}>Broker remarks</label>
+              <textarea className={`${inputCls} resize-none`} rows={3} value={cre.brokerRemarks} onChange={setCreField('brokerRemarks')} maxLength={2000} disabled={busy} placeholder="Anything buyers' or tenants' brokers should know." /></div>
+          </div>
+        )}
+        {!commercial && (
         <div className="grid grid-cols-2 gap-4">
           <div><label className={labelCls}>List price</label>
             <input className={inputCls} value={form.price} onChange={set('price')} placeholder="499000" inputMode="numeric" disabled={busy} /></div>
@@ -472,6 +569,7 @@ export default function GeneratePage() {
               {PROPERTY_TYPES.map(t => <option key={t} value={t}>{t}</option>)}
             </select></div>
         </div>
+        )}
 
         <div>
           <label className={labelCls}>Key features</label>
@@ -496,8 +594,27 @@ export default function GeneratePage() {
         <div>
           <label className={labelCls}>Description <span className="font-normal text-slate-400">(optional)</span></label>
           <textarea className={`${inputCls} resize-none`} rows={4} value={form.description} onChange={set('description')} maxLength={4000} disabled={busy}
-            placeholder="Describe the property — features, finishes, location highlights, anything that makes it special…" />
+            placeholder={commercial ? 'Highlights in your own words: tenancy, access and frontage, building features, why it matters to a buyer or tenant…' : 'Describe the property — features, finishes, location highlights, anything that makes it special…'} />
           <p className="text-xs text-slate-500 mt-1.5">The more detail you provide, the better the campaign output.</p>
+          {(() => {
+            const hits = commercial && !['multifamily', 'mixed_use'].includes(cre.useType) ? [] : scanText(form.description)
+            if (hits.length === 0) return null
+            const fixable = hits.some(h => h.after !== null)
+            return (
+              <div role="status" className="mt-2 bg-amber-50 border border-amber-200 rounded-xl p-3 text-xs text-amber-900">
+                <div className="font-semibold mb-1">Fair Housing check: {hits.length} phrase{hits.length === 1 ? '' : 's'} to review</div>
+                <ul className="list-disc pl-4 space-y-0.5">
+                  {hits.slice(0, 4).map((h, i) => <li key={i}>&ldquo;{h.match}&rdquo; — {h.message}</li>)}
+                </ul>
+                {fixable && (
+                  <button type="button" className="mt-2 font-semibold underline" disabled={busy}
+                    onClick={() => setForm(prev => ({ ...prev, description: applyRewrites(prev.description).text }))}>
+                    Apply safe rewrites
+                  </button>
+                )}
+              </div>
+            )
+          })()}
         </div>
       </section>
 

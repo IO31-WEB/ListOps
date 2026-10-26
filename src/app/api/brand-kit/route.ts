@@ -5,6 +5,8 @@ import { db } from '@/lib/db'
 import { users } from '@/lib/db/schema'
 import { eq } from 'drizzle-orm'
 import { z } from 'zod'
+import { loadComplianceForAgent } from '@/lib/compliance/load'
+import { lockedKeys } from '@/lib/compliance/brand'
 
 // Normalize a URL value: prepend https:// if the user omitted the protocol,
 // pass through empty/undefined as-is, reject anything that still isn't a
@@ -54,6 +56,7 @@ const BrandKitSchema = z.object({
   agentPhotoUrl: z.string().optional(),
   brokerageLogo: optionalUrl(),
   tone: z.enum(['professional', 'friendly', 'luxury', 'energetic']).optional(),
+  licenseNumber: z.string().trim().max(60).optional(),
 })
 
 export async function GET(request: NextRequest) {
@@ -66,7 +69,9 @@ export async function GET(request: NextRequest) {
   const brandKit = user?.brandKit
     ? { ...user.brandKit, aiPersona: (user as any).aiPersona ?? null }
     : null
-  return NextResponse.json({ brandKit })
+  // Brokerage compliance: tells the page which fields are locked and what text is forced onto every output.
+  const { org, licenseNumber } = user ? await loadComplianceForAgent(user.id) : { org: null, licenseNumber: null }
+  return NextResponse.json({ brandKit, licenseNumber: licenseNumber ?? '', compliance: org })
 }
 
 export async function POST(request: NextRequest) {
@@ -95,7 +100,13 @@ export async function POST(request: NextRequest) {
     }
 
     // tone lives on users.aiPersona — strip it from brandKit upsert, save separately
-    const { tone, ...rest } = data as any
+    const { tone, licenseNumber, ...rest } = data as any
+    // Brokerage-locked fields are not agent-editable: drop them server-side (the UI also disables them).
+    const { org } = await loadComplianceForAgent(user.id)
+    for (const k of lockedKeys(org)) delete rest[k]
+    if (typeof licenseNumber === 'string') {
+      await db.update(users).set({ licenseNumber: licenseNumber || null }).where(eq(users.id, user.id))
+    }
     // Normalize instagramHandle — strip leading @ if present
     if (rest.instagramHandle) {
       rest.instagramHandle = rest.instagramHandle.replace(/^@+/, '')

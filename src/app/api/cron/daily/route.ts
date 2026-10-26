@@ -10,6 +10,7 @@ import { processDueOutreach } from '@/lib/outreach'
 import { GET as cleanupUploads } from '../cleanup-uploads/route'
 import { GET as retention } from '../retention/route'
 import { captureError } from '@/lib/monitoring'
+import { sendSocialDigests } from '@/lib/social/digest'
 
 export const maxDuration = 300
 
@@ -20,9 +21,10 @@ async function task(name: string, fn: () => Promise<unknown>) {
 export async function GET(request: NextRequest) {
   if (!cronAuthorized(request)) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
   const outreach = await task('send-outreach', () => processDueOutreach())
+  const social = await task('social-digest', () => sendSocialDigests())
   const uploads = await task('cleanup-uploads', async () => (await cleanupUploads(request)).json())
   const retained = await task('retention', async () => (await retention(request)).json())
-  const failed = [outreach, uploads, retained].some(r => !!r && typeof r === 'object' && 'error' in (r as object))
+  const failed = [outreach, social, uploads, retained].some(r => !!r && typeof r === 'object' && 'error' in (r as object))
   // 500 when any task failed so Vercel's cron log shows a failure (details are already in Sentry); the other tasks still ran.
-  return NextResponse.json({ ok: !failed, outreach, uploads, retention: retained }, { status: failed ? 500 : 200 })
+  return NextResponse.json({ ok: !failed, outreach, social, uploads, retention: retained }, { status: failed ? 500 : 200 })
 }

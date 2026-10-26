@@ -24,6 +24,7 @@ function toRow(clerkId: string, input: ListingInput) {
     yearBuilt: input.yearBuilt ?? null,
     propertyType: input.propertyType ?? null,
     description: input.description ?? null,
+    commercial: input.commercial ?? null,
     features: input.features,
     photoKeys: keys,
     photos: keys.map(photoUrl),

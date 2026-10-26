@@ -22,6 +22,7 @@ export const FEATURE_GATES = {
   // FIX: starter now correctly gets listing_microsite (was blocked in stripe.ts despite pricing page promise)
   listing_microsite:    ['starter', 'pro', 'commercial', 'brokerage', 'enterprise'],
   unlimited_campaigns:  ['pro', 'commercial', 'brokerage', 'enterprise'],
+  qr_codes:             ['starter', 'pro', 'commercial', 'brokerage', 'enterprise'],
   social_scheduling:    ['pro', 'commercial', 'brokerage', 'enterprise'],
   video_script:         ['pro', 'commercial', 'brokerage', 'enterprise'],
   team_seats:           ['pro', 'commercial', 'brokerage', 'enterprise'],
@@ -54,10 +55,17 @@ export const FEATURE_GATES = {
   lead_export:          ['pro', 'commercial', 'brokerage', 'enterprise'],                    // CSV export
   lead_webhook:         ['pro', 'commercial', 'brokerage', 'enterprise'],                    // signed webhook (Zapier "Catch Hook" ready)
   lead_sms:             ['pro', 'commercial', 'brokerage', 'enterprise'],                    // SMS alert to the agent (needs Twilio configured)
-  // Commercial plan gates
-  site_analysis:        ['commercial', 'brokerage', 'enterprise'],
-  property_grading:     ['commercial', 'brokerage', 'enterprise'],
-  attom_enrichment:     ['commercial', 'brokerage', 'enterprise'],
+  // Compliance (Round 8)
+  fair_housing_scan:    ['free', 'starter', 'pro', 'commercial', 'brokerage', 'enterprise'], // protective, so every plan
+  compliance_profile:   ['brokerage', 'enterprise'],                                         // org-wide required disclaimer + locked brand fields
+  // Performance (Round 9)
+  performance_dashboard: ['starter', 'pro', 'commercial', 'brokerage', 'enterprise'],        // per-listing real activity (views, clicks, leads, downloads)
+  seller_approval:      ['pro', 'commercial', 'brokerage', 'enterprise'],
+  seller_report:        ['pro', 'commercial', 'brokerage', 'enterprise'],                    // shareable branded report link for the seller
+  // Commercial (v13): a campaign type, not a separate product. The CRE package itself is available on every plan (subject to the
+  // normal campaign quota); these two are the add-ons.
+  commercial_om:        ['pro', 'commercial', 'brokerage', 'enterprise'],                    // section-by-section OM-style copy in the package
+  outreach_send:        ['commercial', 'brokerage', 'enterprise'],                           // send the email sequence to a prospect list (compliant sender, daily cron follow-ups)
 } as const satisfies Record<string, readonly PlanTier[]>
 
 export type Feature = keyof typeof FEATURE_GATES
@@ -124,6 +132,7 @@ export const PLANS: Plan[] = [
       { text: 'Print-ready listing flyer (PDF)', included: true },
       { text: 'Branded Instagram graphic (PNG, ListOps watermark)', included: true },
       { text: 'Copy to clipboard', included: true },
+      { text: 'Fair Housing language check with one-click rewrites', included: true },
       { text: 'Brand kit', included: false },
       { text: 'Email templates (8: buyer follow-ups, seller update & more)', included: false },
       { text: 'AI photo captions (per room)', included: false },
@@ -154,6 +163,8 @@ export const PLANS: Plan[] = [
       { text: 'AI photo captions from your uploaded photos', included: true },
       { text: 'Auto-generated listing microsite', included: true },
       { text: 'Lead capture on every microsite (Schedule a Showing + Request Info) with instant email alerts', included: true, highlight: true },
+      { text: 'Per-listing performance: real views, call/email clicks, inquiries and downloads', included: true },
+      { text: 'Trackable QR codes for flyers, signs and brochures (real scan counts)', included: true },
       { text: '3 premium flyer templates + Open House & Price Improvement flyers', included: true },
       { text: 'Full branded visual kit: Instagram square & Stories, Facebook post & cover, open house, price improvement (PNG)', included: true, highlight: true },
       { text: 'Video & reel scripts', included: false },
@@ -186,6 +197,9 @@ export const PLANS: Plan[] = [
       { text: '3 flyer templates + 5 color schemes', included: true },
       { text: 'Visual kit PDF export', included: true },
       { text: 'Lead CSV export + Zapier-ready webhook', included: true },
+      { text: 'Shareable branded seller report (always current)', included: true, highlight: true },
+      { text: 'Seller approval portal: private link, approve or request changes per item, you get emailed', included: true, highlight: true },
+      { text: 'Social post calendar: dated queue, daily "due today" email, CSV + calendar export', included: true, highlight: true },
       { text: 'White-label outputs', included: false },
       { text: 'Agent performance analytics', included: false },
     ],
@@ -205,6 +219,7 @@ export const PLANS: Plan[] = [
     maxAgents: 25,
     features: [
       { text: 'Everything in Pro', included: true, highlight: true },
+      { text: 'Brokerage compliance profile: required disclaimer + locked brand fields for every agent', included: true, highlight: true },
       { text: 'Up to 25 agent seats', included: true, highlight: true },
       { text: 'Your brokerage branding on all outputs', included: true, highlight: true },
       { text: 'Brokerage brand override on all content', included: true },
@@ -258,17 +273,13 @@ export const ENTERPRISE_PLAN = {
     maxAgents: 3,
     features: [
       { text: 'Everything in Pro', included: true, highlight: true },
-      { text: 'AI-powered commercial site analysis & PDF parsing', included: true, highlight: true },
-      { text: 'AI property grading card (A–F)', included: true, highlight: true },
-      { text: 'Traffic count scoring', included: true },
-      { text: 'Consumer spend analysis (1/3/5 mi)', included: true },
-      { text: 'Household income grading', included: true },
-      { text: 'Big-box & anchor tenant detection', included: true },
-      { text: 'ATTOM Data enrichment (demographics, spend)', included: true, highlight: true },
-      { text: 'Direct API data push integration', included: true },
-      { text: 'Demographic scoring', included: true },
-      { text: 'AI site narrative & risk flags', included: true },
-      { text: 'PDF grade card export', included: true },
+      { text: 'Unlimited commercial campaigns: offering teaser, one-pager and long narrative', included: true, highlight: true },
+      { text: 'LinkedIn-first 6-week social + Facebook posts for brokers and investors', included: true, highlight: true },
+      { text: '4-touch broker / investor email sequence, written for you', included: true, highlight: true },
+      { text: 'Send the sequence to your prospect list (compliant sender, automatic follow-ups)', included: true, highlight: true },
+      { text: 'OM-style sectioned copy you can edit and export', included: true },
+      { text: 'Commercial teaser microsite with Request Info lead form', included: true },
+      { text: 'One-sheet flyer copy, trackable QR codes, seller approval', included: true },
       { text: 'White-label outputs', included: false },
     ],
   })

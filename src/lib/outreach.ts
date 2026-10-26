@@ -40,7 +40,7 @@ export async function processDueOutreach(opts: { limit?: number; deadlineMs?: nu
     })
     const eligible =
       !!u && !u.deletedAt && !u.ageBlockedAt && !!u.ageConfirmedAt &&
-      canAccess(planOf(u) as PlanTier, 'site_analysis')
+      canAccess(planOf(u) as PlanTier, 'outreach_send')
     const s: Sender = {
       ok: eligible,
       name: [u?.firstName, u?.lastName].filter(Boolean).join(' ') || 'A ListOps user',

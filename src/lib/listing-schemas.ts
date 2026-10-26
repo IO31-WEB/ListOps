@@ -6,6 +6,7 @@
 
 import { z } from 'zod'
 import { titleCaseAddress } from '@/lib/address'
+import { CommercialDetailsSchema } from '@/lib/commercial/types'
 
 /** Strip control chars (keep \n and \t), normalize whitespace, trim. */
 export function cleanText(s: string): string {
@@ -44,16 +45,18 @@ export const ListingInputSchema = z.object({
   city: addrLine(1, 80),
   state: z.string().transform(s => s.trim().toUpperCase()).pipe(z.enum(US_STATES)),
   zip: z.string().regex(/^\d{5}(-\d{4})?$/).optional().or(z.literal('').transform(() => undefined)),
-  price: z.number().int().min(0).max(500_000_000).nullable().optional(),
+  price: z.number().int().min(0).max(5_000_000_000).nullable().optional(),
   bedrooms: z.number().int().min(0).max(50).nullable().optional(),
   bathrooms: z.number().min(0).max(50).multipleOf(0.5).nullable().optional(),
-  sqft: z.number().int().min(0).max(500_000).nullable().optional(),
+  sqft: z.number().int().min(0).max(50_000_000).nullable().optional(),
   yearBuilt: z.number().int().min(1600).max(currentYear + 2).nullable().optional(),
-  propertyType: z.enum(PROPERTY_TYPES).optional(),
+  propertyType: z.enum([...PROPERTY_TYPES, 'Retail', 'Office', 'Industrial', 'Multifamily', 'Mixed-use', 'Land (commercial)']).optional(),
   features: z.array(line(1, 60)).max(25).default([]),
   description: z.string().transform(cleanText).pipe(z.string().max(4000)).optional(),
   /** R2 object keys returned by /api/uploads/listing-photo. Ownership is verified in the route. */
   photoKeys: z.array(z.string().max(200)).max(20).default([]),
+  /** v13: present only for commercial listings. Residential rows keep this undefined/null. */
+  commercial: CommercialDetailsSchema.optional(),
   /** Where the structured data came from. */
   source: z.enum(['manual', 'enriched']).default('manual'),
   enrichmentProvider: optLine(40),

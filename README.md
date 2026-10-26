@@ -12,7 +12,7 @@ Generate → Brand → Distribute → Measure. Next.js 16 · TypeScript (strict)
 1. **Generate** — The agent enters an address (optionally auto-filled from public records via Realie / RentCast), listing details and **their own photos**. Claude (with Vision on the first four photos) writes a full 6-week campaign.
 2. **Brand** — Logo, headshot, colors, contact info, tagline and disclaimer from the agent's Brand Kit are applied to flyers, graphics and the microsite.
 3. **Distribute** — Ready-to-post graphics (PNG/PDF), premium print flyers, a public listing microsite, outreach emails, and copy-to-clipboard for every post.
-4. **Capture & measure** — Every microsite has Schedule a Showing / Request Info forms that land in a leads inbox with source tracking. Microsite view counts today; link clicks and a seller report are next.
+4. **Capture & measure** — Every microsite has Schedule a Showing / Request Info forms that land in a leads inbox with source tracking. Each listing has a performance page (views, call/email clicks, inquiries, downloads) and a shareable seller report. Only counts the app actually observes are shown.
 
 There is **no MLS connection**. Data comes from what the agent types, optional public-record enrichment, and photos the agent uploads.
 
@@ -31,7 +31,9 @@ There is **no MLS connection**. Data comes from what the agent types, optional p
 | Photo captions | Per-photo alt text, Instagram caption, Stories overlay, staging tip (Claude Vision) | Starter+ |
 | Microsite copy | Hero, about, neighborhood, CTA | Starter+ |
 | Video / reel scripts, virtual-tour narration, TikTok, LinkedIn, X threads, Stories, hashtag packs | 6-week sets | Pro+ |
-| Commercial tools | Site analysis, property grading, ATTOM enrichment, OM builder, outreach email sequences | Commercial+ |
+| Commercial campaigns | Same generate flow as residential, with a commercial form: offering teaser, one-pager, narrative, LinkedIn-first + Facebook posts, 4-touch broker/investor email sequence, teaser microsite, one-sheet copy | All plans (campaign quota applies) |
+| Sectioned OM-style copy | Editable offering-memorandum sections | Pro+ |
+| Send the email sequence from ListOps | Recipient list, consent checkbox, unsubscribe + postal address in every email | Commercial+ |
 
 ### Brand & Distribute
 | Feature | Detail | Plan |
@@ -46,6 +48,14 @@ There is **no MLS connection**. Data comes from what the agent types, optional p
 | Lead CSV export | Spreadsheet-safe CSV of your leads | Pro+ |
 | Lead webhook | Signed `POST` per new lead (Zapier "Catch Hook", Make, n8n, your CRM) with test button; https-only, private/internal hosts blocked | Pro+ |
 | Lead SMS alert | Text to your own mobile on each lead. **Code is shipped but inactive until the Twilio env vars are set** | Pro+ (when enabled) |
+| **Fair Housing language check** | Rule-based scan (no AI call) of the listing description and every generated section; flags familial-status, religion, race/national-origin, sex, disability, source-of-income, steering and "master bedroom" phrasing; one-click neutral rewrites (per rule or all safe fixes); live check on the description box before generating; generation prompts carry the same rules. Keyword safety net, not legal advice | All plans |
+| **Missing-branding warnings** | Required/recommended gaps (name, brokerage, license number, disclaimer, contact, logo, headshot) on the Brand Kit page, campaign page and before generating | All plans (Starter+ for Brand Kit) |
+| **Brokerage compliance profile** | Owner/admin sets a required disclaimer, brokerage license line, "Equal Housing Opportunity" toggle, optional per-agent license line, and locks brand fields (brokerage name/logo, agent/team logo, colors, tagline) for every agent. Applied to flyers, graphics, microsites and generated copy; agents cannot remove it | Brokerage+ |
+| **Listing performance dashboard** | `/dashboard/campaigns/[id]/performance`: microsite views (30 days, 7 days, all time) with a daily chart, call/email button clicks, inquiries by type and source, flyer PDF and graphic downloads, campaign age, and what content is ready. Views exclude crawlers/link-preview bots and the signed-in owner; they are page views, not unique people. Social reach/clicks are deliberately not shown (no platform data exists) | Starter+ |
+| **Seller report** | Private revocable link `/r/<token>` — branded page with the same real numbers, an optional agent note, print / save-as-PDF. Shows counts only, never buyers' names or contact details; not indexed; stops working if revoked or the plan lapses | Pro+ |
+| **Seller approval portal** | `/dashboard/campaigns/[id]/approval`: choose what to include (listing headline + description, Facebook/Instagram/LinkedIn posts, Just Listed email), add a note, and get a private revocable link `/a/<token>`. The seller sees the exact text (a snapshot, so later edits can't change what they approved), answers **Approve** or **Request changes + comment** for each item, types their name, and can revise until you close the link. You are emailed each time they answer; the agent page shows status per item, comments, opens and timestamps. It is a dated record of review, **not a legal e-signature** and not a listing agreement. The link isn't emailed to the seller by ListOps — you copy and send it | Pro+ |
+| **Trackable QR codes** | Each flyer (Starter+, published microsite) carries a QR code automatically; the performance page can create one per placement (yard sign, open-house sign-in, brochure, postcard) and download it as print-ready SVG. The QR encodes a short `listops.io/q/<code>` link that counts the scan and redirects to the listing microsite (with `utm_source=qr&utm_campaign=<placement>`, so resulting inquiries show a QR source). Counts exclude bots, your own signed-in scans and over-limit floods; they are scans, not unique people. No IP or device is stored. Codes can't be deleted so printed signs keep working | Starter+ |
+| **Social calendar** | `/dashboard/social`: puts each Facebook, Instagram and LinkedIn post from a campaign on a dated calendar (suggested slots spread across each week; every date/time is editable). Per post: copy, open the network, edit text, reschedule, notes, mark posted / skip. Length-limit and Fair Housing hints while editing. Daily email when posts are due (can be turned off), CSV and `.ics` export. **Posting is manual** — ListOps does not post to your accounts and shows no reach or engagement numbers | Pro+ |
 | Outreach email | Compliant sender (unsubscribe, suppression list), scheduled follow-ups | Commercial+ |
 | Team | Seat invites (Pro+ seats); team activity log, CSV export and per-agent analytics (Brokerage) | Pro+ / Brokerage |
 
@@ -60,13 +70,17 @@ Built in this order (see [Roadmap](#roadmap)):
 
 1. ~~Branded Visual Kit~~ — **shipped** (above)
 2. ~~Lead capture on every microsite~~ — **shipped** (above)
-3. Persistent brand + brokerage compliance profiles — required disclaimers, locked fields for brokerage admins, missing-branding warnings, Fair Housing language scanner with one-click rewrites
-4. Listing performance dashboard + seller report — microsite views, form submissions, link clicks, campaign status; shareable branded report; real data only
-5. Social post scheduling — Meta Business Suite / Instagram Graph API (Buffer as interim), calendar + queue + publish status; copy/export remains the fallback
+3. ~~Persistent brand + brokerage compliance profiles~~ — **shipped** (above)
+4. ~~Listing performance dashboard + seller report~~ — **shipped** (above)
+5. ~~Social post scheduling~~ — **shipped as a calendar + queue + daily reminder** (above); **direct publishing through Meta (Facebook/Instagram Graph API) is not built** — it needs your own Meta developer app and App Review, see `V10_SOCIAL.md`
 
-After those: unique QR codes on print materials with scan analytics; Seller Approval Portal.
+6. ~~QR codes on print materials with scan analytics~~ — **shipped** (above)
 
-Not built (and not claimed): direct social publishing, native CRM sync (use the webhook), webhook retries, auto-reply to the lead, link-click tracking, seller reports, custom domains, SSO/SCIM.
+7. ~~Seller Approval Portal~~ — **shipped** (above)
+
+Everything on the original roadmap is now shipped except direct Meta publishing, which needs your Meta app review (see `V10_SOCIAL.md`).
+
+Not built (and not claimed): direct posting to Facebook/Instagram/LinkedIn (needs Meta app review), TikTok/Stories/X-thread scheduling, social-post reach/clicks (needs platform APIs), unique-visitor counts, emailing the report to the seller from inside ListOps, a PDF file of the seller report (print/save as PDF instead), per-state advertising-rule engines (the profile is a text/lock tool, not a legal rules database), AI-assisted Fair Housing rewrites, scanning of already-published social posts, direct social publishing, native CRM sync (use the webhook), webhook retries, auto-reply to the lead, link-click tracking, seller reports, custom domains, SSO/SCIM.
 
 ---
 
@@ -83,10 +97,19 @@ Not built (and not claimed): direct social publishing, native CRM sync (use the 
 | Visual Kit — all 6 graphics, no watermark | ❌ | ✅ | ✅ | ✅ | ✅ |
 | Visual Kit PDF export | ❌ | ❌ | ✅ | ✅ | ✅ |
 | Brand kit, drip templates, photo captions, microsite | ❌ | ✅ | ✅ | ✅ | ✅ |
+| Trackable QR codes (auto on flyers, scan counts per placement) | ❌ | ✅ | ✅ | ✅ | ✅ |
 | Microsite lead forms + leads inbox + email alerts | ❌ | ✅ | ✅ | ✅ | ✅ |
+| Per-listing performance dashboard (real tracked counts) | ❌ | ✅ | ✅ | ✅ | ✅ |
+| Shareable branded seller report | ❌ | ❌ | ✅ | ✅ | ✅ |
+| Seller approval portal (approve / request changes per item, emailed to you) | ❌ | ❌ | ✅ | ✅ | ✅ |
+| Social post calendar, daily due-email, CSV/.ics export (manual posting) | ❌ | ❌ | ✅ | ✅ | ✅ |
+| Fair Housing language check + one-click rewrites, branding warnings | ✅ | ✅ | ✅ | ✅ | ✅ |
+| Brokerage compliance profile (required disclaimer, locked fields) | ❌ | ❌ | ❌ | ❌ | ✅ |
 | Lead CSV export, webhook, SMS alert (SMS needs Twilio) | ❌ | ❌ | ✅ | ✅ | ✅ |
 | Video, TikTok, LinkedIn, X, Stories, hashtag packs | ❌ | ❌ | ✅ | ✅ | ✅ |
-| Commercial site analysis & grading | ❌ | ❌ | ❌ | ✅ | ✅ |
+| Commercial campaigns (CRE package, teaser microsite, one-sheet) | ✅ | ✅ | ✅ | ✅ | ✅ |
+| Sectioned OM-style copy | ❌ | ❌ | ✅ | ✅ | ✅ |
+| Send broker/investor email sequence from ListOps | ❌ | ❌ | ❌ | ✅ | ✅ |
 | Team seats | 1 | 1 | 3 | 3 | 25 |
 | White-label, analytics, audit logs | ❌ | ❌ | ❌ | ❌ | ✅ |
 
@@ -102,8 +125,8 @@ Enterprise is contact-sales and has no self-serve plan. Annual prices: Starter $
 | Language | TypeScript (strict) |
 | Database | Drizzle ORM + Neon Postgres |
 | Auth | Clerk |
-| AI | Anthropic Claude (`GENERATION_MODEL`, default `claude-sonnet-5`; commercial routes `COMMERCIAL_MODEL`) with Vision |
-| Property data | Realie, RentCast (public records, optional), ATTOM + Google Places (commercial) |
+| AI | Anthropic Claude (`GENERATION_MODEL`, default `claude-sonnet-5`) with Vision |
+| Property data | Realie, RentCast (public records, optional; residential only) |
 | Payments | Stripe |
 | Storage | Cloudflare R2 (listing photos served via `/api/photos/*`; brand assets via public bucket URL) |
 | Images / PDF | `next/og` (satori) for graphics, `pdf-lib`, headless Chromium (`@sparticuz/chromium` + `puppeteer-core`) for flyer PDFs |
@@ -120,6 +143,62 @@ Enterprise is contact-sales and has no self-serve plan. Annual prices: Starter $
 - `GET /api/campaigns/[id]/visual-kit?kind=…&format=png|pdf` — auth → ownership → rate limit → plan gate → render. Nothing is stored.
 - Flyers: `/flyer/[id]?template=&scheme=&badge=&date=&time=&was=`. The page enforces plan limits server-side. PDF download = `POST /api/campaigns/[id]/pdf`, which renders the flyer in headless Chromium using a 3-minute signed token (`lib/print-token.ts`) because the renderer has no login.
 - Graphics use the renderer's built-in font (single weight); flyers use self-hosted Playfair Display + DM Sans.
+
+---
+
+## How Performance Tracking Works
+
+- Table `campaign_events` (migration `drizzle/0012_performance.sql`): one counter per campaign / day (America/New_York) / kind, bumped by an atomic upsert in `lib/performance/record.ts`. No personal data is stored. Kinds: `view`, `click_call`, `click_email`, `flyer_pdf`, `kit_download`, `report_view`.
+- Sources of truth: microsite page render (bots and the signed-in owner skipped), `POST /api/l/[slug]/event` (public; only the two click kinds; per-IP + per-listing limits), the flyer PDF route, and the visual-kit route when `download=1`. The old all-time `microsite_views` counter is kept and now increments atomically.
+- Daily history starts when this shipped; earlier views appear only in the all-time total and the page says so.
+- Seller reports: table `seller_reports` (192-bit token, revocable, open counter). Creating a new link revokes the old one. Code: `src/lib/performance/`, `src/app/dashboard/campaigns/[id]/performance/`, `src/app/r/[token]/`.
+
+---
+
+## How Commercial Works
+
+- Commercial is a **campaign type**, not a separate product. `campaigns.campaign_type` is `'residential'` (default) or `'commercial'`; commercial details live in `listings.commercial` (JSON) and the type is derived server-side from that, so it can't be spoofed. Migration: `drizzle/0016_commercial_campaigns.sql`.
+- `/dashboard/generate` has a Residential | Commercial toggle (`?type=commercial` preselects it). Required: address, use type, size (SF, units or acres), photos. Everything else (price guidance, NOI, cap rate, zoning, occupancy, broker remarks) is optional and only appears in copy when you provide it. No ATTOM, comps or traffic data is used or required.
+- `POST /api/generate` branches after the shared quota/campaign steps into two parallel Claude calls (offering copy with photo vision; social + email outreach). Output is validated by `src/lib/commercial/output.ts`; a failed save refunds the quota.
+- Outputs are stored in `campaigns.analytics.commercial` and mirrored into the residential-shaped fields (`facebookPosts`, `analytics.linkedin`, `listingCopy`, `micrositeCopy`) so the social calendar, approval portal, microsite and flyer keep working.
+- `/dashboard/commercial` lists commercial campaigns. Sending the email sequence: `POST /api/campaigns/[id]/outreach` (Commercial+); existing scheduled follow-ups still send and can be cancelled.
+- Removed: site reports, property grading, ATTOM/Places enrichment, comps, the report dashboard and all `/api/commercial/*` routes. The old tables stay in the database (no destructive migration).
+
+## How the Seller Approval Portal Works
+
+- Tables `approval_requests` (token, snapshot of the items, views, submitted/revoked timestamps) and `approval_responses` (one row per item: decision, comment, the name the seller typed, time), migration `drizzle/0015_seller_approval.sql`.
+- Creating a link snapshots the chosen content and revokes any earlier link for that campaign. The seller must answer every item; "Request changes" requires a comment. Submitting again replaces their earlier answers (same link), until you close it.
+- Public routes `/a/<token>` and `POST /api/a/<token>/respond`: 192-bit token, per-IP and per-token rate limits, no IP or device stored, noindex, only works while your plan includes the feature.
+- Status: *approved* only when every item is approved; any "changes" makes it *changes requested*.
+
+---
+
+## How QR Codes Work
+
+- Tables `qr_codes` (one short code per campaign + placement) and `qr_scans` (per-day counter), migration `drizzle/0014_qr_codes.sql`.
+- The QR is generated in-house (`src/lib/qr/encode.ts`, no dependency): byte mode, error-correction M, versions 1–10, verified against an independent decoder. It encodes only our own short link, never the destination.
+- `/q/<code>` is public: it skips bots, the signed-in owner and over-limit traffic, adds 1 to today's counter, and 302s to the campaign's microsite (fixed path, so it can't be used as an open redirect). Unknown or unpublished codes go to the home page.
+- Scan counts and microsite views are separate numbers; a scan that doesn't finish loading the page is still a scan.
+
+---
+
+## How Social Scheduling Works
+
+- Tables `social_posts` and `social_settings` (migration `drizzle/0013_social_queue.sql`). One row per queued post; unique on (campaign, source key), so scheduling the same campaign twice never duplicates.
+- "Add to calendar" takes a start date in your time zone (set in your account) and queues the campaign's Facebook, Instagram and LinkedIn posts: week N goes out N-1 weeks after the start date, with defaults of Facebook on the start weekday at 10:00, Instagram the next day at 12:00, LinkedIn the day after at 09:00. These are convenient defaults, **not** claims about best times. Daylight-saving shifts are handled.
+- Status "due"/"overdue" is computed when you open the page; only draft/scheduled/posted/skipped are stored.
+- The daily cron (`/api/cron/daily`) emails each Pro+ agent the posts due in the next 24 hours (once per post) unless they turned it off.
+- No data comes back from the networks, so there are no reach/engagement numbers anywhere in this feature.
+
+---
+
+## How Compliance Works
+
+- `src/lib/compliance/` — `brand.ts` (locks + forced disclaimer, pure), `warnings.ts` (missing-branding checker, pure), `fair-housing.ts` (rules + rewrites, pure, browser-safe), `load.ts` (server loader).
+- One resolver, four consumers: flyer page, visual-kit data, microsite page and the generate route all call `loadEffectiveBrandKit()`, so a locked field or required disclaimer cannot be bypassed by editing a URL or the Brand Kit form. The profile only applies while the org's plan includes it.
+- Disclaimer order: required text, broker license, agent license (if enabled), the agent's own text, Equal Housing — each once, so clipping never drops the required part.
+- `GET/POST /api/campaigns/[id]/compliance` scans and rewrites campaign copy plus the listing description. `GET/PUT /api/team/compliance` is owner/admin only, same-origin, audited. Table: `org_compliance` (migration `drizzle/0011_org_compliance.sql`).
+- Locked values are copied from the admin's own Brand Kit when saved (re-save after changing it).
 
 ---
 
@@ -148,7 +227,7 @@ Key environment variables (full list with comments in `.env.example`):
 | Auth | `NEXT_PUBLIC_CLERK_PUBLISHABLE_KEY`, `CLERK_SECRET_KEY`, `CLERK_WEBHOOK_SECRET` |
 | Database | `DATABASE_URL` |
 | AI | `ANTHROPIC_API_KEY`, `GENERATION_MODEL`, `COMMERCIAL_MODEL`, `AI_*_BUDGET_USD` |
-| Property data (optional) | `ENRICHMENT_PROVIDER`, `REALIE_API_KEY`, `RENTCAST_API_KEY`, `ATTOM_API_KEY`, `GOOGLE_PLACES_API_KEY` |
+| Property data (optional) | `ENRICHMENT_PROVIDER`, `REALIE_API_KEY`, `RENTCAST_API_KEY` |
 | Payments | `STRIPE_*` (secret, webhook, price IDs per plan) |
 | Storage | `R2_ACCOUNT_ID`, `R2_ACCESS_KEY_ID`, `R2_SECRET_ACCESS_KEY`, `R2_BUCKET_NAME`, `NEXT_PUBLIC_R2_PUBLIC_URL` (brand assets only) |
 | Email | `RESEND_API_KEY`, `RESEND_FROM_EMAIL`, `MAIL_FOOTER_ADDRESS`, `UNSUBSCRIBE_SECRET` |
@@ -167,10 +246,10 @@ Listing photos need R2 **read + write** credentials; the bucket does not have to
 
 1. ✅ One-click Branded Visual Kit
 2. ✅ Lead capture on every microsite
-3. Brand + brokerage compliance profiles, Fair Housing scanner
-4. Listing performance dashboard + seller report
-5. Social post scheduling (Meta / Instagram Graph API; Buffer interim)
-6. QR codes on print materials with scan analytics
-7. Seller Approval Portal
+3. ✅ Brand + brokerage compliance profiles, Fair Housing scanner
+4. ✅ Listing performance dashboard + seller report
+5. ✅ Social post calendar + queue + reminders (direct Meta publishing still to come)
+6. ✅ QR codes on print materials with scan analytics
+7. ✅ Seller Approval Portal
 
 Rules for every item: reuse brand kit / microsite / Resend / R2 / PostHog; respect plan gating; keep the Free tier useful; never fabricate analytics.

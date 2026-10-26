@@ -17,6 +17,10 @@ const isPublicRoute = createRouteMatcher([
   '/affiliates',
   '/l/(.*)',
   '/flyer/(.*)', // the page does its own auth: signed-in owner OR a short-lived signed print token (PDF renderer)
+  '/q/(.*)', // QR scan redirect: counts a scan, then 302s to the listing microsite (bots/owner excluded, rate-limited)
+  '/a/(.*)', // seller approval page: unguessable revocable token, no login
+  '/api/a/(.*)', // seller approval submit (token + rate limits inside the handler)
+  '/r/(.*)', // seller report: unguessable revocable token, no login
   '/api/l/(.*)', // public microsite lead form (honeypot + rate limits + consent inside the handler)
   '/api/photos/(.*)', // listing photos: public by design, key-validated in the handler
   '/api/webhooks/(.*)',
@@ -28,7 +32,6 @@ const isPublicRoute = createRouteMatcher([
   '/api/unsubscribe',
   '/api/csp-report',
   '/api/cron/(.*)', // protected by CRON_SECRET inside each handler
-  '/api/commercial/data-push',
 ])
 
 export default clerkMiddleware(async (auth, request) => {

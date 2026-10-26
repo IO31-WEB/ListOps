@@ -38,13 +38,18 @@ const FEATURE_COMPARISON = [
   { category: 'Brand & Customization', features: [
     { name: 'Brand kit (logo, colors, photo)', free: false, starter: true, pro: true, brokerage: true },
     { name: 'Custom agent tagline & persona', free: false, starter: true, pro: true, brokerage: true },
+    { name: 'Fair Housing language check + one-click rewrites', free: true, starter: true, pro: true, brokerage: true },
+    { name: 'Brokerage compliance profile (required disclaimer, locked brand fields)', free: false, starter: false, pro: false, brokerage: true },
   ]},
   { category: 'Publishing & Distribution', features: [
     { name: 'Copy to clipboard', free: true, starter: true, pro: true, brokerage: true },
     { name: 'Auto-generated listing microsite', free: false, starter: true, pro: true, brokerage: true },
     { name: 'Microsite lead forms + leads inbox + email alerts', free: false, starter: true, pro: true, brokerage: true },
+    { name: 'Trackable QR codes (auto on flyers, per-placement scan counts)', free: false, starter: true, pro: true, brokerage: true },
     { name: 'Lead CSV export + Zapier-ready webhook', free: false, starter: false, pro: true, brokerage: true },
-    { name: 'Direct social scheduling (coming soon)', free: false, starter: false, pro: true, brokerage: true },
+    { name: 'Seller approval portal (approve / request changes, dated record)', free: false, starter: false, pro: true, brokerage: true },
+    { name: 'Social post calendar (queue, daily reminder email, CSV/calendar export)', free: false, starter: false, pro: true, brokerage: true },
+    { name: 'Direct posting to Facebook/Instagram (coming soon)', free: false, starter: false, pro: false, brokerage: false },
     { name: 'Email platform integrations (coming soon)', free: false, starter: false, pro: true, brokerage: true },
   ]},
   { category: 'Team & Admin', features: [
@@ -57,6 +62,8 @@ const FEATURE_COMPARISON = [
   ]},
   { category: 'Performance', features: [
     { name: 'Campaign history', free: true, starter: true, pro: true, brokerage: true },
+    { name: 'Per-listing performance (views, clicks, inquiries, downloads)', free: false, starter: true, pro: true, brokerage: true },
+    { name: 'Shareable branded seller report', free: false, starter: false, pro: true, brokerage: true },
   ]},
 ]
 

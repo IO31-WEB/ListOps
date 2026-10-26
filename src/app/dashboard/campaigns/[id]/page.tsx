@@ -4,6 +4,8 @@ import { getBillingInfo } from '@/lib/billing-client'
 import { useState, useEffect, useCallback } from 'react'
 import { useParams, useRouter } from 'next/navigation'
 import Link from 'next/link'
+import { CommercialSections } from '@/components/campaign/commercial-sections'
+import { USE_TYPE_LABEL, readCommercial } from '@/lib/commercial/types'
 import {
   ArrowLeft, Copy, Check, Download, Share2, ExternalLink,
   Facebook, Instagram, Mail, Printer, ChevronDown, ChevronUp,
@@ -14,6 +16,7 @@ import {
 import toast from 'react-hot-toast'
 import { PhotoLightbox, PhotoThumb } from '@/components/ui/photo-lightbox'
 import { formatListingAddress } from '@/lib/address'
+import { CompliancePanel } from '@/components/dashboard/compliance-panel'
 
 // ── Types ──────────────────────────────────────────────────────
 
@@ -33,6 +36,7 @@ interface PhotoCaption {
 }
 
 interface Campaign {
+  campaignType?: 'residential' | 'commercial'; commercial?: any
   id: string; status: string; createdAt: string; generationMs?: number
   micrositeSlug?: string; micrositePublished?: boolean; micrositeViews?: number
   facebookPosts?: Array<{ week: number; theme: string; copy: string; hashtags?: string[] }>
@@ -67,7 +71,7 @@ interface Campaign {
   listing?: {
     address?: string; city?: string; state?: string; price?: string
     bedrooms?: number; bathrooms?: string; sqft?: number; photos?: string[]
-    description?: string
+    description?: string; commercial?: unknown
   }
   brandKit?: {
     agentName?: string; logoUrl?: string; brokerageLogo?: string
@@ -738,6 +742,8 @@ export default function CampaignDetailPage() {
   const photos = (campaign.listing?.photos ?? []) as string[]
   const isPro = ['pro', 'commercial', 'brokerage', 'enterprise'].includes(planTier)
   const isStarter = ['starter', 'pro', 'commercial', 'brokerage', 'enterprise'].includes(planTier)
+  const isCommercial = campaign.campaignType === 'commercial'
+  const cre = isCommercial ? readCommercial(campaign.listing?.commercial) : null
 
   let reelScripts: ReelScript[] = []
   let virtualTourScripts: VirtualTourScript[] = []
@@ -769,14 +775,27 @@ export default function CampaignDetailPage() {
             <h1 className="font-display text-2xl font-semibold text-slate-900">{address || 'Campaign'}</h1>
             <div className="flex items-center gap-3 mt-1.5 text-xs text-slate-500 flex-wrap">
               {campaign.listing?.price && <span>${Number(campaign.listing.price).toLocaleString()}</span>}
+              {cre && <span className="bg-slate-100 text-slate-700 rounded-full px-2 py-0.5 font-medium">{USE_TYPE_LABEL[cre.useType]} · {cre.offering === 'lease' ? 'For lease' : 'For sale'}</span>}
               {campaign.listing?.bedrooms && <span>{campaign.listing.bedrooms} bd</span>}
               {campaign.listing?.bathrooms && <span>{campaign.listing.bathrooms} ba</span>}
-              {campaign.listing?.sqft && <span>{campaign.listing.sqft?.toLocaleString()} sqft</span>}
+              {campaign.listing?.sqft && <span>{campaign.listing.sqft?.toLocaleString()} {isCommercial ? 'SF' : 'sqft'}</span>}
               <span className={`px-2 py-0.5 rounded-full capitalize font-medium ${campaign.status === 'complete' ? 'bg-green-100 text-green-700' : 'bg-amber-100 text-amber-700'}`}>{campaign.status}</span>
               {campaign.generationMs && <span className="flex items-center gap-1"><Zap className="w-3 h-3" />Generated in {(campaign.generationMs/1000).toFixed(1)}s</span>}
             </div>
           </div>
           <div className="flex items-center gap-2 flex-wrap flex-shrink-0">
+            <Link href={`/dashboard/campaigns/${campaign.id}/performance`}
+              className="inline-flex items-center gap-1.5 text-xs font-semibold text-slate-700 bg-white border border-slate-200 hover:bg-slate-50 px-3 py-1.5 rounded-lg transition-colors">
+              Performance
+            </Link>
+            <Link href={`/dashboard/social?campaign=${campaign.id}`}
+              className="inline-flex items-center gap-1.5 text-xs font-semibold text-slate-700 bg-white border border-slate-200 hover:bg-slate-50 px-3 py-1.5 rounded-lg transition-colors">
+              Schedule posts
+            </Link>
+            <Link href={`/dashboard/campaigns/${campaign.id}/approval`}
+              className="inline-flex items-center gap-1.5 text-xs font-semibold text-slate-700 bg-white border border-slate-200 hover:bg-slate-50 px-3 py-1.5 rounded-lg transition-colors">
+              Seller approval
+            </Link>
             <Link href={`/dashboard/campaigns/${campaign.id}/kit`}
               className="inline-flex items-center gap-1.5 text-xs font-semibold text-white bg-slate-900 hover:bg-slate-800 px-3 py-1.5 rounded-lg transition-colors">
               <Image className="w-3.5 h-3.5" />Visual Kit
@@ -790,6 +809,8 @@ export default function CampaignDetailPage() {
           </div>
         </div>
       </div>
+
+      <CompliancePanel campaignId={campaign.id} showBrand={isStarter} onFixed={fetchCampaign} />
 
       {/* Property Photos */}
       <div className="bg-white rounded-2xl border border-slate-200 overflow-hidden">
@@ -805,6 +826,12 @@ export default function CampaignDetailPage() {
 
       <PhotoLightbox photos={photos} index={lightbox} onChange={setLightbox} />
 
+      {isCommercial ? (
+        <CommercialSections
+          c={{ id: campaign.id, status: campaign.status, commercial: (campaign.commercial ?? null) as any, facebookPosts: campaign.facebookPosts as any, linkedin: campaign.linkedin as any, micrositeSlug: campaign.micrositeSlug, micrositePublished: campaign.micrositePublished, micrositeCopy: campaign.micrositeCopy as any }}
+          canOm={isPro} canSend={['commercial', 'brokerage', 'enterprise'].includes(planTier)} publishing={publishing} onToggleMicrosite={toggleMicrosite} />
+      ) : (
+      <>
       {/* 1. Listing Copy */}
       {campaign.listingCopy
         ? <ListingCopySection data={campaign.listingCopy} onRegenerate={() => handleRegenerate('listingCopy')} regenerating={regenerating === 'listingCopy'} />
@@ -845,6 +872,8 @@ export default function CampaignDetailPage() {
       {campaign.photoCaptions && campaign.photoCaptions.length > 0
         ? <PhotoCaptionsSection captions={campaign.photoCaptions} photos={photos} onOpenPhoto={setLightbox} onRegenerate={() => handleRegenerate('photoCaptions')} regenerating={regenerating === 'photoCaptions'} />
         : null}
+      </>
+      )}
     </div>
   )
 }

@@ -175,6 +175,26 @@ export const rateLimitLeadSlug = (slug: string) =>
 export const rateLimitLeadTools = (userId: string) =>
   limit({ name: 'lead-tools', limit: 30, windowSeconds: 10 * 60, failClosed: false }, userId)
 
+/** Fair Housing scan / one-click rewrite on a campaign. */
+export const rateLimitCompliance = (userId: string) =>
+  limit({ name: 'compliance', limit: 60, windowSeconds: 10 * 60, failClosed: false }, userId)
+
+/** Public QR redirect: generous (open-house crowds share one Wi-Fi IP) and fail-open — over the limit a scan still redirects, it just isn't counted. */
+export const rateLimitQr = (ip: string) =>
+  limit({ name: 'qr-scan', limit: 300, windowSeconds: 10 * 60, failClosed: false }, ip)
+
+/** Public seller-approval submissions. */
+export const rateLimitApproval = (key: string) =>
+  limit({ name: 'approval', limit: 20, windowSeconds: 10 * 60, failClosed: true }, key)
+
+/** Signed-in QR management. */
+export const rateLimitQrManage = (userId: string) =>
+  limit({ name: 'qr-manage', limit: 60, windowSeconds: 10 * 60, failClosed: false }, userId)
+
+/** Social queue edits / planning / export. */
+export const rateLimitSocial = (userId: string) =>
+  limit({ name: 'social', limit: 120, windowSeconds: 10 * 60, failClosed: false }, userId)
+
 export const rateLimitAPI = (ip: string) =>
   limit({ name: 'api', limit: 60, windowSeconds: 60, failClosed: false }, ip)
 

@@ -86,6 +86,7 @@ export default async function AnalyticsPage() {
                         <p className="text-xs text-slate-500">Microsite views</p>
                       </div>
                     )}
+                    <Link href={`/dashboard/campaigns/${campaign.id}/performance`} className="text-xs font-semibold text-amber-700 underline">Performance</Link>
                     <span className={`text-xs font-medium px-2.5 py-1 rounded-full capitalize ${campaign.status === 'complete' ? 'bg-green-100 text-green-700' : 'bg-amber-100 text-amber-700'}`}>
                       {campaign.status}
                     </span>

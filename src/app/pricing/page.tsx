@@ -44,6 +44,8 @@ const FEATURE_CATEGORIES = [
       { name: 'Custom agent tagline',                         free: false,   starter: true,    pro: true,        brokerage: true },
       { name: 'Flyer templates',                              free: '1',     starter: '3',     pro: '3 + 5 color schemes', brokerage: '3 + 5 color schemes' },
       { name: 'Brokerage brand override on all content',      free: false,   starter: false,   pro: false,       brokerage: true },
+      { name: 'Fair Housing language check + one-click rewrites', free: true,  starter: true,    pro: true,        brokerage: true },
+      { name: 'Brokerage compliance profile (required disclaimer, locked fields)', free: false, starter: false, pro: false, brokerage: true },
     ],
   },
   {
@@ -55,6 +57,11 @@ const FEATURE_CATEGORIES = [
       { name: 'Lead CSV export + Zapier-ready webhook',       free: false,   starter: false,   pro: true,        brokerage: true },
       { name: 'Microsite publish / unpublish',                free: false,   starter: true,    pro: true,        brokerage: true },
       { name: 'Microsite view analytics',                     free: false,   starter: true,    pro: true,        brokerage: true },
+      { name: 'Per-listing performance dashboard (real tracked counts)', free: false, starter: true, pro: true, brokerage: true },
+      { name: 'Trackable QR codes (auto on flyers, scan counts per placement)', free: false, starter: true, pro: true, brokerage: true },
+      { name: 'Shareable branded seller report',              free: false,   starter: false,   pro: true,        brokerage: true },
+      { name: 'Seller approval portal (private link, per-item approve / request changes)', free: false, starter: false, pro: true, brokerage: true },
+      { name: 'Social post calendar + daily "due" email + CSV/calendar export', free: false, starter: false, pro: true, brokerage: true },
     ],
   },
   {

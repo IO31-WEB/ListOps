@@ -59,6 +59,8 @@ export async function GET(
     xThreads:       analytics.xThreads       ?? null,
     stories:        analytics.stories        ?? null,
     hashtagPacks:   analytics.hashtagPacks   ?? null,
+    campaignType:   (campaign as any).campaignType ?? 'residential',
+    commercial:     analytics.commercial     ?? null,
     // Parsed video scripts
     reelScripts,
     virtualTourScripts,

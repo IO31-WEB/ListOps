@@ -339,6 +339,10 @@ export async function POST(
     // Fetch campaign with listing join — getCampaign validates ownership via agentId
     const campaign = await getCampaign(campaignId, userId)
     if (!campaign) return NextResponse.json({ error: 'Campaign not found' }, { status: 404 })
+    // Commercial packages have a different shape; the residential section prompts here would overwrite them with the wrong content.
+    if ((campaign as any).campaignType === 'commercial') {
+      return NextResponse.json({ error: 'Section regeneration is not available for commercial campaigns yet. Edit the listing and generate a new campaign instead.' }, { status: 400 })
+    }
 
     // Build listing context from the joined listing row
     const listing = normalizeListing((campaign as any).listing)

@@ -24,6 +24,7 @@ import { eq, and } from 'drizzle-orm'
 import { getCampaign, checkCampaignQuota } from '@/lib/user-service'
 import { rateLimitPdf, rateLimitHeaders } from '@/lib/ratelimit'
 import { uploadToR2 } from '@/lib/r2'
+import { recordEvent } from '@/lib/performance/record'
 import { trackFlyerDownloaded } from '@/lib/posthog'
 
 // Flyer options chosen in the flyer toolbar. Plan limits are enforced by the flyer page itself.
@@ -77,6 +78,7 @@ export async function POST(
     const cachedUrl = campaign.pdfUrl ?? campaign.flyerUrl
     if (isDefault && cachedUrl?.startsWith('http') && cachedUrl?.includes('r2')) {
       trackFlyerDownloaded({ userId, campaignId: id, template: 'cached', planTier })
+      await recordEvent(id, 'flyer_pdf')
       return NextResponse.json({ url: cachedUrl, cached: true, isPdf: true })
     }
 
@@ -165,6 +167,7 @@ export async function POST(
     const isPdf = !!pdfBuffer && !!pdfUrl
 
     trackFlyerDownloaded({ userId, campaignId: id, template: opts.template, planTier })
+    await recordEvent(id, 'flyer_pdf')
 
     return NextResponse.json({ url: finalUrl, isPdf, cached: false })
   } catch (err) {

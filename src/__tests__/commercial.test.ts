@@ -1,0 +1,112 @@
+import { describe, test, expect } from 'vitest'
+import { readFileSync, existsSync } from 'fs'
+import { join } from 'path'
+import { CommercialDetailsSchema, readCommercial, factLines } from '@/lib/commercial/types'
+import { normalizeCommercial, CommercialOutputError } from '@/lib/commercial/output'
+import { canAccess } from '@/lib/plans'
+
+const read = (p: string) => readFileSync(join(process.cwd(), p), 'utf8')
+
+const offering = {
+  headline: 'Corner retail with 40 parking spaces',
+  headlineVariations: ['A', 'B'],
+  teaser: 'Teaser text.',
+  onePager: { summary: 'Summary.', highlights: ['Corner lot', ''], locationOverview: 'Near the interchange.' },
+  narrative: 'Long narrative.',
+  print: { oneSheetHeadline: 'H', oneSheetSubhead: 'S', oneSheetBody: 'B', callouts: [{ label: 'SF', value: '12,000' }, { label: '', value: 'x' }], callToAction: 'Call' },
+  omSections: [{ title: 'Executive Summary', body: 'Body' }],
+}
+const outreach = {
+  linkedin: [1, 2, 3].map(w => ({ week: w, theme: 'Launch', post: `Post ${w}`, hashtags: ['#CRE', 'retail!'] })),
+  facebook: [1, 2, 3].map(w => ({ week: w, theme: 'Launch', copy: `FB ${w}` })),
+  emailSequence: [
+    { sendDay: 7, subject: 'Third', body: 'c' }, { sendDay: 0, subject: 'First', body: 'a' }, { sendDay: 3, subject: 'Second', body: 'b' },
+  ],
+}
+
+describe('commercial details', () => {
+  test('use type is required; optional fields tolerate empty strings and null', () => {
+    expect(CommercialDetailsSchema.safeParse({}).success).toBe(false)
+    const r = CommercialDetailsSchema.safeParse({ useType: 'retail', noi: '', capRatePct: null, zoning: '' })
+    expect(r.success).toBe(true)
+  })
+  test('readCommercial never throws on junk and returns null', () => {
+    expect(readCommercial(null)).toBeNull()
+    expect(readCommercial('x')).toBeNull()
+    expect(readCommercial({ useType: 'spaceship' })).toBeNull()
+    expect(readCommercial({ useType: 'office' })?.offering).toBe('sale')
+  })
+  test('factLines only states facts that were provided', () => {
+    const lines = factLines({ useType: 'office', offering: 'sale' } as any, { sqft: null, price: null, yearBuilt: null }).join('\n')
+    expect(lines).toMatch(/Office/)
+    expect(lines).not.toMatch(/NOI|Cap rate|Zoning|Year built|Asking/)
+    const full = factLines({ useType: 'retail', offering: 'lease', noi: 100000, capRatePct: 6.5 } as any, { sqft: 12000, price: 30, yearBuilt: 1999 }).join('\n')
+    expect(full).toMatch(/Asking rent/)
+    expect(full).toMatch(/Cap rate: 6.5%/)
+  })
+})
+
+describe('commercial output normalization', () => {
+  test('sorts the email sequence, strips junk, mirrors residential-shaped fields', () => {
+    const n = normalizeCommercial(offering, outreach, { includeOm: true })
+    expect(n.pkg.emailSequence.map(e => e.sendDay)).toEqual([0, 3, 7])
+    expect(n.firstEmail).toBe('a')
+    expect(n.pkg.onePager.highlights).toEqual(['Corner lot'])
+    expect(n.pkg.print.callouts).toHaveLength(1)
+    expect(n.linkedin[0].hashtags).toEqual(['CRE', 'retail'])
+    expect(n.facebookPosts).toHaveLength(3)
+    expect(n.pkg.omSections).toHaveLength(1)
+  })
+  test('OM sections are dropped when the plan does not include them', () => {
+    expect(normalizeCommercial(offering, outreach, { includeOm: false }).pkg.omSections).toBeFalsy()
+  })
+  test('missing teaser / emails fails so the quota is refunded', () => {
+    expect(() => normalizeCommercial({ ...offering, teaser: '' }, outreach, { includeOm: false })).toThrow(CommercialOutputError)
+    expect(() => normalizeCommercial(offering, { ...outreach, emailSequence: [] }, { includeOm: false })).toThrow(CommercialOutputError)
+    expect(() => normalizeCommercial(offering, { ...outreach, linkedin: [] }, { includeOm: false })).toThrow(CommercialOutputError)
+    expect(() => normalizeCommercial('nope', outreach, { includeOm: false })).toThrow(CommercialOutputError)
+  })
+})
+
+describe('commercial plan gates', () => {
+  test('OM sections Pro+, outreach sending Commercial+', () => {
+    expect(canAccess('starter', 'commercial_om')).toBe(false)
+    expect(canAccess('pro', 'commercial_om')).toBe(true)
+    expect(canAccess('pro', 'outreach_send')).toBe(false)
+    expect(canAccess('commercial', 'outreach_send')).toBe(true)
+  })
+})
+
+describe('commercial wiring', () => {
+  test('no ATTOM / site-report / grading code remains', () => {
+    for (const p of ['src/app/api/commercial', 'src/lib/attom-enrichment.ts', 'src/lib/property-grader.ts', 'src/app/dashboard/commercial/[reportId]']) {
+      expect(existsSync(join(process.cwd(), p)), p).toBe(false)
+    }
+    for (const p of ['src/app/api/generate/route.ts', 'src/lib/plans.ts', 'src/middleware.ts', 'src/lib/outreach.ts', 'src/app/dashboard/commercial/page.tsx']) {
+      expect(read(p), p).not.toMatch(/attom_enrichment|site_analysis|property_grading|\/api\/commercial|attom-enrichment/)
+    }
+  })
+  test('generate derives commercial server-side and refunds on failure; regenerate refuses commercial', () => {
+    const g = read('src/app/api/generate/route.ts')
+    expect(g).toMatch(/readCommercial\(/)
+    expect(g).toMatch(/campaignType/)
+    expect(read('src/app/api/campaigns/[id]/regenerate/route.ts')).toMatch(/commercial/)
+  })
+  test('outreach route is same-origin, adult-gated and plan-gated', () => {
+    const r = read('src/app/api/campaigns/[id]/outreach/route.ts')
+    expect(r).toMatch(/assertSameOrigin\(/)
+    expect(r).toMatch(/assertAdult\(/)
+    expect(r).toMatch(/outreach_send/)
+    expect(read('src/lib/outreach.ts')).toMatch(/outreach_send/)
+  })
+  test('migration is idempotent and defaults to residential', () => {
+    const m = read('drizzle/0016_commercial_campaigns.sql')
+    expect(m).toMatch(/ADD COLUMN IF NOT EXISTS "campaign_type" text NOT NULL DEFAULT 'residential'/)
+    expect(m).toMatch(/ADD COLUMN IF NOT EXISTS "commercial" jsonb/)
+  })
+  test('microsite uses broker/investor wording for commercial only', () => {
+    const l = read('src/components/microsite/lead-form.tsx')
+    expect(l).toMatch(/Request Information/)
+    expect(l).toMatch(/Schedule a Showing/)
+  })
+})

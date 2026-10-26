@@ -8,9 +8,14 @@ import { normalizeListing } from '@/lib/address'
 import { resolveListingPhotos } from '@/lib/photos'
 import { getCampaign, checkCampaignQuota } from '@/lib/user-service'
 import { canAccess } from '@/lib/plans'
+import { loadEffectiveBrandKit } from '@/lib/compliance/load'
 import { SCHEME_IDS, resolveScheme, luminance, readableOn } from '@/lib/color-schemes'
 import { verifyPrintToken } from '@/lib/print-token'
 import { PrintButton } from './print-button'
+import { USE_TYPE_LABEL, readCommercial } from '@/lib/commercial/types'
+import { encodeQr, qrPath } from '@/lib/qr/encode'
+import { qrTargetUrl } from '@/lib/qr/codes'
+import { getOrCreateQr } from '@/lib/qr/service'
 
 // ── Typography ─────────────────────────────────────────────────
 // Playfair Display + DM Sans are self-hosted (see app/layout.tsx) and exposed as CSS variables.
@@ -74,12 +79,13 @@ export default async function FlyerPage({
   const eventTime = short(sp.time, 40)
 
   const listing = normalizeListing(campaign.listing)
-  const bk = canAccess(planTier, 'brand_kit') ? (campaign.brandKit as any) : null
+  // Brokerage compliance (locked fields + required disclaimer) is applied here, so it can't be bypassed by editing the URL.
+  const bk = canAccess(planTier, 'brand_kit') ? await loadEffectiveBrandKit(campaign.brandKit as any, campaign.agentId) : null
   const address = listing ? [listing.address, listing.city, listing.state].filter(Boolean).join(', ') : 'Property Address'
   const cityState = listing ? [listing.city, listing.state].filter(Boolean).join(', ') : ''
   const streetAddress = listing?.address ?? address
   const priceNum = listing?.price ? Number(listing.price) : 0
-  const price = priceNum ? `$${priceNum.toLocaleString()}` : ''
+  const price = cre?.priceGuidance || (priceNum ? `$${priceNum.toLocaleString()}` : '')
   const wasNum = /^\d+$/.test(sp.was ?? '') ? Number(sp.was) : 0
   const was = badge === 'priceReduced' && wasNum > priceNum && priceNum > 0 ? `$${wasNum.toLocaleString()}` : ''
   const beds = listing?.bedrooms ?? 0
@@ -87,8 +93,12 @@ export default async function FlyerPage({
   const sqft = listing?.sqft?.toLocaleString() ?? ''
   const yearBuilt = (listing as any)?.yearBuilt ?? ''
   const photos = ((listing?.photos as string[]) ?? []).slice(0, 6)
-  const description = clip(listing?.description ?? '', template === 'modern' ? 520 : 600)
+  const description = clip((cre ? crePrint?.oneSheetBody : '') || listing?.description || '', template === 'modern' ? 520 : 600)
   const features = (((listing as any)?.features as string[] | undefined) ?? []).slice(0, 6)
+
+  // v13: commercial campaigns reuse these templates with CRE stats and the generated one-sheet copy (never beds/baths).
+  const cre = campaign.campaignType === 'commercial' ? readCommercial((campaign.listing as any)?.commercial) : null
+  const crePrint = (campaign.analytics as any)?.commercial?.print as { oneSheetBody?: string } | undefined
 
   const agentName = bk?.agentName ?? ''
   const agentTitle = bk?.agentTitle ?? 'REALTOR®'
@@ -102,12 +112,22 @@ export default async function FlyerPage({
   const disclaimer = clip(bk?.disclaimer ?? '', 260)
   const showMark = !canAccess(planTier, 'remove_branding')
 
+  // Trackable QR (Starter+, published microsite only). Failure must never break the flyer.
+  let qr: { path: string; dim: number } | null = null
+  if (canAccess(planTier, 'qr_codes') && campaign.micrositeSlug && campaign.micrositePublished) {
+    try {
+      const row = await getOrCreateQr(campaign.id, campaign.agentId, 'flyer')
+      const m = encodeQr(qrTargetUrl(row.code))
+      qr = { path: qrPath(m, 2), dim: m.size + 4 }
+    } catch (err) { console.error('[flyer] qr failed', err) }
+  }
+
   const { primary: primaryColor, accent: accentColor } = resolveScheme(scheme, bk?.primaryColor, bk?.accentColor)
   const onAccent = readableOn(accentColor)
   const mainPhoto = photos[0] ?? null
   const hasEvent = badge === 'openHouse'
   const eventLine = [eventDate, eventTime].filter(Boolean).join('  ·  ') || 'Date & time to be announced'
-  const badgeLabel = badge === 'openHouse' ? 'Open House' : badge === 'priceReduced' ? 'Price Improvement' : 'Just Listed'
+  const badgeLabel = cre && badge === 'justListed' ? (cre.offering === 'lease' ? 'For Lease' : 'For Sale') : badge === 'openHouse' ? 'Open House' : badge === 'priceReduced' ? 'Price Improvement' : 'Just Listed'
 
   // ── Shared pieces ─────────────────────────────────────────────
   const noPhoto = (h: string | number) => (
@@ -123,7 +143,13 @@ export default async function FlyerPage({
     </div>
   )
 
-  const statItems = [
+  const statItems = cre ? [
+    { label: 'Property Type', value: USE_TYPE_LABEL[cre.useType] },
+    ...(sqft ? [{ label: 'Square Feet', value: sqft }] : []),
+    ...(cre.units ? [{ label: 'Units', value: String(cre.units) }] : []),
+    ...(cre.capRatePct ? [{ label: 'Cap Rate', value: `${cre.capRatePct}%` }] : []),
+    ...(yearBuilt ? [{ label: 'Year Built', value: String(yearBuilt) }] : []),
+  ].slice(0, 4) : [
     ...(beds ? [{ label: 'Bedrooms', value: String(beds) }] : []),
     ...(baths ? [{ label: 'Bathrooms', value: String(baths) }] : []),
     ...(sqft ? [{ label: 'Square Feet', value: sqft }] : []),
@@ -165,6 +191,14 @@ export default async function FlyerPage({
         </div>
       </div>
       <div style={{ display: 'flex', alignItems: 'center', gap: 12, flexShrink: 0 }}>
+        {qr && (
+          <div style={{ textAlign: 'center', flexShrink: 0 }}>
+            <svg viewBox={`0 0 ${qr.dim} ${qr.dim}`} width={compact ? 66 : 84} height={compact ? 66 : 84} shapeRendering="crispEdges" role="img" aria-label="QR code: scan for photos and details" style={{ background: '#fff', borderRadius: 4, display: 'block' }}>
+              <path d={qr.path} fill="#000" />
+            </svg>
+            <div style={{ fontFamily: SANS, fontSize: 6.5, letterSpacing: 1, marginTop: 3, color: dark ? 'rgba(255,255,255,0.75)' : '#64748b', ...CAPS }}>Scan for details</div>
+          </div>
+        )}
         {logoUrl && (
           // eslint-disable-next-line @next/next/no-img-element
           <img src={logoUrl} alt="Agent logo" style={{ height: compact ? 32 : 42, maxWidth: compact ? 80 : 110, objectFit: 'contain' }} />
@@ -352,7 +386,7 @@ export default async function FlyerPage({
 
             <div style={{ flex: 1, display: 'flex', flexDirection: 'column', minWidth: 0, borderLeft: `6px solid ${primaryColor}` }}>
               <div style={{ background: primaryColor, padding: '36px 30px 28px' }}>
-                <div style={{ fontFamily: SANS, fontSize: 10, letterSpacing: 5, color: accentColor, marginBottom: 14, ...CAPS }}>{badge === 'priceReduced' ? 'New price' : 'For sale'}</div>
+                <div style={{ fontFamily: SANS, fontSize: 10, letterSpacing: 5, color: accentColor, marginBottom: 14, ...CAPS }}>{badge === 'priceReduced' ? 'New price' : cre?.offering === 'lease' ? 'For lease' : 'For sale'}</div>
                 {priceNode(accentColor, 40, 'rgba(255,255,255,0.5)', 'left')}
                 <div style={{ fontFamily: SERIF, fontSize: 21, color: 'white', marginTop: 16, lineHeight: 1.2 }}>{streetAddress}</div>
                 <div style={{ fontFamily: SANS, fontSize: 10.5, letterSpacing: 3, color: 'rgba(255,255,255,0.6)', marginTop: 6, ...CAPS }}>{cityState}</div>

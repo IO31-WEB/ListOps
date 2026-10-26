@@ -11,7 +11,7 @@
 
 import {
   pgTable, pgEnum, uuid, text, integer, boolean,
-  timestamp, jsonb, numeric, index, uniqueIndex, inet,
+  timestamp, jsonb, numeric, index, uniqueIndex, inet, primaryKey,
 } from 'drizzle-orm/pg-core'
 import { relations } from 'drizzle-orm'
 
@@ -213,6 +213,7 @@ export const listings = pgTable('listings', {
   listingAgentPhone: text('listing_agent_phone'),
   officeName: text('office_name'),
 
+  commercial: jsonb('commercial'),                  // v13: CRE details (null = residential). See lib/commercial/types.ts
   rawData: jsonb('raw_data'),
   status: listingStatusEnum('status').notNull().default('active'),
   fetchedAt: timestamp('fetched_at').notNull().defaultNow(),
@@ -234,6 +235,7 @@ export const campaigns = pgTable('campaigns', {
   orgId: uuid('org_id').references(() => organizations.id),
   brandKitId: uuid('brand_kit_id').references(() => brandKits.id),
 
+  campaignType: text('campaign_type').$type<'residential' | 'commercial'>().notNull().default('residential'), // v13
   status: campaignStatusEnum('status').notNull().default('generating'),
   generationMs: integer('generation_ms'),
   failureReason: text('failure_reason'),            // short, user-safe reason (set when status='failed')
@@ -609,4 +611,142 @@ export const leadSettings = pgTable('lead_settings', {
 export const leadRelations = relations(leads, ({ one }) => ({
   campaign: one(campaigns, { fields: [leads.campaignId], references: [campaigns.id] }),
   listing: one(listings, { fields: [leads.listingId], references: [listings.id] }),
+}))
+
+
+// ── Brokerage compliance profile (Round 8) ─────────────────────────────────────────────────────────
+// One row per organization (Brokerage+). Applied at render/generation time to every member's outputs:
+// the required disclaimer is always shown, and "locked" brand fields override whatever an agent typed.
+export const orgCompliance = pgTable('org_compliance', {
+  orgId: uuid('org_id').primaryKey().references(() => organizations.id, { onDelete: 'cascade' }),
+  requiredDisclaimer: text('required_disclaimer'),
+  brokerageLicense: text('brokerage_license'),
+  equalHousing: boolean('equal_housing').notNull().default(false),
+  showAgentLicense: boolean('show_agent_license').notNull().default(false),
+  // Present key = that brand field is locked to this value for every agent in the org.
+  locked: jsonb('locked').$type<{
+    brokerageName?: string; brokerageLogo?: string; logoUrl?: string
+    primaryColor?: string; accentColor?: string; tagline?: string
+  }>().notNull().default({}),
+  updatedBy: uuid('updated_by'),
+  updatedAt: timestamp('updated_at').notNull().defaultNow(),
+})
+
+
+// ── Listing performance tracking (Round 9) ──────────────────────────────────────────────────────────
+// One row per campaign/day/kind with a counter, incremented atomically. Contains NO personal data.
+// kinds: view (microsite page view, bots + the owner excluded) · click_call · click_email · flyer_pdf · kit_download · report_view
+export const campaignEvents = pgTable('campaign_events', {
+  campaignId: uuid('campaign_id').notNull().references(() => campaigns.id, { onDelete: 'cascade' }),
+  day: text('day').notNull(),                       // YYYY-MM-DD in America/New_York
+  kind: text('kind').notNull(),
+  count: integer('count').notNull().default(0),
+}, (t) => ({
+  pk: primaryKey({ columns: [t.campaignId, t.day, t.kind] }),
+}))
+
+// Shareable, revocable seller report links. The token is the only credential (192 bits, unguessable).
+export const sellerReports = pgTable('seller_reports', {
+  id: uuid('id').primaryKey().defaultRandom(),
+  campaignId: uuid('campaign_id').notNull().references(() => campaigns.id, { onDelete: 'cascade' }),
+  agentId: uuid('agent_id').notNull().references(() => users.id, { onDelete: 'cascade' }),
+  token: text('token').notNull(),
+  note: text('note'),                               // optional message from the agent shown at the top
+  views: integer('views').notNull().default(0),
+  lastViewedAt: timestamp('last_viewed_at'),
+  revokedAt: timestamp('revoked_at'),
+  createdAt: timestamp('created_at').notNull().defaultNow(),
+}, (t) => ({
+  tokenIdx: uniqueIndex('seller_reports_token_idx').on(t.token),
+  campaignIdx: index('seller_reports_campaign_idx').on(t.campaignId),
+}))
+
+
+// ── Social post queue (Round 10) ────────────────────────────────────────────────────────────────────
+// The agent's planned posts. ListOps does NOT publish to social networks yet: the queue tells the agent what is due,
+// emails a daily digest, and the agent posts (copy / open) and marks it posted. `status` is what the agent set;
+// "due"/"overdue" is derived from scheduled_for at read time.
+export const socialPosts = pgTable('social_posts', {
+  id: uuid('id').primaryKey().defaultRandom(),
+  agentId: uuid('agent_id').notNull().references(() => users.id, { onDelete: 'cascade' }),
+  campaignId: uuid('campaign_id').notNull().references(() => campaigns.id, { onDelete: 'cascade' }),
+  channel: text('channel').$type<'facebook' | 'instagram' | 'linkedin'>().notNull(),
+  sourceKey: text('source_key').notNull(),          // e.g. "facebookPosts:0" — keeps re-planning idempotent
+  week: integer('week'),
+  body: text('body').notNull(),
+  scheduledFor: timestamp('scheduled_for').notNull(), // UTC
+  status: text('status').$type<'draft' | 'scheduled' | 'posted' | 'skipped'>().notNull().default('scheduled'),
+  postedAt: timestamp('posted_at'),
+  reminderSentAt: timestamp('reminder_sent_at'),
+  notes: text('notes'),
+  createdAt: timestamp('created_at').notNull().defaultNow(),
+  updatedAt: timestamp('updated_at').notNull().defaultNow(),
+}, (t) => ({
+  agentSchedIdx: index('social_posts_agent_sched_idx').on(t.agentId, t.scheduledFor),
+  campaignSourceIdx: uniqueIndex('social_posts_campaign_source_idx').on(t.campaignId, t.sourceKey),
+}))
+
+export const socialSettings = pgTable('social_settings', {
+  userId: uuid('user_id').primaryKey().references(() => users.id, { onDelete: 'cascade' }),
+  digest: boolean('digest').notNull().default(true),   // daily "posts due" email
+  updatedAt: timestamp('updated_at').notNull().defaultNow(),
+})
+
+export const socialPostRelations = relations(socialPosts, ({ one }) => ({
+  campaign: one(campaigns, { fields: [socialPosts.campaignId], references: [campaigns.id] }),
+}))
+
+// ── QR codes (v11) ────────────────────────────────────────────
+// One short code per (campaign, placement). The printed QR encodes /q/<code>, which counts a scan and redirects to the
+// listing microsite. Codes are never deleted by the agent: a printed sign must keep working.
+export const qrCodes = pgTable('qr_codes', {
+  id: uuid('id').primaryKey().defaultRandom(),
+  campaignId: uuid('campaign_id').notNull().references(() => campaigns.id, { onDelete: 'cascade' }),
+  agentId: uuid('agent_id').notNull().references(() => users.id, { onDelete: 'cascade' }),
+  placement: text('placement').notNull(),               // flyer | yard_sign | open_house | brochure | postcard
+  code: text('code').notNull(),
+  createdAt: timestamp('created_at').notNull().defaultNow(),
+}, (t) => ({
+  codeIdx: uniqueIndex('qr_codes_code_idx').on(t.code),
+  campaignPlacementIdx: uniqueIndex('qr_codes_campaign_placement_idx').on(t.campaignId, t.placement),
+}))
+
+export const qrScans = pgTable('qr_scans', {
+  qrId: uuid('qr_id').notNull().references(() => qrCodes.id, { onDelete: 'cascade' }),
+  day: text('day').notNull(),                           // YYYY-MM-DD, app timezone
+  count: integer('count').notNull().default(0),
+}, (t) => ({
+  pk: primaryKey({ columns: [t.qrId, t.day] }),
+}))
+
+// ── Seller Approval Portal (v12) ──────────────────────────────
+// The agent sends the seller a private link. `items` is a SNAPSHOT of the exact text the seller is asked to approve, so a
+// later edit to the campaign can never change what the seller agreed to.
+export const approvalRequests = pgTable('approval_requests', {
+  id: uuid('id').primaryKey().defaultRandom(),
+  campaignId: uuid('campaign_id').notNull().references(() => campaigns.id, { onDelete: 'cascade' }),
+  agentId: uuid('agent_id').notNull().references(() => users.id, { onDelete: 'cascade' }),
+  token: text('token').notNull(),
+  sellerName: text('seller_name'),
+  note: text('note'),
+  items: jsonb('items').$type<Array<{ key: string; group: 'listing' | 'social' | 'email'; label: string; text: string }>>().notNull(),
+  views: integer('views').notNull().default(0),
+  lastViewedAt: timestamp('last_viewed_at'),
+  submittedAt: timestamp('submitted_at'),
+  revokedAt: timestamp('revoked_at'),
+  createdAt: timestamp('created_at').notNull().defaultNow(),
+}, (t) => ({
+  tokenIdx: uniqueIndex('approval_requests_token_idx').on(t.token),
+  campaignIdx: index('approval_requests_campaign_idx').on(t.campaignId),
+}))
+
+export const approvalResponses = pgTable('approval_responses', {
+  requestId: uuid('request_id').notNull().references(() => approvalRequests.id, { onDelete: 'cascade' }),
+  itemKey: text('item_key').notNull(),
+  decision: text('decision').$type<'approved' | 'changes'>().notNull(),
+  comment: text('comment'),
+  signedName: text('signed_name').notNull(),            // name the seller typed when submitting
+  decidedAt: timestamp('decided_at').notNull().defaultNow(),
+}, (t) => ({
+  pk: primaryKey({ columns: [t.requestId, t.itemKey] }),
 }))

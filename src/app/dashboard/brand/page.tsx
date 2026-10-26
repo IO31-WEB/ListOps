@@ -9,6 +9,8 @@ import {
 } from 'lucide-react'
 import toast from 'react-hot-toast'
 import Link from 'next/link'
+import { applyCompliance, lockedKeys, type LockableField, type OrgCompliance } from '@/lib/compliance/brand'
+import { brandWarnings } from '@/lib/compliance/warnings'
 
 interface BrandKitForm {
   agentName: string; agentTitle: string; agentPhone: string
@@ -18,6 +20,18 @@ interface BrandKitForm {
   facebookUrl: string; instagramHandle: string; linkedinUrl: string
   tone: 'professional' | 'friendly' | 'luxury' | 'energetic'
   logoUrl: string; agentPhotoUrl: string; brokerageLogo: string
+  licenseNumber: string
+}
+
+/** Greys out a field the brokerage controls. */
+function LockWrap({ locked, children }: { locked: boolean; children: React.ReactNode }) {
+  if (!locked) return <>{children}</>
+  return (
+    <div className="relative">
+      <div className="opacity-60 pointer-events-none select-none" aria-disabled="true">{children}</div>
+      <span className="absolute -top-2 right-0 inline-flex items-center gap-1 text-[10px] font-semibold bg-slate-800 text-white rounded-full px-2 py-0.5"><Lock className="w-2.5 h-2.5" /> Set by your brokerage</span>
+    </div>
+  )
 }
 
 function ColorPicker({ label, value, onChange }: { label: string; value: string; onChange: (v: string) => void }) {
@@ -172,14 +186,20 @@ export default function BrandPage() {
     agentWebsite: '', brokerageName: '', tagline: '', disclaimer: '',
     primaryColor: '#1e293b', accentColor: '#f59e0b', fontFamily: 'Georgia',
     facebookUrl: '', instagramHandle: '', linkedinUrl: '',
-    tone: 'professional', logoUrl: '', agentPhotoUrl: '', brokerageLogo: '',
+    tone: 'professional', logoUrl: '', agentPhotoUrl: '', brokerageLogo: '', licenseNumber: '',
   })
+  const [compliance, setCompliance] = useState<OrgCompliance | null>(null)
   const [saving, setSaving] = useState(false)
   const [planTier, setPlanTier] = useState<string>('free')
   const [loading, setLoading] = useState(true)
   const [saved, setSaved] = useState(false)
 
   const set = (key: keyof BrandKitForm) => (val: string) => setForm(prev => ({ ...prev, [key]: val }))
+  const locked = new Set<LockableField>(lockedKeys(compliance))
+  const isLocked = (k: LockableField) => locked.has(k)
+  // What outputs will actually use (locks + forced disclaimer applied) — drives the warnings.
+  const effective = applyCompliance(form, compliance, form.licenseNumber)
+  const warnings = brandWarnings(effective, { licenseNumber: form.licenseNumber })
 
   useEffect(() => {
     const fetchBrandKit = async () => {
@@ -188,9 +208,11 @@ export default function BrandPage() {
           fetch('/api/brand-kit'),
           getBillingInfo(),
         ])
-        const { brandKit } = await bkRes.json()
+        const { brandKit, licenseNumber, compliance: org } = await bkRes.json()
+        setCompliance(org ?? null)
         const planTier = info?.planTier ?? 'free'
         setPlanTier(planTier)
+        setForm(prev => ({ ...prev, licenseNumber: licenseNumber ?? '' }))
         if (brandKit) {
           setForm(prev => ({
             ...prev,
@@ -310,6 +332,17 @@ export default function BrandPage() {
         </button>
       </div>
 
+      {warnings.length > 0 && (
+        <div role="status" className="bg-amber-50 border border-amber-200 rounded-2xl p-5">
+          <div className="font-semibold text-amber-900 text-sm mb-2">Finish your brand kit ({warnings.length} item{warnings.length === 1 ? '' : 's'})</div>
+          <ul className="space-y-1.5 text-sm text-amber-900">
+            {warnings.map(w => (
+              <li key={w.id}><span className={`inline-block text-[10px] font-bold uppercase rounded px-1.5 py-0.5 mr-2 ${w.level === 'required' ? 'bg-red-100 text-red-700' : 'bg-amber-100 text-amber-700'}`}>{w.level}</span><strong>{w.message}.</strong> <span className="text-amber-800">{w.fix}</span></li>
+            ))}
+          </ul>
+        </div>
+      )}
+
       {/* Agent Identity */}
       <div className="bg-white rounded-2xl border border-slate-200 p-6">
         <div className="flex items-center gap-2 mb-5">
@@ -324,9 +357,14 @@ export default function BrandPage() {
           <div className="sm:col-span-2">
             <FormField label="Website" type="text" value={form.agentWebsite} onChange={set('agentWebsite')} placeholder="https://sarahmitchell.com" />
           </div>
-          <FormField label="Brokerage Name" value={form.brokerageName} onChange={set('brokerageName')} placeholder="Reed Realty Group" />
+          <LockWrap locked={isLocked('brokerageName')}>
+            <FormField label="Brokerage Name" value={isLocked('brokerageName') ? effective.brokerageName : form.brokerageName} onChange={set('brokerageName')} placeholder="Reed Realty Group" />
+          </LockWrap>
+          <FormField label="License Number" value={form.licenseNumber} onChange={set('licenseNumber')} placeholder="e.g. 123456" />
           <div className="sm:col-span-2">
-            <FormField label="Tagline" value={form.tagline} onChange={set('tagline')} placeholder="Your Trusted Austin Area Real Estate Expert" />
+            <LockWrap locked={isLocked('tagline')}>
+              <FormField label="Tagline" value={isLocked('tagline') ? effective.tagline : form.tagline} onChange={set('tagline')} placeholder="Your Trusted Austin Area Real Estate Expert" />
+            </LockWrap>
           </div>
         </div>
       </div>
@@ -339,8 +377,12 @@ export default function BrandPage() {
         </div>
         <div className="grid sm:grid-cols-3 gap-5">
           <ImageUploadZone label="Agent Headshot"   hint="PNG, JPG, WebP • Max 5MB" currentUrl={form.agentPhotoUrl} slot="agentPhoto"    onUpload={set('agentPhotoUrl')} />
-          <ImageUploadZone label="Agent/Team Logo"  hint="PNG, SVG recommended"     currentUrl={form.logoUrl}       slot="logo"         onUpload={set('logoUrl')} />
-          <ImageUploadZone label="Brokerage Logo"   hint="PNG, SVG recommended"     currentUrl={form.brokerageLogo} slot="brokerageLogo" onUpload={set('brokerageLogo')} />
+          <LockWrap locked={isLocked('logoUrl')}>
+            <ImageUploadZone label="Agent/Team Logo"  hint="PNG, SVG recommended"     currentUrl={isLocked('logoUrl') ? effective.logoUrl : form.logoUrl}       slot="logo"         onUpload={set('logoUrl')} />
+          </LockWrap>
+          <LockWrap locked={isLocked('brokerageLogo')}>
+            <ImageUploadZone label="Brokerage Logo"   hint="PNG, SVG recommended"     currentUrl={isLocked('brokerageLogo') ? effective.brokerageLogo : form.brokerageLogo} slot="brokerageLogo" onUpload={set('brokerageLogo')} />
+          </LockWrap>
         </div>
       </div>
 
@@ -351,8 +393,8 @@ export default function BrandPage() {
           <h2 className="font-display font-semibold text-slate-900">Brand Colors</h2>
         </div>
         <div className="grid sm:grid-cols-2 gap-5 mb-5">
-          <ColorPicker label="Primary Color" value={form.primaryColor} onChange={set('primaryColor')} />
-          <ColorPicker label="Accent Color" value={form.accentColor} onChange={set('accentColor')} />
+          <LockWrap locked={isLocked('primaryColor')}><ColorPicker label="Primary Color" value={isLocked('primaryColor') ? effective.primaryColor : form.primaryColor} onChange={set('primaryColor')} /></LockWrap>
+          <LockWrap locked={isLocked('accentColor')}><ColorPicker label="Accent Color" value={isLocked('accentColor') ? effective.accentColor : form.accentColor} onChange={set('accentColor')} /></LockWrap>
         </div>
         {/* Color Preview */}
         <div className="rounded-xl overflow-hidden border border-slate-200">
@@ -421,6 +463,9 @@ export default function BrandPage() {
           rows={3}
           className="w-full bg-slate-50 border border-slate-200 rounded-xl px-4 py-3 text-sm focus:outline-none focus:ring-2 focus:ring-amber-400 focus:border-transparent resize-none"
         />
+        {compliance && effective.disclaimer !== form.disclaimer && (
+          <p className="text-xs text-slate-500 mt-2 bg-slate-50 rounded-lg p-3"><span className="font-semibold">Your brokerage adds this to every piece:</span> {effective.disclaimer}</p>
+        )}
       </div>
 
       {/* Save button bottom */}

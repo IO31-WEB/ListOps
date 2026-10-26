@@ -11,6 +11,8 @@ interface Props {
   consent: string
   primary: string
   accent: string
+  /** Broker/investor wording for commercial offerings. */
+  commercial?: boolean
 }
 
 const field: React.CSSProperties = {
@@ -19,8 +21,8 @@ const field: React.CSSProperties = {
 }
 const label: React.CSSProperties = { fontFamily: 'Arial, sans-serif', fontSize: 12, fontWeight: 700, color: '#475569', display: 'block', marginBottom: 6 }
 
-export function LeadForm({ slug, address, agentName, consent, primary, accent }: Props) {
-  const [kind, setKind] = useState<Kind>('showing')
+export function LeadForm({ slug, address, agentName, consent, primary, accent, commercial }: Props) {
+  const [kind, setKind] = useState<Kind>(commercial ? 'info' : 'showing')
   const [status, setStatus] = useState<'idle' | 'sending' | 'done' | 'error'>('idle')
   const [error, setError] = useState('')
   const shownAt = useRef(0)
@@ -65,7 +67,7 @@ export function LeadForm({ slug, address, agentName, consent, primary, accent }:
     return (
       <div role="status" style={{ background: 'white', border: `2px solid ${primary}`, borderRadius: 16, padding: '32px 24px', textAlign: 'center', fontFamily: 'Arial, sans-serif' }}>
         <div style={{ fontSize: 22, fontWeight: 800, color: primary, marginBottom: 8 }}>Thank you!</div>
-        <div style={{ fontSize: 15, color: '#475569' }}>{agentName || 'The listing agent'} received your request and will be in touch shortly.</div>
+        <div style={{ fontSize: 15, color: '#475569' }}>{agentName || (commercial ? 'The listing broker' : 'The listing agent')} received your request and will be in touch shortly.</div>
       </div>
     )
   }
@@ -81,10 +83,10 @@ export function LeadForm({ slug, address, agentName, consent, primary, accent }:
 
   return (
     <form onSubmit={onSubmit} style={{ background: 'white', border: '1px solid #e2e8f0', borderRadius: 16, overflow: 'hidden', textAlign: 'left' }}>
-      <div style={{ display: 'flex' }}>{tab('showing', 'Schedule a Showing')}{tab('info', 'Request More Info')}</div>
+      <div style={{ display: 'flex' }}>{commercial ? <>{tab('info', 'Request Information')}{tab('showing', 'Schedule a Tour')}</> : <>{tab('showing', 'Schedule a Showing')}{tab('info', 'Request More Info')}</>}</div>
       <div style={{ padding: 24, display: 'grid', gap: 16 }}>
         <div style={{ fontFamily: 'Arial, sans-serif', fontSize: 14, color: '#64748b' }}>
-          {kind === 'showing' ? `Pick a time to tour ${address}.` : `Ask ${agentName || 'the agent'} anything about ${address}.`}
+          {kind === 'showing' ? `Pick a time to tour ${address}.` : commercial ? `Request the offering details for ${address} from ${agentName || 'the broker'}.` : `Ask ${agentName || 'the agent'} anything about ${address}.`}
         </div>
         <div><label style={label} htmlFor="lf-name">Your name</label><input id="lf-name" name="name" required maxLength={100} autoComplete="name" style={field} /></div>
         <div style={{ display: 'grid', gap: 16, gridTemplateColumns: 'repeat(auto-fit, minmax(200px, 1fr))' }}>
@@ -115,7 +117,7 @@ export function LeadForm({ slug, address, agentName, consent, primary, accent }:
         {status === 'error' && <div role="alert" style={{ color: '#b91c1c', fontFamily: 'Arial, sans-serif', fontSize: 14 }}>{error}</div>}
         <button type="submit" disabled={status === 'sending'}
           style={{ background: primary, color: 'white', border: 'none', borderBottom: `3px solid ${accent}`, padding: '15px 24px', borderRadius: 12, fontSize: 15, fontWeight: 700, cursor: 'pointer', fontFamily: 'Arial, sans-serif', opacity: status === 'sending' ? 0.7 : 1 }}>
-          {status === 'sending' ? 'Sending…' : kind === 'showing' ? 'Request Showing' : 'Send Request'}
+          {status === 'sending' ? 'Sending…' : kind === 'showing' ? (commercial ? 'Request Tour' : 'Request Showing') : commercial ? 'Request Information' : 'Send Request'}
         </button>
       </div>
     </form>

@@ -8,7 +8,9 @@ import { sniffImage } from '@/lib/image-validate'
 import { isListingPhotoKey } from '@/lib/listing-schemas'
 import { resolveScheme } from '@/lib/color-schemes'
 import { formatListingAddress, formatStreet, formatCity, formatState } from '@/lib/address'
+import { readCommercial } from '@/lib/commercial/types'
 import { sanitizeForPrompt } from '@/lib/prompt-safety'
+import { loadEffectiveBrandKit } from '@/lib/compliance/load'
 
 export interface KitOptions { scheme: string; date?: string; time?: string; oldPrice?: number; watermark: boolean }
 
@@ -48,7 +50,7 @@ const clean = (s: unknown, max: number) => sanitizeForPrompt(s, max).replace(/\s
 
 export async function loadKitData(campaign: any, opts: KitOptions, includeBrand: boolean): Promise<KitData> {
   const l = campaign.listing ?? {}
-  const bk = includeBrand ? campaign.brandKit ?? null : null
+  const bk = includeBrand ? await loadEffectiveBrandKit(campaign.brandKit ?? null, campaign.agentId) : null
   const { primary, accent } = resolveScheme(opts.scheme, bk?.primaryColor, bk?.accentColor)
 
   // First usable (JPEG/PNG) photo among the first three.
@@ -61,19 +63,20 @@ export async function loadKitData(campaign: any, opts: KitOptions, includeBrand:
   ])
 
   const priceNum = l.price ? Number(l.price) : 0
+  const cre = readCommercial((l as any).commercial)
   return {
     street: formatStreet(l.address), cityState: [formatCity(l.city), formatState(l.state)].filter(Boolean).join(', '),
     fullAddress: formatListingAddress(l),
-    price: priceNum ? money(priceNum) : 'Contact for price',
+    price: cre?.priceGuidance ? clean(cre.priceGuidance, 40) : priceNum ? money(priceNum) : 'Contact for price',
     oldPrice: opts.oldPrice && opts.oldPrice > priceNum && priceNum > 0 ? money(opts.oldPrice) : null,
-    beds: l.bedrooms ?? 0, baths: l.bathrooms ? Number(l.bathrooms) : 0,
+    beds: cre ? 0 : l.bedrooms ?? 0, baths: cre ? 0 : l.bathrooms ? Number(l.bathrooms) : 0,
     sqft: l.sqft ? Number(l.sqft).toLocaleString('en-US') : '', yearBuilt: l.yearBuilt ?? null,
     photo,
     agentName: clean(bk?.agentName, 60), agentTitle: clean(bk?.agentTitle || '', 40), phone: clean(bk?.agentPhone, 30),
     email: clean(bk?.agentEmail, 80), website: clean(bk?.agentWebsite, 80), brokerage: clean(bk?.brokerageName, 70), tagline: clean(bk?.tagline, 90),
     logo, brokerageLogo, headshot,
     primary, accent,
-    disclaimer: clean(bk?.disclaimer, 200),
+    disclaimer: clean(bk?.disclaimer, 240),
     date: clean(opts.date, 40), time: clean(opts.time, 40),
     watermark: opts.watermark,
   }

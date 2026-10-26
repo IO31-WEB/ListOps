@@ -9,7 +9,7 @@ import { UserButton } from '@clerk/nextjs'
 import {
   Zap, LayoutDashboard, FolderOpen, Plus, Palette,
   CreditCard, Users, BarChart2, Settings, ChevronLeft, Gift,
-  ChevronRight, Menu, X, HelpCircle, Building2, Inbox
+  ChevronRight, Menu, X, HelpCircle, Building2, Inbox, CalendarDays
 } from 'lucide-react'
 import { cn } from '@/lib/utils'
 
@@ -18,6 +18,7 @@ const NAV_ITEMS = [
   { label: 'New Campaign', href: '/dashboard/generate', icon: Plus, highlight: true },
   { label: 'My Campaigns', href: '/dashboard/campaigns', icon: FolderOpen },
   { label: 'Leads', href: '/dashboard/leads', icon: Inbox },
+  { label: 'Social Calendar', href: '/dashboard/social', icon: CalendarDays },
   { label: 'Brand Kit', href: '/dashboard/brand', icon: Palette },
   { label: 'Commercial', href: '/dashboard/commercial', icon: Building2 },
   { label: 'Analytics', href: '/dashboard/analytics', icon: BarChart2 },

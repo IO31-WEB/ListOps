@@ -44,6 +44,11 @@ export default async function TeamPage() {
             {teamMembers.length} of {maxAgents === 999 ? 'unlimited' : maxAgents} seats used
           </p>
         </div>
+        {['brokerage', 'enterprise'].includes(planTier) && (
+          <Link href="/dashboard/team/compliance" className="inline-flex items-center gap-2 border border-slate-200 bg-white text-slate-700 text-sm font-semibold px-5 py-2.5 rounded-xl hover:bg-slate-50 transition-colors">
+            Compliance profile
+          </Link>
+        )}
         {canManageTeam && canAddMore && (
           <Link
             href="/dashboard/team/invite"

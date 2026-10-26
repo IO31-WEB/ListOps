@@ -5,6 +5,7 @@
  * Auth -> ownership -> rate limit -> plan gate -> render. Nothing is stored; every request renders fresh
  * (browsers may cache a preview for 60 s). No engagement numbers or claims are ever drawn.
  */
+import { recordEvent } from '@/lib/performance/record'
 import { NextRequest, NextResponse } from 'next/server'
 import { ImageResponse } from 'next/og'
 import { PDFDocument } from 'pdf-lib'
@@ -61,6 +62,8 @@ export async function GET(request: NextRequest, { params }: { params: Promise<{ 
     const { width, height } = KIT_CATALOG[q.kind]
     const png = new ImageResponse(renderKit(q.kind, data), { width, height })
     const base = slugify(data.fullAddress || 'listing') || 'listing'
+
+    if (q.download) await recordEvent(campaign.id, 'kit_download')
 
     if (q.format === 'png') {
       const bytes = await png.arrayBuffer()

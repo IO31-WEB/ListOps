@@ -6,7 +6,7 @@ import { NextRequest, NextResponse } from 'next/server'
 import { and, eq, inArray, isNotNull, lt, notLike } from 'drizzle-orm'
 import { cronAuthorized } from '@/lib/cron-auth'
 import { db } from '@/lib/db'
-import { aiUsage, auditLogs, brandKits, campaigns, leadSettings, leads, listingUploads, listings, propertyGrades, siteReports, stripeEvents, users } from '@/lib/db/schema'
+import { aiUsage, auditLogs, brandKits, campaigns, leadSettings, leads, listingUploads, socialPosts, socialSettings, qrCodes, approvalRequests, listings, propertyGrades, siteReports, stripeEvents, users } from '@/lib/db/schema'
 import { deleteFromR2 } from '@/lib/r2'
 import { logAudit } from '@/lib/audit'
 import { captureError } from '@/lib/monitoring'
@@ -31,6 +31,10 @@ async function purgeUser(u: { id: string }) {
 
   await db.delete(leads).where(eq(leads.agentId, u.id))
   await db.delete(leadSettings).where(eq(leadSettings.userId, u.id))
+  await db.delete(socialPosts).where(eq(socialPosts.agentId, u.id))
+  await db.delete(approvalRequests).where(eq(approvalRequests.agentId, u.id))
+  await db.delete(qrCodes).where(eq(qrCodes.agentId, u.id))
+  await db.delete(socialSettings).where(eq(socialSettings.userId, u.id))
   await db.delete(campaigns).where(eq(campaigns.agentId, u.id))
   await db.delete(listings).where(eq(listings.agentId, u.id))
   await db.delete(listingUploads).where(eq(listingUploads.userId, u.id))
