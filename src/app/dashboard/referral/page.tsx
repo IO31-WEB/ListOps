@@ -39,7 +39,7 @@ export default function ReferralPage() {
   const shareEmail = () => {
     if (!data?.referralUrl) return
     const subject = encodeURIComponent('Try ListOps — AI real estate marketing in 90s')
-    const body = encodeURIComponent(`Hey,\n\nI've been using ListOps to generate complete 6-week marketing campaigns for my listings in about 90 seconds. Facebook posts, Instagram captions, flyers, email copy — all done.\n\nSign up with my link and we both get a free month when you upgrade:\n${data.referralUrl}\n\nHope it helps!`)
+    const body = encodeURIComponent(`Hey,\n\nI've been using ListOps to generate complete 6-week marketing campaigns for my listings in about 90 seconds. Facebook posts, Instagram captions, flyers, email copy — all done.\n\nSign up with my link and you can try it free:\n${data.referralUrl}\n\nHope it helps!`)
     window.open(`mailto:?subject=${subject}&body=${body}`)
   }
 
@@ -70,7 +70,7 @@ export default function ReferralPage() {
           {[
             { step: '1', text: 'Share your unique link with another agent' },
             { step: '2', text: 'They sign up and upgrade to any paid plan' },
-            { step: '3', text: 'You both get 1 free month added to your account' },
+            { step: '3', text: 'We credit a free month to your account (applied by our team)' },
           ].map(({ step, text }) => (
             <div key={step} className="text-center">
               <div className="w-8 h-8 rounded-full bg-amber-400 text-slate-900 font-bold text-sm flex items-center justify-center mx-auto mb-2">{step}</div>
@@ -129,7 +129,7 @@ export default function ReferralPage() {
 
       {/* Terms */}
       <p className="text-xs text-slate-400 text-center pb-4">
-        Rewards are applied automatically when your referred agent upgrades to a paid plan. Free month credit is applied to your next billing cycle.
+        Stats update automatically: "Signed up" counts people who created an account from your link, and "Upgraded" counts only those whose own account has an active paid subscription. Teammates you invite to your team are not referrals. Free month credits are applied by our team after an upgrade.
       </p>
     </div>
   )

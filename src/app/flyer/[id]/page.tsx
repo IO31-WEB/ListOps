@@ -1,108 +1,227 @@
+import { isCommercialLocked } from '@/lib/plan-resolve'
 import { auth } from '@clerk/nextjs/server'
-import { PrintButton } from './print-button'
 import { redirect } from 'next/navigation'
+import type { CSSProperties } from 'react'
+import { eq } from 'drizzle-orm'
+import { db } from '@/lib/db'
+import { users } from '@/lib/db/schema'
+import { normalizeListing } from '@/lib/address'
+import { resolveListingPhotos } from '@/lib/photos'
 import { getCampaign, checkCampaignQuota } from '@/lib/user-service'
+import { canAccess } from '@/lib/plans'
+import { loadEffectiveBrandKit } from '@/lib/compliance/load'
+import { SCHEME_IDS, resolveScheme, luminance, readableOn } from '@/lib/color-schemes'
+import { verifyPrintToken } from '@/lib/print-token'
+import { PrintButton } from './print-button'
+import { USE_TYPE_LABEL, readCommercial } from '@/lib/commercial/types'
+import { encodeQr, qrPath } from '@/lib/qr/encode'
+import { qrTargetUrl } from '@/lib/qr/codes'
+import { getOrCreateQr } from '@/lib/qr/service'
+
+// ── Typography ─────────────────────────────────────────────────
+// Playfair Display + DM Sans are self-hosted (see app/layout.tsx) and exposed as CSS variables.
+const SERIF = "var(--font-display), 'Playfair Display', Georgia, serif"
+const SANS = "var(--font-body), 'DM Sans', Arial, sans-serif"
+const CAPS: CSSProperties = { textTransform: 'uppercase' }
+
+const TEMPLATES = ['classic', 'luxury', 'modern'] as const
+const BADGES = ['justListed', 'openHouse', 'priceReduced'] as const
+type Template = (typeof TEMPLATES)[number]
+type Badge = (typeof BADGES)[number]
+
+const clip = (text: string, max: number) => {
+  const t = (text ?? '').replace(/\s+/g, ' ').trim()
+  if (t.length <= max) return t
+  const cut = t.slice(0, max)
+  return cut.slice(0, Math.max(cut.lastIndexOf(' '), max - 40)).replace(/[.,;:\s]+$/, '') + '…'
+}
+const short = (s: string | undefined, max: number) => (s ?? '').replace(/[<>]/g, '').replace(/\s+/g, ' ').trim().slice(0, max)
 
 export default async function FlyerPage({
   params,
   searchParams,
 }: {
   params: Promise<{ id: string }>
-  searchParams: Promise<{ template?: string; scheme?: string }>
+  searchParams: Promise<{ template?: string; scheme?: string; badge?: string; date?: string; time?: string; was?: string; pt?: string }>
 }) {
-  const { userId } = await auth()
-  if (!userId) redirect('/sign-in')
-
   const { id } = await params
-  const { template = 'classic', scheme = 'brand' } = await searchParams
+  const sp = await searchParams
 
-  // Color scheme overrides for Pro users
-  const COLOR_SCHEME_MAP: Record<string, { primary: string; accent: string }> = {
-    brand:    { primary: '',        accent: '' },          // uses brand kit colors (default)
-    navy:     { primary: '#1a2744', accent: '#c9a84c' },   // Navy & gold
-    charcoal: { primary: '#2d2d2d', accent: '#e8a020' },   // Charcoal & amber
-    forest:   { primary: '#1e4d2b', accent: '#f5f0e8' },   // Forest green & cream
-    burgundy: { primary: '#6b1a2a', accent: '#d4b896' },   // Burgundy & champagne
+  // ── Load campaign: signed-in owner, OR a short-lived signed token (our PDF renderer has no session) ──
+  let campaign: Awaited<ReturnType<typeof getCampaign>> | undefined
+  let planTier: Awaited<ReturnType<typeof checkCampaignQuota>>['planTier'] = 'free'
+  if (verifyPrintToken(id, sp.pt)) {
+    const row = await db.query.campaigns.findFirst({
+      where: (c, { eq: e }) => e(c.id, id),
+      with: { listing: true, brandKit: true },
+    })
+    if (row) {
+      const owner = await db.query.users.findFirst({ where: eq(users.id, row.agentId) })
+      campaign = { ...row, listing: row.listing ? { ...normalizeListing(row.listing), photos: resolveListingPhotos(row.listing) } : row.listing } as typeof campaign
+      if (owner) planTier = (await checkCampaignQuota(owner.clerkId)).planTier
+    }
+  } else {
+    const { userId } = await auth()
+    if (!userId) redirect('/sign-in')
+    const [c, quota] = await Promise.all([getCampaign(id, userId), checkCampaignQuota(userId)])
+    campaign = c
+    planTier = quota.planTier
   }
-  const schemeColors = COLOR_SCHEME_MAP[scheme] ?? COLOR_SCHEME_MAP.brand
-
-  const [campaign, quota] = await Promise.all([
-    getCampaign(id, userId),
-    checkCampaignQuota(userId),
-  ])
   if (!campaign) redirect('/dashboard/campaigns')
+  if (isCommercialLocked(campaign.campaignType, planTier)) redirect('/dashboard/commercial')
 
-  const planTier = quota.planTier
-  const listing = campaign.listing
-  const address = listing
-    ? [listing.address, listing.city, listing.state].filter(Boolean).join(', ')
-    : 'Property Address'
+  // ── Server-side plan enforcement (the picker hides locked options, but URLs can be edited) ──
+  const reqTemplate = (TEMPLATES as readonly string[]).includes(sp.template ?? '') ? (sp.template as Template) : 'classic'
+  const template: Template = reqTemplate === 'classic' || canAccess(planTier, 'flyer_templates') ? reqTemplate : 'classic'
+  const reqScheme: string = (SCHEME_IDS as readonly string[]).includes(sp.scheme ?? '') ? (sp.scheme as string) : 'brand'
+  const scheme = canAccess(planTier, 'flyer_schemes') ? reqScheme : 'brand'
+  const reqBadge = (BADGES as readonly string[]).includes(sp.badge ?? '') ? (sp.badge as Badge) : 'justListed'
+  const badge: Badge = reqBadge === 'justListed' || canAccess(planTier, 'flyer_variants') ? reqBadge : 'justListed'
+  const eventDate = short(sp.date, 40)
+  const eventTime = short(sp.time, 40)
+
+  const listing = normalizeListing(campaign.listing)
+
+  // v13: commercial campaigns reuse these templates with CRE stats and the generated one-sheet copy (never beds/baths).
+  const cre = campaign.campaignType === 'commercial' ? readCommercial((campaign.listing as any)?.commercial) : null
+  const crePrint = (campaign.analytics as any)?.commercial?.print as { oneSheetBody?: string } | undefined
+  // Brokerage compliance (locked fields + required disclaimer) is applied here, so it can't be bypassed by editing the URL.
+  const bk = canAccess(planTier, 'brand_kit') ? await loadEffectiveBrandKit(campaign.brandKit as any, campaign.agentId) : null
+  const address = listing ? [listing.address, listing.city, listing.state].filter(Boolean).join(', ') : 'Property Address'
   const cityState = listing ? [listing.city, listing.state].filter(Boolean).join(', ') : ''
   const streetAddress = listing?.address ?? address
-  const price = listing?.price ? `$${Number(listing.price).toLocaleString()}` : ''
+  const priceNum = listing?.price ? Number(listing.price) : 0
+  const price = cre?.priceGuidance || (priceNum ? `$${priceNum.toLocaleString()}` : '')
+  const wasNum = /^\d+$/.test(sp.was ?? '') ? Number(sp.was) : 0
+  const was = badge === 'priceReduced' && wasNum > priceNum && priceNum > 0 ? `$${wasNum.toLocaleString()}` : ''
   const beds = listing?.bedrooms ?? 0
   const baths = listing?.bathrooms ?? 0
   const sqft = listing?.sqft?.toLocaleString() ?? ''
   const yearBuilt = (listing as any)?.yearBuilt ?? ''
-  const photos = (listing?.photos as string[]) ?? []
-  const description = listing?.description ?? ''
-  const agentName = campaign.brandKit?.agentName ?? ''
-  const agentTitle = (campaign.brandKit as any)?.agentTitle ?? 'REALTOR®'
-  const agentPhone = campaign.brandKit?.agentPhone ?? ''
-  const agentEmail = (campaign.brandKit as any)?.agentEmail ?? ''
-  const agentPhoto = (campaign.brandKit as any)?.agentPhotoUrl ?? ''
-  const logoUrl = (campaign.brandKit as any)?.logoUrl ?? ''
-  const brokerageLogo = (campaign.brandKit as any)?.brokerageLogo ?? ''
-  const brokerageName = (campaign.brandKit as any)?.brokerageName ?? ''
-  const tagline = (campaign.brandKit as any)?.tagline ?? ''
-  const brandPrimary = campaign.brandKit?.primaryColor ?? '#1e3a5f'
-  const brandAccent = (campaign.brandKit as any)?.accentColor ?? '#c9a84c'
-  const primaryColor = schemeColors.primary || brandPrimary
-  const accentColor = schemeColors.accent || brandAccent
-  // On light/white backgrounds, accent colors can be too pale (e.g. forest cream on white).
-  // Use primaryColor for text labels on white sections, accentColor only on dark backgrounds.
-  const labelOnLight = primaryColor   // text labels on white/light-bg sections
-  const labelOnDark  = accentColor    // text labels on dark/colored-bg sections
-  const mainPhoto = photos[0] ?? null
+  const photos = ((listing?.photos as string[]) ?? []).slice(0, 6)
+  const description = clip((cre ? crePrint?.oneSheetBody : '') || listing?.description || '', template === 'modern' ? 520 : 600)
+  const features = (((listing as any)?.features as string[] | undefined) ?? []).slice(0, 6)
 
-  // Shared helpers
-  const noPhoto = (h: string) => (
-    <div style={{ height: h, background: 'linear-gradient(135deg,#dde3ea,#c8d0db)', display: 'flex', alignItems: 'center', justifyContent: 'center', flexDirection: 'column' as const, gap: 8 }}>
-      <div style={{ fontSize: 40 }}>🏡</div>
-      <div style={{ fontFamily: 'Arial,sans-serif', fontSize: 11, color: '#8fa0b0', letterSpacing: 2 }}>PROPERTY PHOTO</div>
+  const agentName = bk?.agentName ?? ''
+  const agentTitle = bk?.agentTitle ?? 'REALTOR®'
+  const agentPhone = bk?.agentPhone ?? ''
+  const agentEmail = bk?.agentEmail ?? ''
+  const agentPhoto = bk?.agentPhotoUrl ?? ''
+  const logoUrl = bk?.logoUrl ?? ''
+  const brokerageLogo = bk?.brokerageLogo ?? ''
+  const brokerageName = bk?.brokerageName ?? ''
+  const tagline = bk?.tagline ?? ''
+  const disclaimer = clip(bk?.disclaimer ?? '', 260)
+  const showMark = !canAccess(planTier, 'remove_branding')
+
+  // Trackable QR (Starter+, published microsite only). Failure must never break the flyer.
+  let qr: { path: string; dim: number } | null = null
+  if (canAccess(planTier, 'qr_codes') && campaign.micrositeSlug && campaign.micrositePublished) {
+    try {
+      const row = await getOrCreateQr(campaign.id, campaign.agentId, 'flyer')
+      const m = encodeQr(qrTargetUrl(row.code))
+      qr = { path: qrPath(m, 2), dim: m.size + 4 }
+    } catch (err) { console.error('[flyer] qr failed', err) }
+  }
+
+  const { primary: primaryColor, accent: accentColor } = resolveScheme(scheme, bk?.primaryColor, bk?.accentColor)
+  const onAccent = readableOn(accentColor)
+  const mainPhoto = photos[0] ?? null
+  const hasEvent = badge === 'openHouse'
+  const eventLine = [eventDate, eventTime].filter(Boolean).join('  ·  ') || 'Date & time to be announced'
+  const badgeLabel = cre && badge === 'justListed' ? (cre.offering === 'lease' ? 'For Lease' : 'For Sale') : badge === 'openHouse' ? 'Open House' : badge === 'priceReduced' ? 'Price Improvement' : 'Just Listed'
+
+  // ── Shared pieces ─────────────────────────────────────────────
+  const noPhoto = (h: string | number) => (
+    <div style={{ height: h, background: `linear-gradient(135deg, ${primaryColor}, #0b1220)`, display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
+      <div style={{ fontFamily: SANS, fontSize: 11, color: 'rgba(255,255,255,0.45)', letterSpacing: 4, ...CAPS }}>Photo coming soon</div>
+    </div>
+  )
+
+  const priceNode = (color: string, size: number, wasColor: string, align: CSSProperties['textAlign'] = 'right') => (
+    <div style={{ textAlign: align }}>
+      {was && <div style={{ fontFamily: SANS, fontSize: size * 0.42, color: wasColor, textDecoration: 'line-through', marginBottom: 2 }}>{was}</div>}
+      <div style={{ fontFamily: SERIF, fontSize: size, fontWeight: 700, color, lineHeight: 1, letterSpacing: -0.5 }}>{price || 'Price upon request'}</div>
+    </div>
+  )
+
+  const statItems = cre ? [
+    { label: 'Property Type', value: USE_TYPE_LABEL[cre.useType] },
+    ...(sqft ? [{ label: 'Square Feet', value: sqft }] : []),
+    ...(cre.units ? [{ label: 'Units', value: String(cre.units) }] : []),
+    ...(cre.capRatePct ? [{ label: 'Cap Rate', value: `${cre.capRatePct}%` }] : []),
+    ...(yearBuilt ? [{ label: 'Year Built', value: String(yearBuilt) }] : []),
+  ].slice(0, 4) : [
+    ...(beds ? [{ label: 'Bedrooms', value: String(beds) }] : []),
+    ...(baths ? [{ label: 'Bathrooms', value: String(baths) }] : []),
+    ...(sqft ? [{ label: 'Square Feet', value: sqft }] : []),
+    ...(yearBuilt ? [{ label: 'Year Built', value: String(yearBuilt) }] : []),
+  ]
+
+  const eventBar = (bg: string, fg: string, accent: string) => hasEvent && (
+    <div style={{ background: bg, padding: '14px 44px', display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 18 }}>
+      <div style={{ fontFamily: SANS, fontSize: 10, letterSpacing: 5, color: accent, ...CAPS }}>Join us</div>
+      <div style={{ width: 28, height: 1, background: accent }} />
+      <div style={{ fontFamily: SERIF, fontSize: 19, color: fg, fontWeight: 600 }}>{eventLine}</div>
+    </div>
+  )
+
+  const legal = (dark: boolean) => (disclaimer || showMark) && (
+    <div style={{ display: 'flex', justifyContent: 'space-between', gap: 20, marginTop: 10, fontFamily: SANS, fontSize: 8, lineHeight: 1.45, color: dark ? 'rgba(255,255,255,0.5)' : '#94a3b8' }}>
+      <div style={{ flex: 1 }}>{disclaimer}</div>
+      {showMark && <div style={{ flexShrink: 0, letterSpacing: 1 }}>Created with ListOps</div>}
     </div>
   )
 
   const agentFooter = (dark = true, compact = false) => (
-    <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', width: '100%', gap: 8 }}>
-      {/* Left: headshot + agent info */}
-      <div style={{ display: 'flex', alignItems: 'center', gap: compact ? 10 : 14, minWidth: 0, flex: 1 }}>
+    <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', width: '100%', gap: 12 }}>
+      <div style={{ display: 'flex', alignItems: 'center', gap: compact ? 10 : 16, minWidth: 0, flex: 1 }}>
         {agentPhoto && (
-          <img src={agentPhoto} alt={agentName} style={{ width: compact ? 40 : 52, height: compact ? 40 : 52, borderRadius: '50%', objectFit: 'cover', border: `2px solid ${dark ? 'rgba(255,255,255,0.35)' : accentColor}`, flexShrink: 0 }} />
+          // eslint-disable-next-line @next/next/no-img-element
+          <img src={agentPhoto} alt={agentName} style={{ width: compact ? 42 : 56, height: compact ? 42 : 56, borderRadius: '50%', objectFit: 'cover', border: `2px solid ${accentColor}`, flexShrink: 0 }} />
         )}
         <div style={{ minWidth: 0 }}>
-          {agentName && <div style={{ fontFamily: 'Arial,sans-serif', fontWeight: 700, fontSize: compact ? 13 : 15, color: dark ? 'white' : primaryColor, letterSpacing: 0.3, whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>{agentName}</div>}
+          {agentName && <div style={{ fontFamily: SERIF, fontWeight: 700, fontSize: compact ? 14 : 17, color: dark ? 'white' : primaryColor, whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>{agentName}</div>}
           {(agentTitle || brokerageName) && (
-            <div style={{ fontFamily: 'Arial,sans-serif', fontSize: 11, color: dark ? 'rgba(255,255,255,0.65)' : '#64748b', marginTop: 2, whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>
-              {agentTitle}{brokerageName ? ` · ${brokerageName}` : ''}
+            <div style={{ fontFamily: SANS, fontSize: 9.5, letterSpacing: 1.5, color: dark ? 'rgba(255,255,255,0.65)' : '#64748b', marginTop: 2, whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis', ...CAPS }}>
+              {agentTitle}{brokerageName ? `  ·  ${brokerageName}` : ''}
             </div>
           )}
-          <div style={{ fontFamily: 'Arial,sans-serif', fontSize: 11, color: dark ? 'rgba(255,255,255,0.75)' : '#475569', marginTop: 3, whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>
-            {[agentPhone, agentEmail].filter(Boolean).join(' · ')}
+          <div style={{ fontFamily: SANS, fontSize: 11.5, color: dark ? 'rgba(255,255,255,0.88)' : '#334155', marginTop: 4, whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>
+            {[agentPhone, agentEmail].filter(Boolean).join('   ·   ')}
           </div>
         </div>
       </div>
-      {/* Right: logos */}
-      <div style={{ display: 'flex', alignItems: 'center', gap: 8, flexShrink: 0 }}>
+      <div style={{ display: 'flex', alignItems: 'center', gap: 12, flexShrink: 0 }}>
+        {qr && (
+          <div style={{ textAlign: 'center', flexShrink: 0 }}>
+            <svg viewBox={`0 0 ${qr.dim} ${qr.dim}`} width={compact ? 66 : 84} height={compact ? 66 : 84} shapeRendering="crispEdges" role="img" aria-label="QR code: scan for photos and details" style={{ background: '#fff', borderRadius: 4, display: 'block' }}>
+              <path d={qr.path} fill="#000" />
+            </svg>
+            <div style={{ fontFamily: SANS, fontSize: 6.5, letterSpacing: 1, marginTop: 3, color: dark ? 'rgba(255,255,255,0.75)' : '#64748b', ...CAPS }}>Scan for details</div>
+          </div>
+        )}
         {logoUrl && (
-          <img src={logoUrl} alt="Agent Logo" style={{ height: compact ? 32 : 40, maxWidth: compact ? 80 : 110, objectFit: 'contain', opacity: dark ? 0.9 : 1 }} />
+          // eslint-disable-next-line @next/next/no-img-element
+          <img src={logoUrl} alt="Agent logo" style={{ height: compact ? 32 : 42, maxWidth: compact ? 80 : 110, objectFit: 'contain' }} />
         )}
         {brokerageLogo && (
-          <img src={brokerageLogo} alt="Brokerage Logo" style={{ height: compact ? 28 : 36, maxWidth: compact ? 80 : 100, objectFit: 'contain', opacity: dark ? 0.8 : 0.9, borderLeft: logoUrl ? `1px solid ${dark ? 'rgba(255,255,255,0.25)' : '#e2e8f0'}` : 'none', paddingLeft: logoUrl ? 8 : 0 }} />
+          // eslint-disable-next-line @next/next/no-img-element
+          <img src={brokerageLogo} alt="Brokerage logo" style={{ height: compact ? 28 : 38, maxWidth: compact ? 80 : 104, objectFit: 'contain', borderLeft: logoUrl ? `1px solid ${dark ? 'rgba(255,255,255,0.25)' : '#e2e8f0'}` : 'none', paddingLeft: logoUrl ? 12 : 0 }} />
         )}
       </div>
     </div>
   )
+
+  const page: CSSProperties = { width: '8.5in', height: '11in', margin: '0 auto', display: 'flex', flexDirection: 'column', overflow: 'hidden', position: 'relative' }
+  const sectionLabel = (text: string, color: string) => (
+    <div style={{ display: 'flex', alignItems: 'center', gap: 12, marginBottom: 12 }}>
+      <div style={{ width: 30, height: 1.5, background: color }} />
+      <div style={{ fontFamily: SANS, fontSize: 9, letterSpacing: 4, color, fontWeight: 700, ...CAPS }}>{text}</div>
+    </div>
+  )
+
+  const inkDark = luminance(primaryColor) < 0.12 ? primaryColor : '#0b1220'
 
   return (
     <>
@@ -112,247 +231,213 @@ export default async function FlyerPage({
           .no-print { display: none !important; }
           html, body { -webkit-print-color-adjust: exact; print-color-adjust: exact; margin: 0; padding: 0; background: white; }
           .flyer-wrap { margin: 0 !important; padding: 0 !important; background: white; }
-          .flyer-wrap > div { width: 8.5in !important; min-height: unset !important; max-height: 11in !important; height: 11in !important; box-shadow: none !important; overflow: hidden; page-break-after: avoid; }
+          .flyer-wrap > div { width: 8.5in !important; height: 11in !important; box-shadow: none !important; overflow: hidden; page-break-after: avoid; }
         }
         * { box-sizing: border-box; margin: 0; padding: 0; }
         html, body { margin: 0; padding: 0; height: auto; }
-        .flyer-wrap > div:last-child { margin-bottom: 0 !important; padding-bottom: 0 !important; }
-        @media print { html, body { height: auto; } }
-        body { background: #c8cdd4; }
+        body { background: #c8cdd4; -webkit-print-color-adjust: exact; print-color-adjust: exact; }
         img { display: block; }
+        /* Phones: shrink the letter-size preview to fit the screen (print and PDF are unaffected). */
+        @media screen and (max-width: 860px) { .flyer-wrap > div { zoom: .91; } }
+        @media screen and (max-width: 760px) { .flyer-wrap > div { zoom: .81; } }
+        @media screen and (max-width: 680px) { .flyer-wrap > div { zoom: .72; } }
+        @media screen and (max-width: 600px) { .flyer-wrap > div { zoom: .62; } }
+        @media screen and (max-width: 520px) { .flyer-wrap > div { zoom: .52; } }
+        @media screen and (max-width: 440px) { .flyer-wrap > div { zoom: .47; } }
+        @media screen and (max-width: 400px) { .flyer-wrap > div { zoom: .42; } }
+        @media screen and (max-width: 360px) { .flyer-wrap > div { zoom: .37; } }
       `}</style>
 
-      <PrintButton backUrl={`/dashboard/campaigns/${id}`} planTier={planTier} initialTemplate={template} initialScheme={scheme} />
+      <PrintButton flyerId={id} backUrl={`/dashboard/campaigns/${id}`} planTier={planTier}
+        initialTemplate={template} initialScheme={scheme} initialBadge={badge}
+        initialDate={eventDate} initialTime={eventTime} initialWas={wasNum ? String(wasNum) : ''} />
 
-      <div className="flyer-wrap" style={{ paddingTop: 64, paddingBottom: 0, marginBottom: 0 }}>
+      <div className="flyer-wrap" style={{ padding: '20px 0 32px' }}>
 
-        {/* ══ CLASSIC ═══════════════════════════════════════════ */}
+        {/* ══ CLASSIC — "Heritage": full-bleed hero, floating address card ═══════════ */}
         {template === 'classic' && (
-          <div style={{ width: '8.5in', height: '11in', margin: '0 auto', background: 'white', boxShadow: '0 8px 48px rgba(0,0,0,0.22)', display: 'flex', flexDirection: 'column', overflow: 'hidden' }}>
+          <div style={{ ...page, background: 'white', boxShadow: '0 8px 48px rgba(0,0,0,0.22)' }}>
+            <div style={{ height: 500, position: 'relative', overflow: 'hidden', flexShrink: 0 }}>
+              {mainPhoto ? <img src={mainPhoto} alt="Property" style={{ width: '100%', height: '100%', objectFit: 'cover' }} /> : noPhoto(500)}
+              <div style={{ position: 'absolute', inset: 0, background: 'linear-gradient(180deg, rgba(0,0,0,0.28) 0%, rgba(0,0,0,0) 30%, rgba(0,0,0,0) 62%, rgba(0,0,0,0.42) 100%)' }} />
+              <div style={{ position: 'absolute', top: 34, left: 0, background: accentColor, color: onAccent, fontFamily: SANS, fontSize: 11, fontWeight: 700, letterSpacing: 4, padding: '11px 28px 11px 44px', ...CAPS }}>{badgeLabel}</div>
+              {tagline && <div style={{ position: 'absolute', top: 40, right: 44, fontFamily: SERIF, fontStyle: 'italic', fontSize: 13, color: 'rgba(255,255,255,0.92)', textShadow: '0 1px 8px rgba(0,0,0,0.5)' }}>{tagline}</div>}
+            </div>
 
-            {/* Top accent bar */}
-            <div style={{ height: 6, background: `linear-gradient(90deg, ${primaryColor}, ${accentColor})` }} />
-
-            {/* Header */}
-            <div style={{ background: primaryColor, padding: '28px 44px 24px', display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start' }}>
-              <div style={{ flex: 1, paddingRight: 24 }}>
-                <div style={{ fontFamily: 'Arial,sans-serif', fontSize: 9, letterSpacing: 4, textTransform: 'uppercase' as const, color: accentColor, marginBottom: 8 }}>Just Listed</div>
-                <div style={{ fontFamily: 'Georgia,serif', fontSize: 28, fontWeight: 700, color: 'white', lineHeight: 1.2 }}>{streetAddress}</div>
-                <div style={{ fontFamily: 'Arial,sans-serif', fontSize: 13, color: 'rgba(255,255,255,0.6)', marginTop: 5 }}>{cityState}</div>
-                {tagline && <div style={{ fontFamily: 'Georgia,serif', fontSize: 12, color: accentColor, marginTop: 8, fontStyle: 'italic' }}>{tagline}</div>}
+            <div style={{ margin: '-86px 44px 0', position: 'relative', background: 'white', padding: '26px 34px 24px', boxShadow: '0 20px 44px rgba(15,23,42,0.2)', borderTop: `4px solid ${accentColor}`, display: 'flex', justifyContent: 'space-between', alignItems: 'flex-end', gap: 24, flexShrink: 0 }}>
+              <div style={{ minWidth: 0 }}>
+                <div style={{ fontFamily: SANS, fontSize: 10, letterSpacing: 4, color: primaryColor, opacity: 0.7, marginBottom: 8, ...CAPS }}>{cityState}</div>
+                <div style={{ fontFamily: SERIF, fontSize: 33, fontWeight: 700, color: primaryColor, lineHeight: 1.1 }}>{streetAddress}</div>
               </div>
-              <div style={{ textAlign: 'right', flexShrink: 0 }}>
-                <div style={{ fontFamily: 'Arial,sans-serif', fontSize: 10, letterSpacing: 2, color: 'rgba(255,255,255,0.5)', textTransform: 'uppercase' as const, marginBottom: 4 }}>List Price</div>
-                <div style={{ fontFamily: 'Arial,sans-serif', fontSize: 36, fontWeight: 800, color: accentColor, lineHeight: 1 }}>{price}</div>
-              </div>
+              <div style={{ flexShrink: 0 }}>{priceNode(primaryColor, 36, '#94a3b8')}</div>
             </div>
 
-            {/* Main photo */}
-            <div style={{ height: 318, overflow: 'hidden', position: 'relative' }}>
-              {mainPhoto
-                ? <img src={mainPhoto} alt="Property" style={{ width: '100%', height: '100%', objectFit: 'cover' }} />
-                : noPhoto('318px')}
-              {/* Photo overlay gradient */}
-              <div style={{ position: 'absolute', bottom: 0, left: 0, right: 0, height: 60, background: 'linear-gradient(transparent, rgba(0,0,0,0.35))' }} />
-            </div>
+            {eventBar(primaryColor, 'white', accentColor)}
 
-            {/* Stats bar */}
-            <div style={{ background: '#f8fafc', borderBottom: `3px solid ${primaryColor}15`, padding: '16px 44px', display: 'flex', gap: 0 }}>
-              {[
-                { label: 'Bedrooms', value: beds || '—', icon: '🛏' },
-                { label: 'Bathrooms', value: baths || '—', icon: '🚿' },
-                { label: 'Square Feet', value: sqft || '—', icon: '📐' },
-                ...(yearBuilt ? [{ label: 'Year Built', value: yearBuilt, icon: '🏗' }] : []),
-              ].map((s, i, arr) => (
-                <div key={s.label} style={{ flex: 1, textAlign: 'center', padding: '4px 0', borderRight: i < arr.length - 1 ? '1px solid #e2e8f0' : 'none' }}>
-                  <div style={{ fontFamily: 'Arial,sans-serif', fontSize: 22, fontWeight: 800, color: primaryColor }}>{s.value}</div>
-                  <div style={{ fontFamily: 'Arial,sans-serif', fontSize: 9, letterSpacing: 2, color: '#94a3b8', textTransform: 'uppercase' as const, marginTop: 3 }}>{s.label}</div>
-                </div>
-              ))}
-            </div>
-
-            {/* Description + secondary photos row */}
-            <div style={{ display: 'flex', flex: 1, padding: '24px 44px 20px', gap: 28 }}>
-              <div style={{ flex: 1 }}>
-                {/* Section label */}
-                <div style={{ display: 'flex', alignItems: 'center', gap: 10, marginBottom: 12 }}>
-                  <div style={{ width: 28, height: 2, background: labelOnLight }} />
-                  <div style={{ fontFamily: 'Arial,sans-serif', fontSize: 9, letterSpacing: 3, color: labelOnLight, textTransform: 'uppercase' as const }}>About this home</div>
-                </div>
-                <p style={{ fontFamily: 'Georgia,serif', fontSize: 13, lineHeight: 1.9, color: '#374151' }}>
-                  {description || 'Contact us for more information about this exceptional property.'}
-                </p>
-              </div>
-
-              {/* Side photo stack */}
-              {photos.length > 1 && (
-                <div style={{ width: 160, display: 'flex', flexDirection: 'column' as const, gap: 6, flexShrink: 0 }}>
-                  {photos.slice(1, 4).map((photo, i) => (
-                    <img key={i} src={photo} alt="" style={{ width: '100%', height: 80, objectFit: 'cover', borderRadius: 6 }} />
-                  ))}
-                </div>
-              )}
-            </div>
-
-            {/* Feature pills */}
-            {(listing as any)?.features?.length > 0 && (
-              <div style={{ padding: '0 44px 20px', display: 'flex', flexWrap: 'wrap' as const, gap: 6 }}>
-                {((listing as any).features as string[]).slice(0, 8).map((f: string) => (
-                  <span key={f} style={{ fontFamily: 'Arial,sans-serif', fontSize: 10, background: `${primaryColor}12`, color: primaryColor, border: `1px solid ${primaryColor}25`, borderRadius: 20, padding: '3px 10px', fontWeight: 600 }}>{f}</span>
+            {statItems.length > 0 && (
+              <div style={{ display: 'flex', margin: '22px 44px 0', borderTop: '1px solid #e2e8f0', borderBottom: '1px solid #e2e8f0', flexShrink: 0 }}>
+                {statItems.map((s, i) => (
+                  <div key={s.label} style={{ flex: 1, textAlign: 'center', padding: '14px 0', borderRight: i < statItems.length - 1 ? '1px solid #e2e8f0' : 'none' }}>
+                    <div style={{ fontFamily: SERIF, fontSize: 24, fontWeight: 700, color: primaryColor }}>{s.value}</div>
+                    <div style={{ fontFamily: SANS, fontSize: 8.5, letterSpacing: 3, color: '#94a3b8', marginTop: 3, ...CAPS }}>{s.label}</div>
+                  </div>
                 ))}
               </div>
             )}
 
-            {/* Footer */}
-            <div style={{ background: primaryColor, padding: '18px 44px', marginTop: 'auto' }}>
-              {agentFooter(true)}
-            </div>
-
-            {/* Bottom accent bar */}
-            <div style={{ height: 4, background: accentColor }} />
-          </div>
-        )}
-
-        {/* ══ LUXURY ════════════════════════════════════════════ */}
-        {template === 'luxury' && (
-          <div style={{ width: '8.5in', height: '11in', margin: '0 auto', background: '#0a1628', boxShadow: '0 8px 48px rgba(0,0,0,0.5)', display: 'flex', flexDirection: 'column', overflow: 'hidden' }}>
-
-            {/* Hero photo with overlay */}
-            <div style={{ height: 400, position: 'relative', overflow: 'hidden' }}>
-              {mainPhoto
-                ? <img src={mainPhoto} alt="Property" style={{ width: '100%', height: '100%', objectFit: 'cover', filter: 'brightness(0.75)' }} />
-                : noPhoto('400px')}
-              <div style={{ position: 'absolute', inset: 0, background: 'linear-gradient(to bottom, rgba(10,22,40,0.1) 0%, rgba(10,22,40,0.85) 100%)' }} />
-
-              {/* Decorative corner lines */}
-              <div style={{ position: 'absolute', top: 24, left: 24, width: 40, height: 40, borderTop: `2px solid ${accentColor}`, borderLeft: `2px solid ${accentColor}` }} />
-              <div style={{ position: 'absolute', top: 24, right: 24, width: 40, height: 40, borderTop: `2px solid ${accentColor}`, borderRight: `2px solid ${accentColor}` }} />
-
-              <div style={{ position: 'absolute', bottom: 36, left: 48, right: 48 }}>
-                <div style={{ fontFamily: 'Arial,sans-serif', fontSize: 10, letterSpacing: 5, color: accentColor, textTransform: 'uppercase' as const, marginBottom: 12 }}>Exclusively Listed</div>
-                <div style={{ fontFamily: 'Georgia,serif', fontSize: 32, fontWeight: 700, color: 'white', lineHeight: 1.2, marginBottom: 10 }}>{address}</div>
-                <div style={{ display: 'flex', alignItems: 'center', gap: 16 }}>
-                  <div style={{ fontFamily: 'Arial,sans-serif', fontSize: 30, fontWeight: 800, color: accentColor }}>{price}</div>
-                  {tagline && <div style={{ fontFamily: 'Georgia,serif', fontSize: 12, color: 'rgba(255,255,255,0.6)', fontStyle: 'italic' }}>— {tagline}</div>}
-                </div>
-              </div>
-            </div>
-
-            {/* Stats */}
-            <div style={{ borderTop: `1px solid ${accentColor}50`, borderBottom: '1px solid rgba(255,255,255,0.06)', padding: '20px 48px', display: 'flex', gap: 0 }}>
-              {[
-                { label: 'Bedrooms', value: beds || '—' },
-                { label: 'Bathrooms', value: baths || '—' },
-                { label: 'Sq Ft', value: sqft || '—' },
-                ...(yearBuilt ? [{ label: 'Year Built', value: yearBuilt }] : []),
-              ].map((s, i, arr) => (
-                <div key={s.label} style={{ flex: 1, textAlign: 'center', borderRight: i < arr.length - 1 ? '1px solid rgba(255,255,255,0.1)' : 'none', padding: '4px 0' }}>
-                  <div style={{ fontFamily: 'Georgia,serif', fontSize: 24, color: accentColor, fontWeight: 700 }}>{s.value}</div>
-                  <div style={{ fontFamily: 'Arial,sans-serif', fontSize: 9, letterSpacing: 2, color: 'rgba(255,255,255,0.35)', textTransform: 'uppercase' as const, marginTop: 4 }}>{s.label}</div>
-                </div>
-              ))}
-            </div>
-
-            {/* Body */}
-            <div style={{ display: 'flex', flex: 1, padding: '28px 48px', gap: 32 }}>
+            <div style={{ display: 'flex', flex: 1, padding: '22px 44px 14px', gap: 30, minHeight: 0, overflow: 'hidden' }}>
               <div style={{ flex: 1 }}>
-                <div style={{ width: 36, height: 1, background: accentColor, marginBottom: 18 }} />
-                <p style={{ fontFamily: 'Georgia,serif', fontSize: 13, lineHeight: 2, color: 'rgba(255,255,255,0.7)' }}>
-                  {description || 'An exceptional property awaiting its discerning new owner.'}
+                {sectionLabel('About this home', primaryColor)}
+                <p style={{ fontFamily: SERIF, fontSize: 12.5, lineHeight: 1.85, color: '#334155' }}>
+                  {description || 'Contact us for more information about this exceptional property.'}
                 </p>
-                {(listing as any)?.features?.length > 0 && (
-                  <div style={{ marginTop: 20, display: 'flex', flexWrap: 'wrap' as const, gap: 6 }}>
-                    {((listing as any).features as string[]).slice(0, 6).map((f: string) => (
-                      <span key={f} style={{ fontFamily: 'Arial,sans-serif', fontSize: 10, color: accentColor, border: `1px solid ${accentColor}50`, borderRadius: 2, padding: '3px 10px' }}>{f}</span>
+                {features.length > 0 && (
+                  <div style={{ display: 'flex', flexWrap: 'wrap', gap: 6, marginTop: 14 }}>
+                    {features.map(f => (
+                      <span key={f} style={{ fontFamily: SANS, fontSize: 9.5, color: primaryColor, border: `1px solid ${primaryColor}33`, borderRadius: 2, padding: '3px 9px', fontWeight: 600 }}>{f}</span>
                     ))}
                   </div>
                 )}
               </div>
               {photos.length > 1 && (
-                <div style={{ width: 170, display: 'flex', flexDirection: 'column' as const, gap: 6, flexShrink: 0 }}>
-                  {photos.slice(1, 4).map((photo, i) => (
-                    <img key={i} src={photo} alt="" style={{ width: '100%', height: 82, objectFit: 'cover', borderRadius: 4, filter: 'brightness(0.85)' }} />
+                <div style={{ width: 168, display: 'flex', flexDirection: 'column', gap: 7, flexShrink: 0 }}>
+                  {photos.slice(1, 4).map((p, i) => (
+                    // eslint-disable-next-line @next/next/no-img-element
+                    <img key={i} src={p} alt="" style={{ width: '100%', height: 84, objectFit: 'cover' }} />
                   ))}
                 </div>
               )}
             </div>
 
-            {/* Footer */}
-            <div style={{ borderTop: `1px solid ${accentColor}40`, padding: '20px 48px' }}>
+            <div style={{ background: primaryColor, padding: '18px 44px 14px', flexShrink: 0, borderTop: `3px solid ${accentColor}` }}>
               {agentFooter(true)}
+              {legal(true)}
             </div>
-            <div style={{ height: 3, background: `linear-gradient(90deg, ${accentColor}, transparent)` }} />
           </div>
         )}
 
-        {/* ══ MODERN ════════════════════════════════════════════ */}
-        {template === 'modern' && (
-          <div style={{ width: '8.5in', height: '11in', margin: '0 auto', background: 'white', boxShadow: '0 8px 48px rgba(0,0,0,0.22)', display: 'flex', overflow: 'hidden' }}>
-
-            {/* Left — photos */}
-            <div style={{ width: '50%', display: 'flex', flexDirection: 'column' as const, overflow: 'hidden' }}>
-              <div style={{ flex: 1, overflow: 'hidden', position: 'relative' }}>
-                {mainPhoto
-                  ? <img src={mainPhoto} alt="Property" style={{ width: '100%', height: '100%', objectFit: 'cover' }} />
-                  : noPhoto('100%')}
-                {/* Tag overlay on photo */}
-                <div style={{ position: 'absolute', top: 20, left: 20, background: accentColor, color: '#0f172a', fontFamily: 'Arial,sans-serif', fontSize: 9, fontWeight: 800, letterSpacing: 3, textTransform: 'uppercase' as const, padding: '6px 14px' }}>
-                  Just Listed
-                </div>
+        {/* ══ LUXURY — "Maison": ink background, framed, centered editorial ═══════════ */}
+        {template === 'luxury' && (
+          <div style={{ ...page, background: inkDark, boxShadow: '0 8px 48px rgba(0,0,0,0.5)' }}>
+            <div style={{ position: 'absolute', inset: 18, border: `1px solid ${accentColor}73`, pointerEvents: 'none', zIndex: 5 }} />
+            <div style={{ height: hasEvent ? 400 : 462, position: 'relative', overflow: 'hidden', flexShrink: 0 }}>
+              {mainPhoto ? <img src={mainPhoto} alt="Property" style={{ width: '100%', height: '100%', objectFit: 'cover' }} /> : noPhoto('100%')}
+              <div style={{ position: 'absolute', inset: 0, background: `linear-gradient(180deg, ${inkDark}55 0%, ${inkDark}00 28%, ${inkDark}99 70%, ${inkDark} 100%)` }} />
+              <div style={{ position: 'absolute', left: 0, right: 0, bottom: 24, textAlign: 'center', padding: '0 60px' }}>
+                <div style={{ fontFamily: SANS, fontSize: 10, letterSpacing: 8, color: accentColor, marginBottom: 14, ...CAPS }}>{badge === 'justListed' ? 'Exclusively Listed' : badgeLabel}</div>
+                <div style={{ fontFamily: SERIF, fontSize: 38, fontWeight: 600, color: 'white', lineHeight: 1.12 }}>{streetAddress}</div>
+                <div style={{ fontFamily: SANS, fontSize: 11, letterSpacing: 5, color: 'rgba(255,255,255,0.65)', marginTop: 10, ...CAPS }}>{cityState}</div>
               </div>
-              {photos.length > 1 && (
-                <div style={{ display: 'flex', height: 120, flexShrink: 0 }}>
-                  {photos.slice(1, 3).map((photo, i) => (
-                    <img key={i} src={photo} alt="" style={{ flex: 1, objectFit: 'cover', borderRight: i === 0 ? '3px solid white' : 'none' }} />
-                  ))}
-                </div>
-              )}
             </div>
 
-            {/* Right — content */}
-            <div style={{ flex: 1, display: 'flex', flexDirection: 'column' as const, borderLeft: `5px solid ${primaryColor}`, overflow: 'hidden' }}>
+            <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 22, padding: '8px 60px 4px', flexShrink: 0 }}>
+              <div style={{ flex: 1, height: 1, background: `linear-gradient(90deg, transparent, ${accentColor}99)` }} />
+              {priceNode(accentColor, 32, 'rgba(255,255,255,0.45)', 'center')}
+              <div style={{ flex: 1, height: 1, background: `linear-gradient(270deg, transparent, ${accentColor}99)` }} />
+            </div>
 
-              {/* Color top block */}
-              <div style={{ background: primaryColor, padding: '32px 32px 24px' }}>
-                <div style={{ fontFamily: 'Arial,sans-serif', fontSize: 9, letterSpacing: 3, color: `${accentColor}`, textTransform: 'uppercase' as const, marginBottom: 10 }}>For Sale</div>
-                <div style={{ fontFamily: 'Arial,sans-serif', fontSize: 34, fontWeight: 800, color: accentColor, lineHeight: 1 }}>{price}</div>
-                <div style={{ fontFamily: 'Georgia,serif', fontSize: 16, color: 'white', marginTop: 8, lineHeight: 1.3 }}>{streetAddress}</div>
-                <div style={{ fontFamily: 'Arial,sans-serif', fontSize: 12, color: 'rgba(255,255,255,0.55)', marginTop: 4 }}>{cityState}</div>
+            {hasEvent && (
+              <div style={{ textAlign: 'center', padding: '10px 60px 0', flexShrink: 0 }}>
+                <span style={{ fontFamily: SANS, fontSize: 10, letterSpacing: 6, color: accentColor, ...CAPS }}>Open house  </span>
+                <span style={{ fontFamily: SERIF, fontSize: 17, color: 'white' }}>{eventLine}</span>
               </div>
+            )}
 
-              {/* Stats grid */}
-              <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', borderBottom: '1px solid #e2e8f0' }}>
-                {[
-                  { label: 'Bedrooms', value: beds || '—' },
-                  { label: 'Bathrooms', value: baths || '—' },
-                  { label: 'Square Feet', value: sqft || '—' },
-                  { label: 'Year Built', value: yearBuilt || '—' },
-                ].map((s, i) => (
-                  <div key={s.label} style={{ padding: '14px 20px', borderRight: i % 2 === 0 ? '1px solid #e2e8f0' : 'none', borderBottom: i < 2 ? '1px solid #e2e8f0' : 'none' }}>
-                    <div style={{ fontFamily: 'Arial,sans-serif', fontSize: 20, fontWeight: 800, color: primaryColor }}>{s.value}</div>
-                    <div style={{ fontFamily: 'Arial,sans-serif', fontSize: 9, letterSpacing: 1, color: '#94a3b8', textTransform: 'uppercase' as const, marginTop: 2 }}>{s.label}</div>
+            {statItems.length > 0 && (
+              <div style={{ display: 'flex', justifyContent: 'center', padding: '14px 60px 4px', flexShrink: 0 }}>
+                {statItems.map((s, i) => (
+                  <div key={s.label} style={{ padding: '2px 26px', textAlign: 'center', borderLeft: i > 0 ? '1px solid rgba(255,255,255,0.14)' : 'none' }}>
+                    <div style={{ fontFamily: SERIF, fontSize: 22, color: 'white', fontWeight: 600 }}>{s.value}</div>
+                    <div style={{ fontFamily: SANS, fontSize: 8, letterSpacing: 3, color: 'rgba(255,255,255,0.45)', marginTop: 4, ...CAPS }}>{s.label}</div>
                   </div>
                 ))}
               </div>
+            )}
 
-              {/* Description */}
-              <div style={{ padding: '20px 28px', flex: 1 }}>
-                <div style={{ width: 24, height: 2, background: labelOnLight, marginBottom: 14 }} />
-                <p style={{ fontFamily: 'Georgia,serif', fontSize: 12.5, lineHeight: 1.85, color: '#475569' }}>
+            <div style={{ padding: '14px 90px 0', textAlign: 'center', flexShrink: 0 }}>
+              <p style={{ fontFamily: SERIF, fontStyle: 'italic', fontSize: 13, lineHeight: 1.95, color: 'rgba(255,255,255,0.78)' }}>
+                {clip(description || 'An exceptional residence awaiting its next chapter.', hasEvent ? 340 : 440)}
+              </p>
+            </div>
+
+            {photos.length > 2 && !hasEvent && (
+              <div style={{ display: 'flex', gap: 8, padding: '16px 48px 0', flexShrink: 0 }}>
+                {photos.slice(1, 4).map((p, i) => (
+                  // eslint-disable-next-line @next/next/no-img-element
+                  <img key={i} src={p} alt="" style={{ flex: 1, minWidth: 0, height: 104, objectFit: 'cover' }} />
+                ))}
+              </div>
+            )}
+
+            <div style={{ marginTop: 'auto', padding: '14px 48px 24px', flexShrink: 0 }}>
+              <div style={{ height: 1, background: `linear-gradient(90deg, transparent, ${accentColor}88, transparent)`, marginBottom: 14 }} />
+              {agentFooter(true)}
+              {legal(true)}
+            </div>
+          </div>
+        )}
+
+        {/* ══ MODERN — "Atelier": split layout, bold type ═════════════════════════════ */}
+        {template === 'modern' && (
+          <div style={{ ...page, background: 'white', flexDirection: 'row', boxShadow: '0 8px 48px rgba(0,0,0,0.22)' }}>
+            <div style={{ width: '47%', display: 'flex', flexDirection: 'column', overflow: 'hidden', flexShrink: 0 }}>
+              <div style={{ flex: 1, position: 'relative', overflow: 'hidden', minHeight: 0 }}>
+                {mainPhoto ? <img src={mainPhoto} alt="Property" style={{ width: '100%', height: '100%', objectFit: 'cover' }} /> : noPhoto('100%')}
+                <div style={{ position: 'absolute', top: 28, left: 0, background: accentColor, color: onAccent, fontFamily: SANS, fontSize: 10, fontWeight: 700, letterSpacing: 4, padding: '9px 20px 9px 26px', ...CAPS }}>{badgeLabel}</div>
+              </div>
+              {photos.length > 1 && (
+                <div style={{ display: 'flex', height: 150, flexShrink: 0, gap: 4, paddingTop: 4, background: 'white' }}>
+                  {photos.slice(1, 3).map((p, i) => (
+                    // eslint-disable-next-line @next/next/no-img-element
+                    <img key={i} src={p} alt="" style={{ flex: 1, minWidth: 0, objectFit: 'cover' }} />
+                  ))}
+                </div>
+              )}
+            </div>
+
+            <div style={{ flex: 1, display: 'flex', flexDirection: 'column', minWidth: 0, borderLeft: `6px solid ${primaryColor}` }}>
+              <div style={{ background: primaryColor, padding: '36px 30px 28px' }}>
+                <div style={{ fontFamily: SANS, fontSize: 10, letterSpacing: 5, color: accentColor, marginBottom: 14, ...CAPS }}>{badge === 'priceReduced' ? 'New price' : cre?.offering === 'lease' ? 'For lease' : 'For sale'}</div>
+                {priceNode(accentColor, 40, 'rgba(255,255,255,0.5)', 'left')}
+                <div style={{ fontFamily: SERIF, fontSize: 21, color: 'white', marginTop: 16, lineHeight: 1.2 }}>{streetAddress}</div>
+                <div style={{ fontFamily: SANS, fontSize: 10.5, letterSpacing: 3, color: 'rgba(255,255,255,0.6)', marginTop: 6, ...CAPS }}>{cityState}</div>
+              </div>
+
+              {hasEvent && (
+                <div style={{ background: accentColor, color: onAccent, padding: '12px 30px' }}>
+                  <div style={{ fontFamily: SANS, fontSize: 9, letterSpacing: 4, ...CAPS }}>Open house</div>
+                  <div style={{ fontFamily: SERIF, fontSize: 16, fontWeight: 700, marginTop: 2 }}>{eventLine}</div>
+                </div>
+              )}
+
+              {statItems.length > 0 && (
+                <div style={{ display: 'flex', flexWrap: 'wrap', borderBottom: '1px solid #e2e8f0' }}>
+                  {statItems.map((s, i) => (
+                    <div key={s.label} style={{ width: '50%', padding: '14px 30px', borderRight: i % 2 === 0 ? '1px solid #e2e8f0' : 'none', borderTop: i > 1 ? '1px solid #e2e8f0' : 'none' }}>
+                      <div style={{ fontFamily: SERIF, fontSize: 22, fontWeight: 700, color: primaryColor }}>{s.value}</div>
+                      <div style={{ fontFamily: SANS, fontSize: 8.5, letterSpacing: 2.5, color: '#94a3b8', marginTop: 2, ...CAPS }}>{s.label}</div>
+                    </div>
+                  ))}
+                </div>
+              )}
+
+              <div style={{ padding: '22px 30px', flex: 1, overflow: 'hidden', minHeight: 0 }}>
+                <div style={{ width: 28, height: 2, background: primaryColor, marginBottom: 14 }} />
+                <p style={{ fontFamily: SERIF, fontSize: 12, lineHeight: 1.85, color: '#475569' }}>
                   {description || 'Contact us for more information about this exceptional property.'}
                 </p>
-                {(listing as any)?.features?.length > 0 && (
-                  <div style={{ marginTop: 16, display: 'flex', flexWrap: 'wrap' as const, gap: 5 }}>
-                    {((listing as any).features as string[]).slice(0, 6).map((f: string) => (
-                      <span key={f} style={{ fontFamily: 'Arial,sans-serif', fontSize: 9, background: `${primaryColor}10`, color: primaryColor, border: `1px solid ${primaryColor}20`, borderRadius: 2, padding: '2px 8px', fontWeight: 600 }}>{f}</span>
+                {features.length > 0 && (
+                  <div style={{ marginTop: 14, display: 'flex', flexWrap: 'wrap', gap: 5 }}>
+                    {features.map(f => (
+                      <span key={f} style={{ fontFamily: SANS, fontSize: 9, color: primaryColor, border: `1px solid ${primaryColor}30`, padding: '2px 8px', fontWeight: 600 }}>{f}</span>
                     ))}
                   </div>
                 )}
               </div>
 
-              {/* Agent footer */}
-              <div style={{ borderTop: '1px solid #e2e8f0', padding: '12px 20px', background: '#f8fafc' }}>
+              <div style={{ borderTop: '1px solid #e2e8f0', padding: '14px 22px 10px', background: '#f8fafc', flexShrink: 0 }}>
                 {agentFooter(false, true)}
+                {legal(false)}
               </div>
             </div>
           </div>

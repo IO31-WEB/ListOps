@@ -8,6 +8,8 @@ import { organizations } from '@/lib/db/schema'
 import { eq } from 'drizzle-orm'
 import { z } from 'zod'
 import { assertAdult } from '@/lib/age'
+import { logAudit } from '@/lib/audit'
+import { rateLimitBilling, rateLimitHeaders } from '@/lib/ratelimit'
 import { ApiError, handleApiError } from '@/lib/api-utils'
 import { renewalSummary } from '@/components/billing/renewal-notice'
 
@@ -29,6 +31,9 @@ export async function POST(request: NextRequest) {
   const origin = reqOrigin === appUrl || /^https:\/\/[a-z0-9-]+\.vercel\.app$/.test(reqOrigin) ? reqOrigin : appUrl
 
   try {
+    const rl = await rateLimitBilling(userId)
+    if (!rl.success) return NextResponse.json({ error: 'Too many checkout attempts. Please try again later.' }, { status: 429, headers: rateLimitHeaders(rl) })
+
     const body = await request.json()
     const { planId, billing } = RequestSchema.parse(body)
 
@@ -58,6 +63,11 @@ export async function POST(request: NextRequest) {
     }
 
     assertAdult(dbUser)
+
+    // Plans are bought by the account OWNER for the whole organization. A teammate must never attach a subscription to (or change) the team's billing.
+    if (dbUser.role !== 'owner') {
+      return NextResponse.json({ error: 'Only the account owner can change the plan. Ask your team owner.' }, { status: 403 })
+    }
 
     const plan = PLANS.find(p => p.id === planId)
     if (!plan) return NextResponse.json({ error: 'Invalid plan' }, { status: 400 })
@@ -114,8 +124,13 @@ export async function POST(request: NextRequest) {
       // Optional explicit "I agree to the Terms" checkbox at checkout. Requires the Terms URL to be set in
       // Stripe Dashboard → Settings → Public details, so it is opt-in via env to avoid a 400 from Stripe.
       ...(process.env.STRIPE_REQUIRE_TOS === 'true' ? { consent_collection: { terms_of_service: 'required' as const } } : {}),
+    }, {
+      // DOUBLE-SUBMIT PROTECTION: a double-click / retry within the same minute gets the SAME Checkout Session back
+      // from Stripe instead of creating a second one.
+      idempotencyKey: `checkout:${userId}:${planId}:${billing}:${Math.floor(Date.now() / 60_000)}`,
     })
 
+    await logAudit({ action: 'billing.checkout_started', actorClerkId: userId, targetUserId: dbUser.id, request, metadata: { planId, billing } })
     return NextResponse.json({ url: session.url })
   } catch (err) {
     if (err instanceof z.ZodError) {

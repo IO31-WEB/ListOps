@@ -1,8 +1,11 @@
 import type { Metadata } from 'next'
+import { LogoMark } from '@/components/ui/logo'
 import { notFound } from 'next/navigation'
 import Link from 'next/link'
-import { House, ArrowRight, ArrowLeft, Clock, Tag, Check } from 'lucide-react'
+import { ArrowRight, ArrowLeft, Clock, Tag, Check } from 'lucide-react'
 import { BLOG_POSTS, getPost, getRelatedPosts, type BlogSection } from '@/lib/blog-posts'
+import { JsonLd } from '@/components/seo/json-ld'
+import { blogPostingLd, breadcrumbLd, abs } from '@/lib/seo'
 
 interface Props {
   params: Promise<{ slug: string }>
@@ -23,9 +26,11 @@ export async function generateMetadata({ params }: Props): Promise<Metadata> {
     openGraph: {
       title: post.title,
       description: post.description,
-      url: `https://listops.io/blog/${post.slug}`,
+      url: abs(`/blog/${post.slug}`),
       type: 'article',
       publishedTime: post.publishedAt,
+      modifiedTime: post.updated ?? post.publishedAt,
+      section: post.category,
       authors: ['ListOps'],
     },
     twitter: {
@@ -34,7 +39,7 @@ export async function generateMetadata({ params }: Props): Promise<Metadata> {
       description: post.description,
     },
     alternates: {
-      canonical: `https://listops.io/blog/${post.slug}`,
+      canonical: abs(`/blog/${post.slug}`),
     },
   }
 }
@@ -134,37 +139,16 @@ export default async function BlogPostPage({ params }: Props) {
   const related = getRelatedPosts(post.relatedSlugs)
   const catStyle = CATEGORY_STYLES[post.categoryColor] ?? CATEGORY_STYLES.amber
 
-  const jsonLd = {
-    '@context': 'https://schema.org',
-    '@type': 'Article',
-    headline: post.title,
-    description: post.description,
-    datePublished: post.publishedAt,
-    author: { '@type': 'Organization', name: 'ListOps' },
-    publisher: {
-      '@type': 'Organization',
-      name: 'ListOps',
-      url: 'https://listops.io',
-    },
-    url: `https://listops.io/blog/${post.slug}`,
-    mainEntityOfPage: `https://listops.io/blog/${post.slug}`,
-  }
-
   return (
     <div className="min-h-screen bg-[var(--cream)]">
       {/* Structured data */}
-      <script
-        type="application/ld+json"
-        dangerouslySetInnerHTML={{ __html: JSON.stringify(jsonLd) }}
-      />
+      <JsonLd data={[blogPostingLd(post), breadcrumbLd([{ name: 'Home', path: '/' }, { name: 'Blog', path: '/blog' }, { name: post.title, path: `/blog/${post.slug}` }])]} />
 
       {/* Nav */}
       <nav className="fixed top-0 inset-x-0 z-50 glass border-b border-amber-100/60">
         <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 h-16 flex items-center justify-between">
           <Link href="/" className="flex items-center gap-2.5">
-            <div className="w-8 h-8 bg-slate-900 rounded-lg flex items-center justify-center">
-              <House className="w-4 h-4 text-amber-400" />
-            </div>
+            <LogoMark className="w-8 h-8" />
             <span className="font-display font-semibold text-slate-900 text-lg">ListOps</span>
           </Link>
           <div className="flex items-center gap-3">
@@ -194,6 +178,11 @@ export default async function BlogPostPage({ params }: Props) {
             <time className="text-slate-400 text-sm" dateTime={post.publishedAt}>
               {new Date(post.publishedAt).toLocaleDateString('en-US', { month: 'long', day: 'numeric', year: 'numeric' })}
             </time>
+            {post.updated && post.updated !== post.publishedAt && (
+              <span className="text-slate-400 text-sm">
+                Updated <time dateTime={post.updated}>{new Date(post.updated).toLocaleDateString('en-US', { month: 'long', day: 'numeric', year: 'numeric' })}</time>
+              </span>
+            )}
           </div>
 
           <div className="text-6xl mb-6">{post.heroEmoji}</div>
@@ -272,9 +261,7 @@ export default async function BlogPostPage({ params }: Props) {
       <footer className="border-t border-slate-200 py-8 px-4">
         <div className="max-w-6xl mx-auto flex flex-col sm:flex-row items-center justify-between gap-4">
           <div className="flex items-center gap-2">
-            <div className="w-6 h-6 bg-slate-900 rounded flex items-center justify-center">
-              <House className="w-3 h-3 text-amber-400" />
-            </div>
+            <LogoMark className="w-6 h-6" />
             <span className="text-sm font-semibold text-slate-600">ListOps</span>
           </div>
           <div className="flex items-center gap-6 text-xs text-slate-400">

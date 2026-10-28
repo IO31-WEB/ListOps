@@ -9,7 +9,7 @@
  */
 import { NextRequest, NextResponse } from 'next/server'
 import { and, inArray, lt, notExists, sql } from 'drizzle-orm'
-import { timingSafeEqual } from 'crypto'
+import { cronAuthorized } from '@/lib/cron-auth'
 import { db } from '@/lib/db'
 import { listings, listingUploads } from '@/lib/db/schema'
 import { deleteFromR2 } from '@/lib/r2'
@@ -19,16 +19,9 @@ export const maxDuration = 60
 const MIN_AGE_MS = 24 * 60 * 60 * 1000
 const BATCH = 300
 
-function authorized(request: NextRequest): boolean {
-  const secret = process.env.CRON_SECRET
-  if (!secret || secret.length < 16) return false // refuse to run unauthenticated
-  const given = request.headers.get('authorization') ?? ''
-  const expected = `Bearer ${secret}`
-  return given.length === expected.length && timingSafeEqual(Buffer.from(given), Buffer.from(expected))
-}
 
 export async function GET(request: NextRequest) {
-  if (!authorized(request)) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
+  if (!cronAuthorized(request)) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
   try {
     const cutoff = new Date(Date.now() - MIN_AGE_MS)
     const orphans = await db

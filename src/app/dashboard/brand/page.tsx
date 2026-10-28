@@ -5,10 +5,13 @@ import { useState, useCallback, useEffect } from 'react'
 import { useDropzone } from 'react-dropzone'
 import {
   Upload, Check, Palette, User, Globe,
-  Mail, Lock, Zap, Save, Loader2, Image, Building2, MessageSquare
+  Mail, Lock, Zap, Save, Loader2, Image, Building2, MessageSquare, Plus, X
 } from 'lucide-react'
 import toast from 'react-hot-toast'
 import Link from 'next/link'
+import { applyCompliance, lockedKeys, type LockableField, type OrgCompliance } from '@/lib/compliance/brand'
+import { brandWarnings } from '@/lib/compliance/warnings'
+import { resolveBrandAssetUrl } from '@/lib/brand-assets'
 
 interface BrandKitForm {
   agentName: string; agentTitle: string; agentPhone: string
@@ -18,6 +21,24 @@ interface BrandKitForm {
   facebookUrl: string; instagramHandle: string; linkedinUrl: string
   tone: 'professional' | 'friendly' | 'luxury' | 'energetic'
   logoUrl: string; agentPhotoUrl: string; brokerageLogo: string
+  licenseNumber: string
+  extraColors: BrandColor[]
+}
+
+interface BrandColor { name: string; value: string }
+
+const MAX_EXTRA_COLORS = 8
+const SUGGESTED_COLOR_NAMES = ['Secondary', 'Tertiary', 'Neutral', 'Highlight', 'Background', 'Text', 'Link', 'Border']
+
+/** Greys out a field the brokerage controls. */
+function LockWrap({ locked, children }: { locked: boolean; children: React.ReactNode }) {
+  if (!locked) return <>{children}</>
+  return (
+    <div className="relative">
+      <div className="opacity-60 pointer-events-none select-none" aria-disabled="true">{children}</div>
+      <span className="absolute -top-2 right-0 inline-flex items-center gap-1 text-[10px] font-semibold bg-slate-800 text-white rounded-full px-2 py-0.5"><Lock className="w-2.5 h-2.5" /> Set by your brokerage</span>
+    </div>
+  )
 }
 
 function ColorPicker({ label, value, onChange }: { label: string; value: string; onChange: (v: string) => void }) {
@@ -44,8 +65,16 @@ function ImageUploadZone({ label, hint, currentUrl, slot, onUpload }: {
   slot: ImageSlot
   onUpload: (url: string) => void
 }) {
-  const [preview, setPreview] = useState<string>(currentUrl || '')
+  // Display URL: stored values (older R2 URLs included) are resolved to the same-origin /api/brand-assets path.
+  const [preview, setPreview] = useState<string>(resolveBrandAssetUrl(currentUrl))
   const [uploading, setUploading] = useState(false)
+  const [broken, setBroken] = useState(false)
+
+  // The saved kit arrives after first render (and locked values can change): keep the preview in step with it.
+  useEffect(() => {
+    setPreview(resolveBrandAssetUrl(currentUrl))
+    setBroken(false)
+  }, [currentUrl])
 
   const uploadFile = useCallback(async (file: File) => {
     setUploading(true)
@@ -64,7 +93,7 @@ function ImageUploadZone({ label, hint, currentUrl, slot, onUpload }: {
           const reader = new FileReader()
           reader.onload = (e) => {
             const dataUrl = e.target?.result as string
-            setPreview(dataUrl)
+            setPreview(dataUrl); setBroken(false)
             onUpload(dataUrl)
             resolve()
           }
@@ -77,7 +106,7 @@ function ImageUploadZone({ label, hint, currentUrl, slot, onUpload }: {
 
       if (!res.ok) throw new Error(data?.error || `Upload failed (${res.status})`)
 
-      setPreview(data.url)
+      setPreview(resolveBrandAssetUrl(data.url)); setBroken(false)
       onUpload(data.url)
       toast.success('Image uploaded!')
     } catch (err: unknown) {
@@ -116,12 +145,19 @@ function ImageUploadZone({ label, hint, currentUrl, slot, onUpload }: {
         <input {...getInputProps()} />
         {preview ? (
           <div className="flex items-center gap-4">
-            <img src={preview} alt="Preview" className="w-16 h-16 object-contain rounded-lg border border-slate-200 bg-white" />
-            <div className="text-left">
-              <p className="text-xs font-semibold text-green-700 flex items-center gap-1">
-                <Check className="w-3 h-3" /> Uploaded
-              </p>
-              <p className="text-xs text-slate-500 mt-0.5">Click or drag to replace</p>
+            {broken ? (
+              <div className="w-16 h-16 rounded-lg border border-dashed border-slate-300 bg-slate-50 flex items-center justify-center text-[10px] text-slate-400 text-center leading-tight px-1">No preview</div>
+            ) : (
+              // eslint-disable-next-line @next/next/no-img-element
+              <img key={preview} src={preview} alt={`${label} preview`} onError={() => setBroken(true)} className="w-16 h-16 object-contain rounded-lg border border-slate-200 bg-white" />
+            )}
+            <div className="text-left min-w-0">
+              {broken ? (
+                <p className="text-xs font-semibold text-amber-700">Preview unavailable</p>
+              ) : (
+                <p className="text-xs font-semibold text-green-700 flex items-center gap-1"><Check className="w-3 h-3" /> Uploaded</p>
+              )}
+              <p className="text-xs text-slate-500 mt-0.5">{broken ? 'Click or drag to upload it again' : 'Click or drag to replace'}</p>
             </div>
           </div>
         ) : (
@@ -172,14 +208,26 @@ export default function BrandPage() {
     agentWebsite: '', brokerageName: '', tagline: '', disclaimer: '',
     primaryColor: '#1e293b', accentColor: '#f59e0b', fontFamily: 'Georgia',
     facebookUrl: '', instagramHandle: '', linkedinUrl: '',
-    tone: 'professional', logoUrl: '', agentPhotoUrl: '', brokerageLogo: '',
+    tone: 'professional', logoUrl: '', agentPhotoUrl: '', brokerageLogo: '', licenseNumber: '', extraColors: [],
   })
+  const [compliance, setCompliance] = useState<OrgCompliance | null>(null)
   const [saving, setSaving] = useState(false)
   const [planTier, setPlanTier] = useState<string>('free')
   const [loading, setLoading] = useState(true)
   const [saved, setSaved] = useState(false)
 
   const set = (key: keyof BrandKitForm) => (val: string) => setForm(prev => ({ ...prev, [key]: val }))
+  const addColor = () => setForm(prev => {
+    if (prev.extraColors.length >= MAX_EXTRA_COLORS) return prev
+    const used = new Set(prev.extraColors.map(c => c.name))
+    const name = SUGGESTED_COLOR_NAMES.find(n => !used.has(n)) ?? `Color ${prev.extraColors.length + 3}`
+    return { ...prev, extraColors: [...prev.extraColors, { name, value: '#64748b' }] }
+  })
+  const locked = new Set<LockableField>(lockedKeys(compliance))
+  const isLocked = (k: LockableField) => locked.has(k)
+  // What outputs will actually use (locks + forced disclaimer applied) — drives the warnings.
+  const effective = applyCompliance(form, compliance, form.licenseNumber)
+  const warnings = brandWarnings(effective, { licenseNumber: form.licenseNumber })
 
   useEffect(() => {
     const fetchBrandKit = async () => {
@@ -188,9 +236,11 @@ export default function BrandPage() {
           fetch('/api/brand-kit'),
           getBillingInfo(),
         ])
-        const { brandKit } = await bkRes.json()
+        const { brandKit, licenseNumber, compliance: org } = await bkRes.json()
+        setCompliance(org ?? null)
         const planTier = info?.planTier ?? 'free'
         setPlanTier(planTier)
+        setForm(prev => ({ ...prev, licenseNumber: licenseNumber ?? '' }))
         if (brandKit) {
           setForm(prev => ({
             ...prev,
@@ -212,6 +262,7 @@ export default function BrandPage() {
             agentPhotoUrl: brandKit.agentPhotoUrl ?? '',
             brokerageLogo: brandKit.brokerageLogo ?? '',
             tone: brandKit.aiPersona?.tone ?? brandKit.tone ?? 'professional',
+            extraColors: Array.isArray(brandKit.extraColors) ? brandKit.extraColors : [],
           }))
         }
       } catch (err) {
@@ -229,7 +280,13 @@ export default function BrandPage() {
       const res = await fetch('/api/brand-kit', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify(form),
+        body: JSON.stringify({
+          ...form,
+          // Only complete colors are saved: a valid #rrggbb value and a name (blank names fall back to "Color").
+          extraColors: form.extraColors
+            .filter(c => /^#[0-9a-fA-F]{6}$/.test(c.value))
+            .map(c => ({ name: c.name.trim() || 'Color', value: c.value })),
+        }),
       })
       const data = await res.json()
       if (!res.ok) throw new Error(data.error || 'Failed to save')
@@ -295,7 +352,7 @@ export default function BrandPage() {
   return (
     <div className="max-w-3xl mx-auto space-y-6">
       {/* Header */}
-      <div className="flex items-center justify-between">
+      <div className="flex flex-wrap items-center justify-between gap-3">
         <div>
           <h1 className="font-display text-2xl font-semibold text-slate-900">Brand Kit</h1>
           <p className="text-sm text-slate-500 mt-1">Set once. Applied to every campaign automatically.</p>
@@ -309,6 +366,17 @@ export default function BrandPage() {
           {saving ? 'Saving...' : saved ? 'Saved!' : 'Save Brand Kit'}
         </button>
       </div>
+
+      {warnings.length > 0 && (
+        <div role="status" className="bg-amber-50 border border-amber-200 rounded-2xl p-5">
+          <div className="font-semibold text-amber-900 text-sm mb-2">Finish your brand kit ({warnings.length} item{warnings.length === 1 ? '' : 's'})</div>
+          <ul className="space-y-1.5 text-sm text-amber-900">
+            {warnings.map(w => (
+              <li key={w.id}><span className={`inline-block text-[10px] font-bold uppercase rounded px-1.5 py-0.5 mr-2 ${w.level === 'required' ? 'bg-red-100 text-red-700' : 'bg-amber-100 text-amber-700'}`}>{w.level}</span><strong>{w.message}.</strong> <span className="text-amber-800">{w.fix}</span></li>
+            ))}
+          </ul>
+        </div>
+      )}
 
       {/* Agent Identity */}
       <div className="bg-white rounded-2xl border border-slate-200 p-6">
@@ -324,9 +392,14 @@ export default function BrandPage() {
           <div className="sm:col-span-2">
             <FormField label="Website" type="text" value={form.agentWebsite} onChange={set('agentWebsite')} placeholder="https://sarahmitchell.com" />
           </div>
-          <FormField label="Brokerage Name" value={form.brokerageName} onChange={set('brokerageName')} placeholder="Reed Realty Group" />
+          <LockWrap locked={isLocked('brokerageName')}>
+            <FormField label="Brokerage Name" value={isLocked('brokerageName') ? effective.brokerageName : form.brokerageName} onChange={set('brokerageName')} placeholder="Reed Realty Group" />
+          </LockWrap>
+          <FormField label="License Number" value={form.licenseNumber} onChange={set('licenseNumber')} placeholder="e.g. 123456" />
           <div className="sm:col-span-2">
-            <FormField label="Tagline" value={form.tagline} onChange={set('tagline')} placeholder="Your Trusted Austin Area Real Estate Expert" />
+            <LockWrap locked={isLocked('tagline')}>
+              <FormField label="Tagline" value={isLocked('tagline') ? effective.tagline : form.tagline} onChange={set('tagline')} placeholder="Your Trusted Austin Area Real Estate Expert" />
+            </LockWrap>
           </div>
         </div>
       </div>
@@ -339,8 +412,12 @@ export default function BrandPage() {
         </div>
         <div className="grid sm:grid-cols-3 gap-5">
           <ImageUploadZone label="Agent Headshot"   hint="PNG, JPG, WebP • Max 5MB" currentUrl={form.agentPhotoUrl} slot="agentPhoto"    onUpload={set('agentPhotoUrl')} />
-          <ImageUploadZone label="Agent/Team Logo"  hint="PNG, SVG recommended"     currentUrl={form.logoUrl}       slot="logo"         onUpload={set('logoUrl')} />
-          <ImageUploadZone label="Brokerage Logo"   hint="PNG, SVG recommended"     currentUrl={form.brokerageLogo} slot="brokerageLogo" onUpload={set('brokerageLogo')} />
+          <LockWrap locked={isLocked('logoUrl')}>
+            <ImageUploadZone label="Agent/Team Logo"  hint="PNG, SVG recommended"     currentUrl={isLocked('logoUrl') ? effective.logoUrl : form.logoUrl}       slot="logo"         onUpload={set('logoUrl')} />
+          </LockWrap>
+          <LockWrap locked={isLocked('brokerageLogo')}>
+            <ImageUploadZone label="Brokerage Logo"   hint="PNG, SVG recommended"     currentUrl={isLocked('brokerageLogo') ? effective.brokerageLogo : form.brokerageLogo} slot="brokerageLogo" onUpload={set('brokerageLogo')} />
+          </LockWrap>
         </div>
       </div>
 
@@ -351,10 +428,52 @@ export default function BrandPage() {
           <h2 className="font-display font-semibold text-slate-900">Brand Colors</h2>
         </div>
         <div className="grid sm:grid-cols-2 gap-5 mb-5">
-          <ColorPicker label="Primary Color" value={form.primaryColor} onChange={set('primaryColor')} />
-          <ColorPicker label="Accent Color" value={form.accentColor} onChange={set('accentColor')} />
+          <LockWrap locked={isLocked('primaryColor')}><ColorPicker label="Primary Color" value={isLocked('primaryColor') ? effective.primaryColor : form.primaryColor} onChange={set('primaryColor')} /></LockWrap>
+          <LockWrap locked={isLocked('accentColor')}><ColorPicker label="Accent Color" value={isLocked('accentColor') ? effective.accentColor : form.accentColor} onChange={set('accentColor')} /></LockWrap>
         </div>
+        {/* Additional named colors */}
+        {form.extraColors.length > 0 && (
+          <div className="grid sm:grid-cols-2 gap-5 mb-5">
+            {form.extraColors.map((c, i) => (
+              <div key={i} className="relative">
+                <div className="flex items-center justify-between gap-2 mb-1.5">
+                  <input
+                    value={c.name}
+                    maxLength={30}
+                    aria-label={`Name for color ${i + 3}`}
+                    onChange={e => setForm(prev => ({ ...prev, extraColors: prev.extraColors.map((x, j) => j === i ? { ...x, name: e.target.value } : x) }))}
+                    className="min-w-0 flex-1 bg-transparent text-xs font-semibold text-slate-600 border-b border-dashed border-slate-300 focus:outline-none focus:border-amber-400 py-0.5"
+                  />
+                  <button type="button" aria-label={`Remove ${c.name || 'color'}`} onClick={() => setForm(prev => ({ ...prev, extraColors: prev.extraColors.filter((_, j) => j !== i) }))}
+                    className="p-1 rounded text-slate-400 hover:text-red-600 hover:bg-red-50 transition-colors"><X className="w-3.5 h-3.5" /></button>
+                </div>
+                <div className="flex items-center gap-2">
+                  <input type="color" value={c.value} aria-label={`${c.name || 'Color'} picker`}
+                    onChange={e => setForm(prev => ({ ...prev, extraColors: prev.extraColors.map((x, j) => j === i ? { ...x, value: e.target.value } : x) }))}
+                    className="w-10 h-10 rounded-lg cursor-pointer border border-slate-200 p-0.5 flex-shrink-0" />
+                  <input type="text" value={c.value} maxLength={7}
+                    onChange={e => setForm(prev => ({ ...prev, extraColors: prev.extraColors.map((x, j) => j === i ? { ...x, value: e.target.value } : x) }))}
+                    className="flex-1 min-w-0 bg-slate-50 border border-slate-200 rounded-lg px-3 py-2 text-sm font-mono focus:outline-none focus:ring-2 focus:ring-amber-400" placeholder="#000000" />
+                </div>
+              </div>
+            ))}
+          </div>
+        )}
+        {form.extraColors.length < MAX_EXTRA_COLORS && (
+          <button type="button" onClick={addColor}
+            className="mb-5 inline-flex items-center gap-1.5 text-sm font-medium text-amber-700 hover:text-amber-800 border border-dashed border-amber-300 hover:border-amber-400 rounded-lg px-3 py-2 transition-colors">
+            <Plus className="w-4 h-4" /> Add another color
+          </button>
+        )}
+
         {/* Color Preview */}
+        {form.extraColors.length > 0 && (
+          <div className="flex h-8 rounded-lg overflow-hidden border border-slate-200 mb-3" aria-label="Your palette">
+            {[{ name: 'Primary', value: form.primaryColor }, { name: 'Accent', value: form.accentColor }, ...form.extraColors].map((c, i) => (
+              <div key={i} title={`${c.name}: ${c.value}`} style={{ backgroundColor: c.value }} className="flex-1" />
+            ))}
+          </div>
+        )}
         <div className="rounded-xl overflow-hidden border border-slate-200">
           <div style={{ backgroundColor: form.primaryColor }} className="p-4">
             <p style={{ color: form.accentColor }} className="text-xs font-bold uppercase tracking-widest mb-1">Preview</p>
@@ -421,6 +540,9 @@ export default function BrandPage() {
           rows={3}
           className="w-full bg-slate-50 border border-slate-200 rounded-xl px-4 py-3 text-sm focus:outline-none focus:ring-2 focus:ring-amber-400 focus:border-transparent resize-none"
         />
+        {compliance && effective.disclaimer !== form.disclaimer && (
+          <p className="text-xs text-slate-500 mt-2 bg-slate-50 rounded-lg p-3"><span className="font-semibold">Your brokerage adds this to every piece:</span> {effective.disclaimer}</p>
+        )}
       </div>
 
       {/* Save button bottom */}

@@ -8,6 +8,7 @@
  */
 
 import { describe, test, expect, vi, beforeEach } from 'vitest'
+import { seatLimitFor } from '@/lib/plans'
 
 // ── Mock DB ───────────────────────────────────────────────────
 vi.mock('@/lib/db', () => ({
@@ -90,13 +91,9 @@ describe('Webhook org resolution', () => {
   })
 })
 
-describe('Agent seat limits by plan', () => {
-  const agentLimits: Record<string, number> = {
-    starter: 1, pro: 3, brokerage: 25, enterprise: 999,
-  }
-
-  test('starter allows 1 agent', () => expect(agentLimits['starter']).toBe(1))
-  test('pro allows 3 agents', () => expect(agentLimits['pro']).toBe(3))
-  test('brokerage allows 25 agents', () => expect(agentLimits['brokerage']).toBe(25))
-  test('unknown plan defaults to 1 agent', () => expect(agentLimits['unknown'] ?? 1).toBe(1))
+describe('Agent seat limits by plan (single source: SEAT_LIMITS)', () => {
+  test('free and starter allow 1 seat', () => { expect(seatLimitFor('free')).toBe(1); expect(seatLimitFor('starter')).toBe(1) })
+  test('pro and commercial allow 2 seats', () => { expect(seatLimitFor('pro')).toBe(2); expect(seatLimitFor('commercial')).toBe(2) })
+  test('brokerage allows 25 seats', () => expect(seatLimitFor('brokerage')).toBe(25))
+  test('unknown plan defaults to 1 seat', () => expect(seatLimitFor('unknown')).toBe(1))
 })

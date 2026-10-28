@@ -11,7 +11,7 @@
 
 import {
   pgTable, pgEnum, uuid, text, integer, boolean,
-  timestamp, jsonb, numeric, index, uniqueIndex, inet,
+  timestamp, jsonb, numeric, index, uniqueIndex, inet, primaryKey,
 } from 'drizzle-orm/pg-core'
 import { relations } from 'drizzle-orm'
 
@@ -78,6 +78,8 @@ export const users = pgTable('users', {
   lastName: text('last_name'),
   phone: text('phone'),
   licenseNumber: text('license_number'),
+  /** Last time the user opened the notification bell; notifications older than this count as read (on every device). */
+  notificationsSeenAt: timestamp('notifications_seen_at'),
   mlsAgentId: text('mls_agent_id'),
   avatarUrl: text('avatar_url'),
   timezone: text('timezone').notNull().default('America/New_York'),
@@ -102,7 +104,8 @@ export const users = pgTable('users', {
 
   // Legal gates (server-enforced; see lib/age.ts)
   ageConfirmedAt: timestamp('age_confirmed_at'),   // user attested they are 18+
-  ageBlockedAt: timestamp('age_blocked_at'),       // user said they are under 18 -> account blocked
+  ageBlockedAt: timestamp('age_blocked_at'),
+  deletedAt: timestamp('deleted_at'),              // soft delete (account closed); content is purged after 30 days by cron/retention       // user said they are under 18 -> account blocked
   termsAcceptedAt: timestamp('terms_accepted_at'),
   termsVersion: text('terms_version'),
 
@@ -127,6 +130,8 @@ export const brandKits = pgTable('brand_kits', {
   primaryColor: text('primary_color').notNull().default('#1e293b'),
   accentColor: text('accent_color').notNull().default('#f59e0b'),
   fontFamily: text('font_family').notNull().default('Georgia'),
+  /** Additional named brand colors beyond primary + accent, e.g. [{ name: 'Secondary', value: '#2a4d69' }]. */
+  extraColors: jsonb('extra_colors').$type<Array<{ name: string; value: string }>>().notNull().default([]),
 
   agentName: text('agent_name'),
   agentTitle: text('agent_title').notNull().default('REALTOR®'),
@@ -212,6 +217,7 @@ export const listings = pgTable('listings', {
   listingAgentPhone: text('listing_agent_phone'),
   officeName: text('office_name'),
 
+  commercial: jsonb('commercial'),                  // v13: CRE details (null = residential). See lib/commercial/types.ts
   rawData: jsonb('raw_data'),
   status: listingStatusEnum('status').notNull().default('active'),
   fetchedAt: timestamp('fetched_at').notNull().defaultNow(),
@@ -233,8 +239,11 @@ export const campaigns = pgTable('campaigns', {
   orgId: uuid('org_id').references(() => organizations.id),
   brandKitId: uuid('brand_kit_id').references(() => brandKits.id),
 
+  campaignType: text('campaign_type').$type<'residential' | 'commercial'>().notNull().default('residential'), // v13
   status: campaignStatusEnum('status').notNull().default('generating'),
   generationMs: integer('generation_ms'),
+  failureReason: text('failure_reason'),            // short, user-safe reason (set when status='failed')
+  refundedAt: timestamp('refunded_at'),            // set when quota for this generation was refunded (prevents double refund)
 
   facebookPosts: jsonb('facebook_posts').$type<Array<{
     week: number; theme: string; copy: string; hashtags: string[]
@@ -303,8 +312,34 @@ export const referrals = pgTable('referrals', {
   referredEmail: text('referred_email').notNull(),
   status: referralStatusEnum('status').notNull().default('pending'),
   rewardGranted: boolean('reward_granted').notNull().default(false),
+  /** 'link' = shared referral link/code; 'team' = a seat invite. Team invitees inherit the inviter's plan, so they never count as "upgraded". */
+  source: text('source').notNull().default('link'),
   createdAt: timestamp('created_at').notNull().defaultNow(),
-})
+}, (t) => ({
+  referrerIdx: index('referral_referrer_idx').on(t.referrerId),
+  referredUserIdx: index('referral_referred_user_idx').on(t.referredUserId),
+}))
+
+// ── Team seat invites ──────────────────────────────────────────
+// Single-use, email-bound, expiring. Only the SHA-256 of the token is stored.
+
+export const teamInvites = pgTable('team_invites', {
+  id: uuid('id').primaryKey().defaultRandom(),
+  orgId: uuid('org_id').notNull().references(() => organizations.id, { onDelete: 'cascade' }),
+  inviterId: uuid('inviter_id').notNull().references(() => users.id, { onDelete: 'cascade' }),
+  email: text('email').notNull(),
+  role: roleEnum('role').notNull().default('agent'),
+  tokenHash: text('token_hash').notNull(),
+  status: text('status').notNull().default('pending'), // pending | accepted | revoked
+  expiresAt: timestamp('expires_at').notNull(),
+  acceptedUserId: uuid('accepted_user_id').references(() => users.id, { onDelete: 'set null' }),
+  acceptedAt: timestamp('accepted_at'),
+  createdAt: timestamp('created_at').notNull().defaultNow(),
+}, (t) => ({
+  tokenIdx: uniqueIndex('team_invite_token_idx').on(t.tokenHash),
+  orgIdx: index('team_invite_org_idx').on(t.orgId, t.status),
+  emailIdx: index('team_invite_email_idx').on(t.email),
+}))
 
 // ── Relations ──────────────────────────────────────────────────
 
@@ -496,4 +531,252 @@ export const listingUploads = pgTable('listing_uploads', {
 }, (t) => ({
   createdIdx: index('listing_uploads_created_idx').on(t.createdAt),
   userIdx: index('listing_uploads_user_idx').on(t.userId),
+}))
+
+
+// ── AI usage ledger (durable spend history for the admin overview) ───────────────
+// Redis holds the live caps; this table is the permanent record. Costs are ESTIMATES (see lib/ai-budget.ts).
+export const aiUsage = pgTable('ai_usage', {
+  id: uuid('id').primaryKey().defaultRandom(),
+  clerkId: text('clerk_id').notNull(),
+  kind: text('kind').notNull(), // 'generate' | 'teaser' | 'regenerate' | ...
+  inputTokens: integer('input_tokens').notNull().default(0),
+  outputTokens: integer('output_tokens').notNull().default(0),
+  costUsd: numeric('cost_usd', { precision: 10, scale: 4 }).notNull().default('0'),
+  createdAt: timestamp('created_at').notNull().defaultNow(),
+}, (t) => ({
+  createdIdx: index('ai_usage_created_idx').on(t.createdAt),
+  clerkIdx: index('ai_usage_clerk_idx').on(t.clerkId, t.createdAt),
+}))
+
+
+// ── Processed Stripe webhook event ids (idempotency: Stripe delivers events at-least-once) ──
+export const stripeEvents = pgTable('stripe_events', {
+  id: text('id').primaryKey(), // evt_...
+  type: text('type').notNull(),
+  createdAt: timestamp('created_at').notNull().defaultNow(),
+})
+
+
+// ── Scheduled outreach follow-ups (sequence emails 2..N). Email #1 is sent immediately by the send route. ──
+// A daily cron (/api/cron/send-outreach) sends whatever is due. Rows never contain secrets; recipients who
+// unsubscribe are skipped at send time via email_suppressions.
+export const outreachEmails = pgTable('outreach_emails', {
+  id: uuid('id').primaryKey().defaultRandom(),
+  userId: uuid('user_id').notNull().references(() => users.id, { onDelete: 'cascade' }),
+  reportId: uuid('report_id').notNull(),
+  batchId: uuid('batch_id').notNull(),
+  recipientEmail: text('recipient_email').notNull(),
+  recipientName: text('recipient_name'),
+  stepIndex: integer('step_index').notNull(),
+  subject: text('subject').notNull(),
+  body: text('body').notNull(),
+  sendAt: timestamp('send_at').notNull(),
+  status: text('status').$type<'pending' | 'sending' | 'sent' | 'failed' | 'skipped' | 'cancelled'>().notNull().default('pending'),
+  skipReason: text('skip_reason'),
+  attempts: integer('attempts').notNull().default(0),
+  sentAt: timestamp('sent_at'),
+  createdAt: timestamp('created_at').notNull().defaultNow(),
+}, (t) => ({
+  dueIdx: index('outreach_due_idx').on(t.status, t.sendAt),
+  userReportIdx: index('outreach_user_report_idx').on(t.userId, t.reportId),
+  uniq: uniqueIndex('outreach_batch_recipient_step_idx').on(t.batchId, t.recipientEmail, t.stepIndex),
+}))
+
+
+// ── Leads captured on listing microsites (Round 7) ─────────────────────────────────────────────────
+// One row per "Schedule a Showing" / "Request Info" submission. Contains a third party's contact details, so:
+// rows are only ever read by the owning agent, cascade-delete with the campaign/agent, and the IP is stored hashed.
+export const leads = pgTable('leads', {
+  id: uuid('id').primaryKey().defaultRandom(),
+  campaignId: uuid('campaign_id').notNull().references(() => campaigns.id, { onDelete: 'cascade' }),
+  agentId: uuid('agent_id').notNull().references(() => users.id, { onDelete: 'cascade' }),
+  listingId: uuid('listing_id').references(() => listings.id, { onDelete: 'set null' }),
+
+  kind: text('kind').$type<'showing' | 'info'>().notNull(),
+  status: text('status').$type<'new' | 'contacted' | 'closed'>().notNull().default('new'),
+
+  name: text('name').notNull(),
+  email: text('email').notNull(),            // lower-cased
+  phone: text('phone'),
+  message: text('message'),
+  preferredDate: text('preferred_date'),     // YYYY-MM-DD
+  preferredTime: text('preferred_time'),     // morning | afternoon | evening | anytime
+
+  // Source tracking (all optional, all sanitized + length-capped before insert)
+  source: text('source'),                    // utm_source / ?src= (e.g. "instagram"), else "direct"
+  medium: text('medium'),
+  campaignTag: text('campaign_tag'),
+  referrerHost: text('referrer_host'),
+
+  // Consent record (what the person agreed to, and when)
+  consentText: text('consent_text').notNull(),
+  consentAt: timestamp('consent_at').notNull().defaultNow(),
+
+  ipHash: text('ip_hash'),                   // sha256(ip + salt) — dedupe/abuse forensics, never the raw IP
+  delivery: jsonb('delivery').$type<{
+    email?: 'sent' | 'failed' | 'skipped'
+    sms?: 'sent' | 'failed' | 'skipped'
+    webhook?: 'sent' | 'failed' | 'skipped'
+  }>().default({}),
+
+  createdAt: timestamp('created_at').notNull().defaultNow(),
+}, (t) => ({
+  agentCreatedIdx: index('leads_agent_created_idx').on(t.agentId, t.createdAt),
+  campaignIdx: index('leads_campaign_idx').on(t.campaignId),
+  dedupeIdx: index('leads_dedupe_idx').on(t.campaignId, t.email, t.kind, t.createdAt),
+}))
+
+// Per-agent lead delivery preferences (one row per agent).
+export const leadSettings = pgTable('lead_settings', {
+  userId: uuid('user_id').primaryKey().references(() => users.id, { onDelete: 'cascade' }),
+  notifyEmail: text('notify_email'),         // null = use brand-kit agent email, then account email
+  smsEnabled: boolean('sms_enabled').notNull().default(false),
+  smsPhone: text('sms_phone'),               // E.164, the agent's OWN number
+  webhookUrl: text('webhook_url'),           // https only; validated (no private/internal hosts)
+  webhookSecret: text('webhook_secret'),     // HMAC signing secret shown to the owner
+  updatedAt: timestamp('updated_at').notNull().defaultNow(),
+})
+
+export const leadRelations = relations(leads, ({ one }) => ({
+  campaign: one(campaigns, { fields: [leads.campaignId], references: [campaigns.id] }),
+  listing: one(listings, { fields: [leads.listingId], references: [listings.id] }),
+}))
+
+
+// ── Brokerage compliance profile (Round 8) ─────────────────────────────────────────────────────────
+// One row per organization (Brokerage+). Applied at render/generation time to every member's outputs:
+// the required disclaimer is always shown, and "locked" brand fields override whatever an agent typed.
+export const orgCompliance = pgTable('org_compliance', {
+  orgId: uuid('org_id').primaryKey().references(() => organizations.id, { onDelete: 'cascade' }),
+  requiredDisclaimer: text('required_disclaimer'),
+  brokerageLicense: text('brokerage_license'),
+  equalHousing: boolean('equal_housing').notNull().default(false),
+  showAgentLicense: boolean('show_agent_license').notNull().default(false),
+  // Present key = that brand field is locked to this value for every agent in the org.
+  locked: jsonb('locked').$type<{
+    brokerageName?: string; brokerageLogo?: string; logoUrl?: string
+    primaryColor?: string; accentColor?: string; tagline?: string
+  }>().notNull().default({}),
+  updatedBy: uuid('updated_by'),
+  updatedAt: timestamp('updated_at').notNull().defaultNow(),
+})
+
+
+// ── Listing performance tracking (Round 9) ──────────────────────────────────────────────────────────
+// One row per campaign/day/kind with a counter, incremented atomically. Contains NO personal data.
+// kinds: view (microsite page view, bots + the owner excluded) · click_call · click_email · flyer_pdf · kit_download · report_view
+export const campaignEvents = pgTable('campaign_events', {
+  campaignId: uuid('campaign_id').notNull().references(() => campaigns.id, { onDelete: 'cascade' }),
+  day: text('day').notNull(),                       // YYYY-MM-DD in America/New_York
+  kind: text('kind').notNull(),
+  count: integer('count').notNull().default(0),
+}, (t) => ({
+  pk: primaryKey({ columns: [t.campaignId, t.day, t.kind] }),
+}))
+
+// Shareable, revocable seller report links. The token is the only credential (192 bits, unguessable).
+export const sellerReports = pgTable('seller_reports', {
+  id: uuid('id').primaryKey().defaultRandom(),
+  campaignId: uuid('campaign_id').notNull().references(() => campaigns.id, { onDelete: 'cascade' }),
+  agentId: uuid('agent_id').notNull().references(() => users.id, { onDelete: 'cascade' }),
+  token: text('token').notNull(),
+  note: text('note'),                               // optional message from the agent shown at the top
+  views: integer('views').notNull().default(0),
+  lastViewedAt: timestamp('last_viewed_at'),
+  revokedAt: timestamp('revoked_at'),
+  createdAt: timestamp('created_at').notNull().defaultNow(),
+}, (t) => ({
+  tokenIdx: uniqueIndex('seller_reports_token_idx').on(t.token),
+  campaignIdx: index('seller_reports_campaign_idx').on(t.campaignId),
+}))
+
+
+// ── Social post queue (Round 10) ────────────────────────────────────────────────────────────────────
+// The agent's planned posts. ListOps does NOT publish to social networks yet: the queue tells the agent what is due,
+// emails a daily digest, and the agent posts (copy / open) and marks it posted. `status` is what the agent set;
+// "due"/"overdue" is derived from scheduled_for at read time.
+export const socialPosts = pgTable('social_posts', {
+  id: uuid('id').primaryKey().defaultRandom(),
+  agentId: uuid('agent_id').notNull().references(() => users.id, { onDelete: 'cascade' }),
+  campaignId: uuid('campaign_id').notNull().references(() => campaigns.id, { onDelete: 'cascade' }),
+  channel: text('channel').$type<'facebook' | 'instagram' | 'linkedin'>().notNull(),
+  sourceKey: text('source_key').notNull(),          // e.g. "facebookPosts:0" — keeps re-planning idempotent
+  week: integer('week'),
+  body: text('body').notNull(),
+  scheduledFor: timestamp('scheduled_for').notNull(), // UTC
+  status: text('status').$type<'draft' | 'scheduled' | 'posted' | 'skipped'>().notNull().default('scheduled'),
+  postedAt: timestamp('posted_at'),
+  reminderSentAt: timestamp('reminder_sent_at'),
+  notes: text('notes'),
+  createdAt: timestamp('created_at').notNull().defaultNow(),
+  updatedAt: timestamp('updated_at').notNull().defaultNow(),
+}, (t) => ({
+  agentSchedIdx: index('social_posts_agent_sched_idx').on(t.agentId, t.scheduledFor),
+  campaignSourceIdx: uniqueIndex('social_posts_campaign_source_idx').on(t.campaignId, t.sourceKey),
+}))
+
+export const socialSettings = pgTable('social_settings', {
+  userId: uuid('user_id').primaryKey().references(() => users.id, { onDelete: 'cascade' }),
+  digest: boolean('digest').notNull().default(true),   // daily "posts due" email
+  updatedAt: timestamp('updated_at').notNull().defaultNow(),
+})
+
+export const socialPostRelations = relations(socialPosts, ({ one }) => ({
+  campaign: one(campaigns, { fields: [socialPosts.campaignId], references: [campaigns.id] }),
+}))
+
+// ── QR codes (v11) ────────────────────────────────────────────
+// One short code per (campaign, placement). The printed QR encodes /q/<code>, which counts a scan and redirects to the
+// listing microsite. Codes are never deleted by the agent: a printed sign must keep working.
+export const qrCodes = pgTable('qr_codes', {
+  id: uuid('id').primaryKey().defaultRandom(),
+  campaignId: uuid('campaign_id').notNull().references(() => campaigns.id, { onDelete: 'cascade' }),
+  agentId: uuid('agent_id').notNull().references(() => users.id, { onDelete: 'cascade' }),
+  placement: text('placement').notNull(),               // flyer | yard_sign | open_house | brochure | postcard
+  code: text('code').notNull(),
+  createdAt: timestamp('created_at').notNull().defaultNow(),
+}, (t) => ({
+  codeIdx: uniqueIndex('qr_codes_code_idx').on(t.code),
+  campaignPlacementIdx: uniqueIndex('qr_codes_campaign_placement_idx').on(t.campaignId, t.placement),
+}))
+
+export const qrScans = pgTable('qr_scans', {
+  qrId: uuid('qr_id').notNull().references(() => qrCodes.id, { onDelete: 'cascade' }),
+  day: text('day').notNull(),                           // YYYY-MM-DD, app timezone
+  count: integer('count').notNull().default(0),
+}, (t) => ({
+  pk: primaryKey({ columns: [t.qrId, t.day] }),
+}))
+
+// ── Seller Approval Portal (v12) ──────────────────────────────
+// The agent sends the seller a private link. `items` is a SNAPSHOT of the exact text the seller is asked to approve, so a
+// later edit to the campaign can never change what the seller agreed to.
+export const approvalRequests = pgTable('approval_requests', {
+  id: uuid('id').primaryKey().defaultRandom(),
+  campaignId: uuid('campaign_id').notNull().references(() => campaigns.id, { onDelete: 'cascade' }),
+  agentId: uuid('agent_id').notNull().references(() => users.id, { onDelete: 'cascade' }),
+  token: text('token').notNull(),
+  sellerName: text('seller_name'),
+  note: text('note'),
+  items: jsonb('items').$type<Array<{ key: string; group: 'listing' | 'social' | 'email'; label: string; text: string }>>().notNull(),
+  views: integer('views').notNull().default(0),
+  lastViewedAt: timestamp('last_viewed_at'),
+  submittedAt: timestamp('submitted_at'),
+  revokedAt: timestamp('revoked_at'),
+  createdAt: timestamp('created_at').notNull().defaultNow(),
+}, (t) => ({
+  tokenIdx: uniqueIndex('approval_requests_token_idx').on(t.token),
+  campaignIdx: index('approval_requests_campaign_idx').on(t.campaignId),
+}))
+
+export const approvalResponses = pgTable('approval_responses', {
+  requestId: uuid('request_id').notNull().references(() => approvalRequests.id, { onDelete: 'cascade' }),
+  itemKey: text('item_key').notNull(),
+  decision: text('decision').$type<'approved' | 'changes'>().notNull(),
+  comment: text('comment'),
+  signedName: text('signed_name').notNull(),            // name the seller typed when submitting
+  decidedAt: timestamp('decided_at').notNull().defaultNow(),
+}, (t) => ({
+  pk: primaryKey({ columns: [t.requestId, t.itemKey] }),
 }))

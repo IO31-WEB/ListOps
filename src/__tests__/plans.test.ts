@@ -95,7 +95,7 @@ describe('Plan data integrity', () => {
 
 describe('FEATURE_GATES completeness', () => {
   test('every feature gate only references valid plan tiers', () => {
-    const validTiers = ['free', 'starter', 'pro', 'brokerage', 'enterprise']
+    const validTiers = ['free', 'starter', 'pro', 'commercial', 'brokerage', 'enterprise']
     Object.entries(FEATURE_GATES).forEach(([feature, tiers]) => {
       tiers.forEach(tier => {
         expect(validTiers).toContain(tier)

@@ -5,6 +5,10 @@ import { db } from '@/lib/db'
 import { users } from '@/lib/db/schema'
 import { eq } from 'drizzle-orm'
 import { z } from 'zod'
+import { loadComplianceForAgent } from '@/lib/compliance/load'
+import { lockedKeys } from '@/lib/compliance/brand'
+import { brandAssetKeyFromUrl, withResolvedBrandAssets } from '@/lib/brand-assets'
+import { deleteFromR2 } from '@/lib/r2'
 
 // Normalize a URL value: prepend https:// if the user omitted the protocol,
 // pass through empty/undefined as-is, reject anything that still isn't a
@@ -35,6 +39,19 @@ const optionalEmail = () =>
     { message: 'Must be a valid email or empty' }
   )
 
+// Brand images: empty, one of our same-origin asset paths / stored R2 URLs, a local-dev data URL, or an https URL.
+const assetUrl = () =>
+  z.string().max(3_000_000).optional().refine(
+    (v) => !v || /^(\/api\/brand-assets\/|https:\/\/|data:image\/(png|jpeg|webp);base64,)/.test(v),
+    { message: 'Must be an uploaded image' }
+  )
+
+const HEX = /^#[0-9a-fA-F]{6}$/
+const BrandColorSchema = z.object({
+  name: z.string().transform(v => v.replace(/[\u0000-\u001f<>]/g, '').trim()).pipe(z.string().min(1).max(30)),
+  value: z.string().regex(HEX),
+})
+
 const BrandKitSchema = z.object({
   agentName: z.string().max(100).optional(),
   agentTitle: z.string().max(100).optional(),
@@ -50,10 +67,12 @@ const BrandKitSchema = z.object({
   facebookUrl: optionalUrl(),
   instagramHandle: z.string().max(50).optional(),
   linkedinUrl: optionalUrl(),
-  logoUrl: z.string().optional(),
-  agentPhotoUrl: z.string().optional(),
-  brokerageLogo: optionalUrl(),
+  logoUrl: assetUrl(),
+  agentPhotoUrl: assetUrl(),
+  brokerageLogo: assetUrl(),
+  extraColors: z.array(BrandColorSchema).max(8).optional(),
   tone: z.enum(['professional', 'friendly', 'luxury', 'energetic']).optional(),
+  licenseNumber: z.string().trim().max(60).optional(),
 })
 
 export async function GET(request: NextRequest) {
@@ -64,9 +83,11 @@ export async function GET(request: NextRequest) {
   // aiPersona lives on the users table, not brandKits — merge it in so the
   // frontend can read brandKit.aiPersona.tone reliably
   const brandKit = user?.brandKit
-    ? { ...user.brandKit, aiPersona: (user as any).aiPersona ?? null }
+    ? { ...withResolvedBrandAssets(user.brandKit), aiPersona: (user as any).aiPersona ?? null }
     : null
-  return NextResponse.json({ brandKit })
+  // Brokerage compliance: tells the page which fields are locked and what text is forced onto every output.
+  const { org, licenseNumber } = user ? await loadComplianceForAgent(user.id) : { org: null, licenseNumber: null }
+  return NextResponse.json({ brandKit, licenseNumber: licenseNumber ?? '', compliance: org })
 }
 
 export async function POST(request: NextRequest) {
@@ -95,12 +116,30 @@ export async function POST(request: NextRequest) {
     }
 
     // tone lives on users.aiPersona — strip it from brandKit upsert, save separately
-    const { tone, ...rest } = data as any
+    const { tone, licenseNumber, ...rest } = data as any
+    // Brokerage-locked fields are not agent-editable: drop them server-side (the UI also disables them).
+    const { org } = await loadComplianceForAgent(user.id)
+    for (const k of lockedKeys(org)) delete rest[k]
+    if (typeof licenseNumber === 'string') {
+      await db.update(users).set({ licenseNumber: licenseNumber || null }).where(eq(users.id, user.id))
+    }
     // Normalize instagramHandle — strip leading @ if present
     if (rest.instagramHandle) {
       rest.instagramHandle = rest.instagramHandle.replace(/^@+/, '')
     }
+    const previous = user.brandKit as Record<string, any> | null
     const brandKit = await upsertBrandKit(user.id, user.orgId!, rest)
+
+    // Replaced a logo/headshot? Remove the old object from R2 (only ours, only this user's, never the new one).
+    if (previous) {
+      for (const f of ['logoUrl', 'agentPhotoUrl', 'brokerageLogo'] as const) {
+        if (!(f in rest)) continue
+        const oldKey = brandAssetKeyFromUrl(previous[f])
+        if (oldKey && oldKey.startsWith(`brand-kits/${user.id}/`) && oldKey !== brandAssetKeyFromUrl(rest[f])) {
+          void deleteFromR2(oldKey).catch(() => {})
+        }
+      }
+    }
 
     // Save tone to users.aiPersona (the column that actually exists for this field)
     if (tone) {
@@ -120,7 +159,7 @@ export async function POST(request: NextRequest) {
 
     // Merge aiPersona back into response so frontend state stays in sync
     const returnedBrandKit = brandKit
-      ? { ...brandKit, aiPersona: tone ? { tone, writingStyle: '', tagline: rest.tagline ?? '', specialties: [], marketArea: rest.brokerageName ?? '' } : null }
+      ? { ...withResolvedBrandAssets(brandKit), aiPersona: tone ? { tone, writingStyle: '', tagline: rest.tagline ?? '', specialties: [], marketArea: rest.brokerageName ?? '' } : null }
       : null
     return NextResponse.json({ brandKit: returnedBrandKit, success: true })
   } catch (err) {

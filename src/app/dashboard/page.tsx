@@ -1,4 +1,5 @@
 import { auth } from '@clerk/nextjs/server'
+import { LogoMark } from '@/components/ui/logo'
 import { redirect } from 'next/navigation'
 import Link from 'next/link'
 import { Plus, TrendingUp, Zap, ArrowRight, Clock, FileText, BarChart2, Palette, Users, CheckCircle, AlertTriangle } from 'lucide-react'
@@ -45,14 +46,14 @@ export default async function DashboardPage() {
         <div className="relative flex flex-col sm:flex-row items-start sm:items-center justify-between gap-5">
           <div>
             <div className="flex items-center gap-2 mb-2">
-              <Zap className="w-4 h-4 text-amber-400" />
+              <LogoMark className="w-5 h-5" tone="light" />
               <span className="text-amber-400 text-xs font-semibold uppercase tracking-widest">ListOps</span>
               <span className="text-xs text-slate-500 capitalize bg-slate-800 px-2 py-0.5 rounded-full ml-1">{planTier} plan</span>
             </div>
             <h2 className="font-display text-2xl sm:text-3xl font-semibold mb-2">
               Ready to generate your next campaign?
             </h2>
-            <p className="text-slate-400 text-sm">Add your listing and photos and get a complete 6-week campaign in ~2 minutes.</p>
+            <p className="text-slate-400 text-sm">Add your listing, upload photos, and get a complete 6-week campaign in about 2 minutes.</p>
           </div>
           <Link
             href="/dashboard/generate"
@@ -248,7 +249,7 @@ export default async function DashboardPage() {
           {
             title: planTier === 'free' ? 'Upgrade to Starter' : planTier === 'starter' ? 'Upgrade to Pro' : 'Manage Team',
             desc: planTier === 'free'
-              ? 'Get Brand Kit, 5 campaigns/month, and remove ListOps branding.'
+              ? 'Get Brand Kit, email templates, photo captions and more campaigns each month.'
               : planTier === 'starter'
               ? 'Unlock unlimited campaigns, social scheduling & listing microsites.'
               : 'Add agents to your workspace for shared campaigns.',

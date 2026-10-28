@@ -1,8 +1,9 @@
 'use client'
 
+import { LogoMark } from '@/components/ui/logo'
 import { useState } from 'react'
 import Link from 'next/link'
-import { House, ArrowRight, Mail, Send } from 'lucide-react'
+import { ArrowRight, Mail, Send } from 'lucide-react'
 import toast from 'react-hot-toast'
 
 export default function ContactPage() {
@@ -38,9 +39,7 @@ export default function ContactPage() {
       <nav className="fixed top-0 inset-x-0 z-50 glass border-b border-amber-100/60">
         <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 h-16 flex items-center justify-between">
           <Link href="/" className="flex items-center gap-2.5">
-            <div className="w-8 h-8 bg-slate-900 rounded-lg flex items-center justify-center">
-              <House className="w-4 h-4 text-amber-400" />
-            </div>
+            <LogoMark className="w-8 h-8" />
             <span className="font-display font-semibold text-slate-900 text-lg">ListOps</span>
           </Link>
           <Link href="/sign-in" className="text-sm font-medium text-slate-600 hover:text-slate-900 transition-colors">Sign In</Link>

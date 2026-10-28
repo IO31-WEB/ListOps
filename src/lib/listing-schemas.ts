@@ -5,6 +5,8 @@
  */
 
 import { z } from 'zod'
+import { titleCaseAddress } from '@/lib/address'
+import { CommercialDetailsSchema } from '@/lib/commercial/types'
 
 /** Strip control chars (keep \n and \t), normalize whitespace, trim. */
 export function cleanText(s: string): string {
@@ -19,6 +21,10 @@ export function cleanText(s: string): string {
 /** Single-line fields (address, city...) additionally lose angle brackets. */
 const line = (min: number, max: number) =>
   z.string().transform(s => cleanText(s).replace(/[<>]/g, '').replace(/\s+/g, ' ')).pipe(z.string().min(min).max(max))
+
+/** Same as `line`, plus title-case normalization — applied server-side regardless of what the client sent. */
+const addrLine = (min: number, max: number) =>
+  z.string().transform(s => titleCaseAddress(cleanText(s).replace(/[<>]/g, ''))).pipe(z.string().min(min).max(max))
 
 const optLine = (max: number) =>
   z.string().transform(s => cleanText(s).replace(/[<>]/g, '').replace(/\s+/g, ' ')).pipe(z.string().max(max)).optional()
@@ -35,26 +41,36 @@ export const PROPERTY_TYPES = [
 const currentYear = new Date().getFullYear()
 
 export const ListingInputSchema = z.object({
-  address: line(3, 120),
-  city: line(1, 80),
+  address: addrLine(3, 120),
+  city: addrLine(1, 80),
   state: z.string().transform(s => s.trim().toUpperCase()).pipe(z.enum(US_STATES)),
   zip: z.string().regex(/^\d{5}(-\d{4})?$/).optional().or(z.literal('').transform(() => undefined)),
-  price: z.number().int().min(0).max(500_000_000).nullable().optional(),
+  price: z.number().int().min(0).max(5_000_000_000).nullable().optional(),
   bedrooms: z.number().int().min(0).max(50).nullable().optional(),
   bathrooms: z.number().min(0).max(50).multipleOf(0.5).nullable().optional(),
-  sqft: z.number().int().min(0).max(500_000).nullable().optional(),
+  sqft: z.number().int().min(0).max(50_000_000).nullable().optional(),
   yearBuilt: z.number().int().min(1600).max(currentYear + 2).nullable().optional(),
-  propertyType: z.enum(PROPERTY_TYPES).optional(),
+  propertyType: z.enum([...PROPERTY_TYPES, 'Retail', 'Office', 'Industrial', 'Multifamily', 'Mixed-use', 'Land (commercial)']).optional(),
   features: z.array(line(1, 60)).max(25).default([]),
   description: z.string().transform(cleanText).pipe(z.string().max(4000)).optional(),
   /** R2 object keys returned by /api/uploads/listing-photo. Ownership is verified in the route. */
   photoKeys: z.array(z.string().max(200)).max(20).default([]),
+  /** v13: present only for commercial listings. Residential rows keep this undefined/null. */
+  commercial: CommercialDetailsSchema.optional(),
   /** Where the structured data came from. */
   source: z.enum(['manual', 'enriched']).default('manual'),
   enrichmentProvider: optLine(40),
 })
 
 export type ListingInput = z.infer<typeof ListingInputSchema>
+
+/** Property types that only exist in the Commercial workflow. */
+export const COMMERCIAL_PROPERTY_TYPES = ['Retail', 'Office', 'Industrial', 'Multifamily', 'Mixed-use', 'Land (commercial)'] as const
+
+/** True when the payload is a commercial listing (CRE details or a CRE-only property type). */
+export function isCommercialInput(input: Pick<ListingInput, 'commercial' | 'propertyType'>): boolean {
+  return !!input.commercial || (!!input.propertyType && (COMMERCIAL_PROPERTY_TYPES as readonly string[]).includes(input.propertyType))
+}
 
 export const EnrichRequestSchema = z.object({
   address: line(3, 120),
@@ -69,7 +85,12 @@ export const UuidSchema = z.string().uuid()
 export function photoKeyPrefix(userId: string) {
   return `listings/${userId}/`
 }
-const KEY_RE = /^listings\/[A-Za-z0-9_-]{5,64}\/[A-Za-z0-9_-]{10,40}\.(jpg|png|webp)$/
+export const KEY_RE = /^listings\/[A-Za-z0-9_-]{5,64}\/[A-Za-z0-9_-]{10,40}\.(jpg|png|webp)$/
+
+/** True only for keys our upload route could have generated (used by the public photo route). */
+export function isListingPhotoKey(k: string): boolean {
+  return KEY_RE.test(k)
+}
 
 export function assertOwnPhotoKeys(userId: string, keys: string[]): string[] {
   const prefix = photoKeyPrefix(userId)

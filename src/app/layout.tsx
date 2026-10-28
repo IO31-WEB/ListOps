@@ -3,6 +3,9 @@ import { ClerkProvider } from '@clerk/nextjs'
 import { PostHogProvider } from '@/components/posthog-provider'
 import { Toaster } from 'react-hot-toast'
 import localFont from 'next/font/local'
+import { clerkAppearance } from '@/lib/clerk-appearance'
+import { JsonLd } from '@/components/seo/json-ld'
+import { organizationLd, websiteLd } from '@/lib/seo'
 import '@/styles/globals.css'
 
 // ── Self-hosted fonts (privacy) ───────────────────────────────────────────────
@@ -43,7 +46,7 @@ export const metadata: Metadata = {
     template: '%s | ListOps',
   },
   description: 'Generate a complete 6-week real estate marketing campaign from your listing details and photos. Facebook, Instagram, email, and print-ready flyers — all in about 2 minutes.',
-  keywords: ['real estate marketing', 'listing marketing automation', 'real estate agent tools', 'listing marketing', 'AI real estate'],
+  keywords: ['real estate marketing', 'listing marketing automation', 'real estate agent tools', 'commercial real estate marketing', 'offering memorandum', 'listing campaign generator'],
   authors: [{ name: 'ListOps' }],
   creator: 'ListOps',
   openGraph: {
@@ -61,7 +64,6 @@ export const metadata: Metadata = {
   },
   robots: { index: true, follow: true },
   metadataBase: new URL(process.env.NEXT_PUBLIC_APP_URL || 'https://listops.io'),
-  alternates: { canonical: '/' },
 }
 
 export const viewport: Viewport = {
@@ -74,22 +76,11 @@ export const viewport: Viewport = {
 export default function RootLayout({ children }: { children: React.ReactNode }) {
   return (
     <ClerkProvider
-      appearance={{
-        variables: {
-          colorPrimary: '#0f172a',
-          colorBackground: '#fef9f0',
-          fontFamily: 'DM Sans, system-ui, sans-serif',
-          borderRadius: '0.625rem',
-        },
-        elements: {
-          formButtonPrimary: 'bg-slate-900 hover:bg-slate-800 text-amber-50 font-medium',
-          card: 'shadow-xl border border-amber-100',
-          headerTitle: 'font-display text-slate-900',
-        },
-      }}
+      appearance={clerkAppearance}
     >
       <html lang="en" suppressHydrationWarning className={`${fontDisplay.variable} ${fontBody.variable} ${fontMono.variable}`}>
         <body className="antialiased min-h-screen">
+          <JsonLd data={[organizationLd(), websiteLd()]} />
           <PostHogProvider>
           {children}
           </PostHogProvider>

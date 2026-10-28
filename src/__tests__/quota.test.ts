@@ -7,27 +7,13 @@
 
 import { describe, test, expect } from 'vitest'
 import { CAMPAIGN_LIMITS } from '@/lib/plans'
+import { needsBillingReset, quotaWindow, addMonthsUtc } from '@/lib/quota-period'
 
 // ── Quota math helpers (extracted for pure unit testing) ──────
 
 function isQuotaAllowed(used: number, limit: number | 'unlimited'): boolean {
   if (limit === 'unlimited') return true
   return used < limit
-}
-
-function needsBillingReset(
-  lastResetAt: Date,
-  periodEnd: Date | null,
-  now: Date
-): boolean {
-  if (periodEnd) {
-    // Reset if lastResetAt is before the start of the current billing period
-    const periodStart = new Date(periodEnd.getTime() - 30 * 24 * 60 * 60 * 1000)
-    return lastResetAt < periodStart
-  }
-  // Calendar month fallback
-  return lastResetAt.getMonth() !== now.getMonth() ||
-         lastResetAt.getFullYear() !== now.getFullYear()
 }
 
 describe('Quota enforcement', () => {
@@ -99,5 +85,32 @@ describe('Billing period reset logic', () => {
     expect(calendarWouldReset).toBe(true)
     expect(billingWouldReset).toBe(false)
     // Billing-based reset is correct here — don't reset early
+  })
+
+  test('a reset recorded exactly at the period start does not reset again mid-period', () => {
+    // 31-day month: the old "periodEnd − 30 days" rule put the window start a day AFTER this reset.
+    const periodEnd = new Date('2025-03-15T00:00:00Z')
+    expect(needsBillingReset(new Date('2025-02-15T00:00:00Z'), periodEnd, new Date('2025-03-01T00:00:00Z'))).toBe(false)
+  })
+
+  test('annual plan: the period end is a year away, quota still resets monthly (not on every call)', () => {
+    const periodEnd = new Date('2026-06-15T00:00:00Z')
+    const sep20 = new Date('2025-09-20T12:00:00Z')
+    expect(quotaWindow(periodEnd, sep20).start.toISOString()).toBe('2025-09-15T00:00:00.000Z')
+    expect(quotaWindow(periodEnd, sep20).next.toISOString()).toBe('2025-10-15T00:00:00.000Z')
+    expect(needsBillingReset(new Date('2025-09-16T00:00:00Z'), periodEnd, sep20)).toBe(false) // already reset this month
+    expect(needsBillingReset(new Date('2025-08-20T00:00:00Z'), periodEnd, sep20)).toBe(true)  // last month's reset
+  })
+
+  test('stale / past period end falls back to calendar months', () => {
+    const w = quotaWindow(new Date('2025-01-01T00:00:00Z'), now)
+    expect(w.start.toISOString()).toBe('2025-03-01T00:00:00.000Z')
+    expect(w.next.toISOString()).toBe('2025-04-01T00:00:00.000Z')
+  })
+
+  test('month math clamps the day', () => {
+    expect(addMonthsUtc(new Date('2025-03-31T00:00:00Z'), -1).toISOString()).toBe('2025-02-28T00:00:00.000Z')
+    expect(addMonthsUtc(new Date('2024-03-31T00:00:00Z'), -1).toISOString()).toBe('2024-02-29T00:00:00.000Z')
+    expect(addMonthsUtc(new Date('2025-01-15T00:00:00Z'), -1).toISOString()).toBe('2024-12-15T00:00:00.000Z')
   })
 })

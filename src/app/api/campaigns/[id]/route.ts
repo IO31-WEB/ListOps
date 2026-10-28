@@ -1,6 +1,8 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { auth } from '@clerk/nextjs/server'
-import { getCampaign } from '@/lib/user-service'
+import { getCampaign, getUserWithDetails } from '@/lib/user-service'
+import { canAccess } from '@/lib/plans'
+import { resolvePlan } from '@/lib/plan-resolve'
 import { db } from '@/lib/db'
 import { campaigns } from '@/lib/db/schema'
 import { eq, and } from 'drizzle-orm'
@@ -16,6 +18,14 @@ export async function GET(
   const campaign = await getCampaign(id, userId)
   if (!campaign) return NextResponse.json({ error: 'Not found' }, { status: 404 })
 
+  // Server-side plan gate on READ as well as generate: what comes back is what the CURRENT plan owns.
+  const viewer = await getUserWithDetails(userId)
+  const plan = resolvePlan(viewer)
+  if ((campaign as any).campaignType === 'commercial' && !canAccess(plan, 'commercial_campaigns')) {
+    return NextResponse.json({ error: 'Commercial campaigns are part of the Commercial plan.', upgrade: true, locked: 'commercial' }, { status: 403 })
+  }
+  const can = (f: Parameters<typeof canAccess>[1]) => canAccess(plan, f)
+
   // Auto-expire campaigns stuck in 'generating' for more than 10 minutes.
   // This happens when the Vercel function times out before the AI finishes.
   if (campaign.status === 'generating') {
@@ -23,7 +33,7 @@ export async function GET(
     if (ageMs > 10 * 60 * 1000) {
       try {
         await db.update(campaigns)
-          .set({ status: 'failed', updatedAt: new Date() })
+          .set({ status: 'failed', failureReason: 'Timed out', updatedAt: new Date() })
           .where(eq(campaigns.id, campaign.id))
         campaign.status = 'failed'
       } catch { /* non-fatal */ }
@@ -50,18 +60,20 @@ export async function GET(
     ...campaign,
     // Content modules from analytics column
     listingCopy:    analytics.listingCopy    ?? null,
-    emailDrip:      analytics.emailDrip      ?? null,
+    emailDrip:      can('email_drip') ? (analytics.emailDrip ?? null) : null,
     printMaterials: analytics.printMaterials ?? null,
-    photoCaptions:  analytics.photoCaptions  ?? null,
-    micrositeCopy:  analytics.micrositeCopy  ?? null,
-    tiktok:         analytics.tiktok         ?? null,
-    linkedin:       analytics.linkedin       ?? null,
-    xThreads:       analytics.xThreads       ?? null,
-    stories:        analytics.stories        ?? null,
-    hashtagPacks:   analytics.hashtagPacks   ?? null,
+    photoCaptions:  can('photo_captions') ? (analytics.photoCaptions ?? null) : null,
+    micrositeCopy:  can('microsite_copy') ? (analytics.micrositeCopy ?? null) : null,
+    tiktok:         can('expanded_social') ? (analytics.tiktok ?? null) : null,
+    linkedin:       can('expanded_social') ? (analytics.linkedin ?? null) : null,
+    xThreads:       can('expanded_social') ? (analytics.xThreads ?? null) : null,
+    stories:        can('expanded_social') ? (analytics.stories ?? null) : null,
+    hashtagPacks:   can('expanded_social') ? (analytics.hashtagPacks ?? null) : null,
+    campaignType:   (campaign as any).campaignType ?? 'residential',
+    commercial:     can('commercial_campaigns') ? (analytics.commercial ?? null) : null,
     // Parsed video scripts
-    reelScripts,
-    virtualTourScripts,
+    reelScripts: can('video_script') ? reelScripts : null,
+    virtualTourScripts: can('virtual_tour_scripts') ? virtualTourScripts : null,
   }
 
   return NextResponse.json({ campaign: enriched })

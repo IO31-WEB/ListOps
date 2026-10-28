@@ -1,4 +1,7 @@
-import { describe, test, expect } from 'vitest'
+import { describe, test, expect, vi } from 'vitest'
+
+// ai-budget writes a spend ledger to the DB; tests only exercise its pure cost math.
+vi.mock('@/lib/db', () => ({ db: { insert: () => ({ values: () => Promise.resolve() }) } }))
 import { sniffImage } from '@/lib/image-validate'
 import { ListingInputSchema, assertOwnPhotoKeys, cleanText } from '@/lib/listing-schemas'
 import { estimateCostUsd } from '@/lib/ai-budget'

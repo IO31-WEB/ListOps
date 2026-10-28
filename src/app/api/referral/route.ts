@@ -41,6 +41,8 @@ export async function GET() {
     where: eq(referrals.referrerId, user.id),
   })
 
+  // Total Referred = everyone you invited or referred (seat invites + link signups). Signed Up = they created an account.
+  // Upgraded = a referred person whose OWN organization now has an active paid plan (seat invitees inherit a plan, so they never count here).
   const stats = {
     total: referred.length,
     signedUp: referred.filter(r => r.status === 'signed_up' || r.status === 'upgraded').length,

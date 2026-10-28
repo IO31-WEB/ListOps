@@ -1,9 +1,14 @@
 'use client'
 
+import { canAccess, type PlanTier } from '@/lib/plans'
 import { getBillingInfo } from '@/lib/billing-client'
+import { resolveBrandAssetUrl } from '@/lib/brand-assets'
 import { useState, useEffect, useCallback } from 'react'
 import { useParams, useRouter } from 'next/navigation'
 import Link from 'next/link'
+import { CommercialSections } from '@/components/campaign/commercial-sections'
+import { CommercialInsights } from '@/components/campaign/commercial-insights'
+import { USE_TYPE_LABEL, readCommercial } from '@/lib/commercial/types'
 import {
   ArrowLeft, Copy, Check, Download, Share2, ExternalLink,
   Facebook, Instagram, Mail, Printer, ChevronDown, ChevronUp,
@@ -12,6 +17,9 @@ import {
   Globe2, Send, RefreshCw,
 } from 'lucide-react'
 import toast from 'react-hot-toast'
+import { PhotoLightbox, PhotoThumb } from '@/components/ui/photo-lightbox'
+import { formatListingAddress } from '@/lib/address'
+import { CompliancePanel } from '@/components/dashboard/compliance-panel'
 
 // ── Types ──────────────────────────────────────────────────────
 
@@ -31,6 +39,7 @@ interface PhotoCaption {
 }
 
 interface Campaign {
+  campaignType?: 'residential' | 'commercial'; commercial?: any
   id: string; status: string; createdAt: string; generationMs?: number
   micrositeSlug?: string; micrositePublished?: boolean; micrositeViews?: number
   facebookPosts?: Array<{ week: number; theme: string; copy: string; hashtags?: string[] }>
@@ -65,7 +74,7 @@ interface Campaign {
   listing?: {
     address?: string; city?: string; state?: string; price?: string
     bedrooms?: number; bathrooms?: string; sqft?: number; photos?: string[]
-    description?: string
+    description?: string; commercial?: unknown
   }
   brandKit?: {
     agentName?: string; logoUrl?: string; brokerageLogo?: string
@@ -492,27 +501,47 @@ function EmailCampaignsSection({ emailJustListed, emailStillAvailable, drip, onR
 
 function PrintOfflineSection({ print, campaignId, onRegenerate, regenerating }: { print: NonNullable<Campaign['printMaterials']>; campaignId: string; onRegenerate?: () => void; regenerating?: boolean }) {
   const [downloadingPdf, setDownloadingPdf] = useState(false)
+  const [downloadingBrochure, setDownloadingBrochure] = useState(false)
   const handlePdf = async () => {
     setDownloadingPdf(true)
     try { const res = await fetch(`/api/campaigns/${campaignId}/pdf`,{method:'POST'}); const d = await res.json(); if(d.url) window.open(d.url,'_blank') }
     catch { alert('PDF failed.') } finally { setDownloadingPdf(false) }
   }
+  // Brochure: the server renders the two-sided tri-fold (with bleed). If it can't produce a PDF it returns the page URL instead.
+  const handleBrochurePdf = async () => {
+    setDownloadingBrochure(true)
+    try {
+      const res = await fetch(`/api/campaigns/${campaignId}/pdf`, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ doc: 'brochure' }) })
+      const d = await res.json()
+      if (!res.ok) throw new Error(d.error || 'PDF failed.')
+      if (d.url) window.open(d.url, '_blank', 'noopener')
+    } catch (e) { alert(e instanceof Error ? e.message : 'PDF failed.') } finally { setDownloadingBrochure(false) }
+  }
   const items = [
     { label: 'Yard Sign Rider', icon: '🪧', note: 'Standard 6" rider', content: print.yardSignRider },
     { label: 'Postcard Headline', icon: '📮', content: print.postcardHeadline },
     { label: 'Postcard Body', icon: '📮', note: 'Door-knocker back copy', content: print.postcardBody },
-    { label: 'Open House Info Packet', icon: '🏡', note: 'Welcome paragraph', content: print.openHouseSignIn },
-    { label: 'Brochure Copy', icon: '📄', content: print.brochureCopy },
+    { label: 'Open House Welcome Paragraph', icon: '🏡', note: 'Welcome paragraph', content: print.openHouseSignIn },
+    { label: 'Brochure Copy', icon: '📄', note: 'Used in the brochure above', content: print.brochureCopy },
     { label: 'Magazine Ad', icon: '📰', note: 'Premium format', content: print.magazineAd },
   ]
   return (
     <Section title="Print & Offline" badge="6 formats" icon={Printer} accent="amber" onRegenerate={onRegenerate} regenerating={regenerating}>
       <div className="p-5 border-b border-slate-100 flex items-center justify-between gap-4 flex-wrap bg-amber-50">
-        <div><p className="text-sm font-semibold text-slate-900">Print-Ready Listing Flyer</p><p className="text-xs text-slate-500 mt-0.5">Fully branded with your colors and agent info</p></div>
+        <div><p className="text-sm font-semibold text-slate-900">Print-Ready Listing Flyer</p><p className="text-xs text-slate-500 mt-0.5">Three premium styles, plus Open House and Price Improvement flyers — branded with your colors and agent info</p></div>
         <div className="flex gap-2">
           <a href={`/flyer/${campaignId}`} target="_blank" rel="noopener noreferrer" className="inline-flex items-center gap-2 bg-white border border-slate-200 text-slate-700 text-sm font-semibold px-4 py-2 rounded-xl hover:bg-slate-50 transition-colors"><ExternalLink className="w-4 h-4" />View Flyer</a>
           <button onClick={handlePdf} disabled={downloadingPdf} className="inline-flex items-center gap-2 bg-slate-900 text-white text-sm font-semibold px-4 py-2 rounded-xl hover:bg-slate-800 transition-colors disabled:opacity-60">
             {downloadingPdf ? <><span className="w-4 h-4 border-2 border-white/30 border-t-white rounded-full animate-spin" />Generating...</> : <><Download className="w-4 h-4" />Download PDF</>}
+          </button>
+        </div>
+      </div>
+      <div className="p-5 border-b border-slate-100 flex items-center justify-between gap-4 flex-wrap bg-amber-50/60">
+        <div className="min-w-0"><p className="text-sm font-semibold text-slate-900">Print-Ready Tri-Fold Brochure</p><p className="text-xs text-slate-500 mt-0.5">Designed two-sided brochure from your brochure copy, photos and brand — a press-ready PDF with bleed for VistaPrint or any print shop</p></div>
+        <div className="flex gap-2 flex-wrap">
+          <a href={`/brochure/${campaignId}`} target="_blank" rel="noopener noreferrer" className="inline-flex items-center gap-2 bg-white border border-slate-200 text-slate-700 text-sm font-semibold px-4 py-2 rounded-xl hover:bg-slate-50 transition-colors"><ExternalLink className="w-4 h-4" />View Brochure</a>
+          <button onClick={handleBrochurePdf} disabled={downloadingBrochure} className="inline-flex items-center gap-2 bg-slate-900 text-white text-sm font-semibold px-4 py-2 rounded-xl hover:bg-slate-800 transition-colors disabled:opacity-60">
+            {downloadingBrochure ? <><span className="w-4 h-4 border-2 border-white/30 border-t-white rounded-full animate-spin" />Generating...</> : <><Download className="w-4 h-4" />Download PDF</>}
           </button>
         </div>
       </div>
@@ -578,7 +607,7 @@ function VideoSection({ reelScripts, virtualTourScripts, onRegenerate, regenerat
   )
 }
 
-// ── Section 6: Microsite Copy Editor ──────────────────────────
+// ── Section 6: Microsite Copy ──────────────────────────
 
 function MicrositeCopySection({ micrositeCopy, micrositeSlug, micrositePublished, campaignId, onToggle, publishing, onRegenerate, regenerating }: {
   micrositeCopy: NonNullable<Campaign['micrositeCopy']>; micrositeSlug?: string; micrositePublished?: boolean
@@ -597,12 +626,14 @@ function MicrositeCopySection({ micrositeCopy, micrositeSlug, micrositePublished
     { label: 'Photo Caption Template', content: micrositeCopy.photoCaptionTemplate },
   ]
   return (
-    <Section title="Microsite Copy Editor" badge="Live Page" icon={Globe2} accent="blue" onRegenerate={onRegenerate} regenerating={regenerating}>
+    <Section title="Microsite Copy" badge="Live Page" icon={Globe2} accent="blue" onRegenerate={onRegenerate} regenerating={regenerating}>
       <div className="p-4 border-b border-slate-100 flex items-center justify-between gap-4 bg-blue-50 flex-wrap">
         <div className="flex items-center gap-3">
           <div className={`w-2 h-2 rounded-full ${micrositePublished ? 'bg-green-500' : 'bg-slate-400'}`} />
           <span className="text-sm font-semibold text-slate-900">{micrositePublished ? 'Microsite is live' : 'Microsite is unpublished'}</span>
           {micrositePublished && micrositeSlug && <a href={`/l/${micrositeSlug}`} target="_blank" rel="noopener noreferrer" className="text-xs text-blue-600 hover:underline flex items-center gap-1"><Eye className="w-3 h-3" />View live</a>}
+          {micrositeSlug && <span className="text-xs text-slate-500 font-mono break-all">listops.io/l/{micrositeSlug}</span>}
+          {micrositeSlug && <CopyButton text={`https://listops.io/l/${micrositeSlug}`} label="Copy link" />}
         </div>
         <button onClick={onToggle} disabled={publishing}
           className={`inline-flex items-center gap-1.5 text-xs font-semibold px-3 py-1.5 rounded-lg transition-colors ${micrositePublished ? 'bg-slate-200 text-slate-700 hover:bg-slate-300' : 'bg-green-600 text-white hover:bg-green-700'}`}>
@@ -626,7 +657,7 @@ function MicrositeCopySection({ micrositeCopy, micrositeSlug, micrositePublished
 
 // ── Section 7: Photo Captions ──────────────────────────────────
 
-function PhotoCaptionsSection({ captions, photos, onRegenerate, regenerating }: { captions: PhotoCaption[]; photos: string[]; onRegenerate?: () => void; regenerating?: boolean }) {
+function PhotoCaptionsSection({ captions, photos, onOpenPhoto, onRegenerate, regenerating }: { captions: PhotoCaption[]; photos: string[]; onOpenPhoto: (i: number) => void; onRegenerate?: () => void; regenerating?: boolean }) {
   return (
     <Section title="Photo Captions" badge={`${captions.length} photos`} icon={Camera} accent="rose" onRegenerate={onRegenerate} regenerating={regenerating}>
       <p className="text-xs text-slate-400 italic px-5 py-3 border-b border-slate-100">Alt text, Instagram captions, story overlay text, and staging tips for each photo.</p>
@@ -635,7 +666,7 @@ function PhotoCaptionsSection({ captions, photos, onRegenerate, regenerating }: 
           <div key={i} className="p-5">
             <div className="flex gap-4">
               {photos[i]
-                ? <a href={photos[i]} target="_blank" rel="noopener noreferrer" className="w-20 h-20 rounded-xl overflow-hidden bg-slate-100 flex-shrink-0 hover:opacity-80 transition-opacity"><img src={photos[i]} alt={cap.altText} className="w-full h-full object-cover" /></a>
+                ? <button type="button" onClick={() => onOpenPhoto(i)} aria-label={`View photo ${i + 1} full size`} className="w-20 h-20 rounded-xl overflow-hidden bg-slate-100 flex-shrink-0 cursor-zoom-in hover:opacity-80 transition-opacity"><PhotoThumb src={photos[i]} alt={cap.altText} className="w-full h-full object-cover" /></button>
                 : <div className="w-20 h-20 rounded-xl bg-slate-100 flex-shrink-0 flex items-center justify-center"><Camera className="w-6 h-6 text-slate-300" /></div>
               }
               <div className="flex-1 space-y-2 min-w-0">
@@ -663,6 +694,7 @@ export default function CampaignDetailPage() {
   const [campaign, setCampaign] = useState<Campaign | null>(null)
   const [loading, setLoading] = useState(true)
   const [publishing, setPublishing] = useState(false)
+  const [lightbox, setLightbox] = useState<number | null>(null)
   const [planTier, setPlanTier] = useState<string>('free')
   const [regenerating, setRegenerating] = useState<string | null>(null)  // section key being regenerated
 
@@ -674,7 +706,11 @@ export default function CampaignDetailPage() {
   const fetchCampaign = async () => {
     try {
       const res = await fetch(`/api/campaigns/${id}`)
-      if (!res.ok) { if (res.status === 404) router.push('/dashboard/campaigns'); throw new Error('Not found') }
+      if (!res.ok) {
+        if (res.status === 404) router.push('/dashboard/campaigns')
+        if (res.status === 403) { const d = await res.json().catch(() => ({})); if (d?.locked === 'commercial') { router.push('/dashboard/commercial'); return } }
+        throw new Error('Not found')
+      }
       const data = await res.json()
       setCampaign(data.campaign)
     } catch { toast.error('Could not load campaign') }
@@ -686,9 +722,12 @@ export default function CampaignDetailPage() {
     setRegenerating(section)
     const sectionLabels: Record<string, string> = {
       listingCopy: 'Listing Copy',
+      offering: 'Offering copy',
+      om: 'OM sections',
+      emails: 'Email sequence',
       social: 'Social Calendar',
       email: 'Email Campaigns',
-      emailDrip: 'Email Drip',
+      emailDrip: 'Email Templates',
       print: 'Print Materials',
       video: 'Video & Reel Scripts',
       microsite: 'Microsite Copy',
@@ -729,10 +768,12 @@ export default function CampaignDetailPage() {
   if (loading) return <div className="flex items-center justify-center h-64"><Loader2 className="w-8 h-8 text-amber-400 animate-spin" /></div>
   if (!campaign) return null
 
-  const address = [campaign.listing?.address, campaign.listing?.city, campaign.listing?.state].filter(Boolean).join(', ')
+  const address = formatListingAddress(campaign.listing)
   const photos = (campaign.listing?.photos ?? []) as string[]
-  const isPro = ['pro', 'commercial', 'brokerage', 'enterprise'].includes(planTier)
-  const isStarter = ['starter', 'pro', 'commercial', 'brokerage', 'enterprise'].includes(planTier)
+  const isPro = canAccess(planTier as PlanTier, 'expanded_social')
+  const isStarter = canAccess(planTier as PlanTier, 'brand_kit')
+  const isCommercial = campaign.campaignType === 'commercial'
+  const cre = isCommercial ? readCommercial(campaign.listing?.commercial) : null
 
   let reelScripts: ReelScript[] = []
   let virtualTourScripts: VirtualTourScript[] = []
@@ -757,28 +798,49 @@ export default function CampaignDetailPage() {
           <div>
             {(campaign.brandKit?.logoUrl || campaign.brandKit?.brokerageLogo) && (
               <div className="flex items-center gap-3 mb-3">
-                {campaign.brandKit?.logoUrl && <img src={campaign.brandKit.logoUrl} alt="Agent Logo" className="h-8 max-w-[100px] object-contain" />}
-                {campaign.brandKit?.brokerageLogo && <img src={campaign.brandKit.brokerageLogo} alt="Brokerage Logo" className="h-7 max-w-[90px] object-contain opacity-80" />}
+                {campaign.brandKit?.logoUrl && <img src={resolveBrandAssetUrl(campaign.brandKit.logoUrl)} onError={e => { e.currentTarget.style.display = 'none' }} alt="Agent Logo" className="h-8 max-w-[100px] object-contain" />}
+                {campaign.brandKit?.brokerageLogo && <img src={resolveBrandAssetUrl(campaign.brandKit.brokerageLogo)} onError={e => { e.currentTarget.style.display = 'none' }} alt="Brokerage Logo" className="h-7 max-w-[90px] object-contain opacity-80" />}
               </div>
             )}
             <h1 className="font-display text-2xl font-semibold text-slate-900">{address || 'Campaign'}</h1>
             <div className="flex items-center gap-3 mt-1.5 text-xs text-slate-500 flex-wrap">
               {campaign.listing?.price && <span>${Number(campaign.listing.price).toLocaleString()}</span>}
+              {cre && <span className="bg-slate-100 text-slate-700 rounded-full px-2 py-0.5 font-medium">{USE_TYPE_LABEL[cre.useType]} · {cre.offering === 'lease' ? 'For lease' : 'For sale'}</span>}
               {campaign.listing?.bedrooms && <span>{campaign.listing.bedrooms} bd</span>}
               {campaign.listing?.bathrooms && <span>{campaign.listing.bathrooms} ba</span>}
-              {campaign.listing?.sqft && <span>{campaign.listing.sqft?.toLocaleString()} sqft</span>}
+              {campaign.listing?.sqft && <span>{campaign.listing.sqft?.toLocaleString()} {isCommercial ? 'SF' : 'sqft'}</span>}
               <span className={`px-2 py-0.5 rounded-full capitalize font-medium ${campaign.status === 'complete' ? 'bg-green-100 text-green-700' : 'bg-amber-100 text-amber-700'}`}>{campaign.status}</span>
               {campaign.generationMs && <span className="flex items-center gap-1"><Zap className="w-3 h-3" />Generated in {(campaign.generationMs/1000).toFixed(1)}s</span>}
             </div>
           </div>
-          {campaign.micrositeSlug && campaign.micrositePublished && (
-            <a href={`/l/${campaign.micrositeSlug}`} target="_blank" rel="noopener noreferrer"
-              className="inline-flex items-center gap-1.5 text-xs font-medium text-blue-600 bg-blue-50 hover:bg-blue-100 px-3 py-1.5 rounded-lg transition-colors flex-shrink-0">
-              <Eye className="w-3.5 h-3.5" />View Microsite ({campaign.micrositeViews ?? 0} views)
-            </a>
-          )}
+          <div className="flex items-center gap-2 flex-wrap flex-shrink-0">
+            <Link href={`/dashboard/campaigns/${campaign.id}/performance`}
+              className="inline-flex items-center gap-1.5 text-xs font-semibold text-slate-700 bg-white border border-slate-200 hover:bg-slate-50 px-3 py-1.5 rounded-lg transition-colors">
+              Performance
+            </Link>
+            <Link href={`/dashboard/social?campaign=${campaign.id}`}
+              className="inline-flex items-center gap-1.5 text-xs font-semibold text-slate-700 bg-white border border-slate-200 hover:bg-slate-50 px-3 py-1.5 rounded-lg transition-colors">
+              Schedule posts
+            </Link>
+            <Link href={`/dashboard/campaigns/${campaign.id}/approval`}
+              className="inline-flex items-center gap-1.5 text-xs font-semibold text-slate-700 bg-white border border-slate-200 hover:bg-slate-50 px-3 py-1.5 rounded-lg transition-colors">
+              Seller approval
+            </Link>
+            <Link href={`/dashboard/campaigns/${campaign.id}/kit`}
+              className="inline-flex items-center gap-1.5 text-xs font-semibold text-white bg-slate-900 hover:bg-slate-800 px-3 py-1.5 rounded-lg transition-colors">
+              <Image className="w-3.5 h-3.5" />Visual Kit
+            </Link>
+            {campaign.micrositeSlug && campaign.micrositePublished && (
+              <a href={`/l/${campaign.micrositeSlug}`} target="_blank" rel="noopener noreferrer"
+                className="inline-flex items-center gap-1.5 text-xs font-medium text-blue-600 bg-blue-50 hover:bg-blue-100 px-3 py-1.5 rounded-lg transition-colors">
+                <Eye className="w-3.5 h-3.5" />View Microsite ({campaign.micrositeViews ?? 0} views)
+              </a>
+            )}
+          </div>
         </div>
       </div>
+
+      <CompliancePanel campaignId={campaign.id} showBrand={isStarter} onFixed={fetchCampaign} />
 
       {/* Property Photos */}
       <div className="bg-white rounded-2xl border border-slate-200 overflow-hidden">
@@ -787,11 +849,23 @@ export default function CampaignDetailPage() {
           {photos.length > 0 && <span className="text-xs text-slate-500 bg-slate-100 px-2 py-0.5 rounded-full">{photos.length} photos</span>}
         </div>
         {photos.length > 0
-          ? <div className="p-4 grid grid-cols-2 sm:grid-cols-3 gap-3">{photos.slice(0,6).map((photo,i) => <a key={i} href={photo} target="_blank" rel="noopener noreferrer" className="aspect-video rounded-xl overflow-hidden bg-slate-100 block hover:opacity-90 transition-opacity"><img src={photo} alt={`Photo ${i+1}`} className="w-full h-full object-cover" /></a>)}</div>
+          ? <div className="p-4 grid grid-cols-2 sm:grid-cols-3 gap-3">{photos.map((photo,i) => <button key={i} type="button" onClick={() => setLightbox(i)} aria-label={`View photo ${i+1} full size`} className="aspect-video rounded-xl overflow-hidden bg-slate-100 block cursor-zoom-in hover:opacity-90 transition-opacity"><PhotoThumb src={photo} alt={`Photo ${i+1}`} className="w-full h-full object-cover" /></button>)}</div>
           : <div className="p-8 text-center"><div className="text-4xl mb-3">🏡</div><p className="text-sm font-semibold text-slate-500 mb-1">No photos available</p><p className="text-xs text-slate-400">Photos you upload with your listing will appear here.</p></div>
         }
       </div>
 
+      <PhotoLightbox photos={photos} index={lightbox} onChange={setLightbox} />
+
+      {isCommercial && cre && canAccess(planTier as PlanTier, 'commercial_underwriting') && (
+        <CommercialInsights details={cre} price={campaign.listing?.price ? Number(campaign.listing.price) : null} sqft={campaign.listing?.sqft ?? null} yearBuilt={(campaign.listing as any)?.yearBuilt ?? null} photoCount={photos.length} descriptionLength={(campaign.listing?.description ?? '').length} />
+      )}
+
+      {isCommercial ? (
+        <CommercialSections
+          c={{ id: campaign.id, status: campaign.status, commercial: (campaign.commercial ?? null) as any, facebookPosts: campaign.facebookPosts as any, linkedin: campaign.linkedin as any, micrositeSlug: campaign.micrositeSlug, micrositePublished: campaign.micrositePublished, micrositeCopy: campaign.micrositeCopy as any }}
+          canOm={canAccess(planTier as PlanTier, 'commercial_om')} canMicrosite={isStarter} onRegenerate={handleRegenerate} regenerating={regenerating} canSend={canAccess(planTier as PlanTier, 'outreach_send')} publishing={publishing} onToggleMicrosite={toggleMicrosite} />
+      ) : (
+      <>
       {/* 1. Listing Copy */}
       {campaign.listingCopy
         ? <ListingCopySection data={campaign.listingCopy} onRegenerate={() => handleRegenerate('listingCopy')} regenerating={regenerating === 'listingCopy'} />
@@ -803,7 +877,7 @@ export default function CampaignDetailPage() {
       {/* 3. Email Campaigns */}
       <EmailCampaignsSection emailJustListed={campaign.emailJustListed} emailStillAvailable={campaign.emailStillAvailable} drip={isStarter ? campaign.emailDrip : undefined} onRegenerate={() => handleRegenerate('email')} regenerating={regenerating === 'email'} onRegenerateDrip={isStarter ? () => handleRegenerate('emailDrip') : undefined} regeneratingDrip={regenerating === 'emailDrip'} />
       {!isStarter && campaign.emailJustListed && (
-        <LockedSection title="Email Drip Sequences" icon={Mail} plan="Starter"
+        <LockedSection title="Email Templates (8)" icon={Mail} plan="Starter"
           description="Buyer Day 1–30 drip, seller updates, open house invites, post-showing feedback, and market report newsletters." />
       )}
 
@@ -819,19 +893,21 @@ export default function CampaignDetailPage() {
             description="6 weeks of social reel scripts plus Matterport walkthrough narration, 30-sec highlight reel, drone voice-over, and timed walkthrough scripts." />
       }
 
-      {/* 6. Microsite Copy Editor */}
+      {/* 6. Microsite Copy */}
       {isStarter && campaign.micrositeCopy
         ? <MicrositeCopySection micrositeCopy={campaign.micrositeCopy} micrositeSlug={campaign.micrositeSlug} micrositePublished={campaign.micrositePublished} campaignId={campaign.id} onToggle={toggleMicrosite} publishing={publishing} onRegenerate={() => handleRegenerate('microsite')} regenerating={regenerating === 'microsite'} />
         : !isStarter
-          ? <LockedSection title="Microsite Copy Editor" icon={Globe2} plan="Starter"
+          ? <LockedSection title="Microsite Copy" icon={Globe2} plan="Starter"
               description="Hero headline, about section, neighborhood story, and CTA copy for your listing microsite — edit and publish in one click." />
           : null
       }
 
       {/* 7. Photo Captions */}
       {campaign.photoCaptions && campaign.photoCaptions.length > 0
-        ? <PhotoCaptionsSection captions={campaign.photoCaptions} photos={photos} onRegenerate={() => handleRegenerate('photoCaptions')} regenerating={regenerating === 'photoCaptions'} />
+        ? <PhotoCaptionsSection captions={campaign.photoCaptions} photos={photos} onOpenPhoto={setLightbox} onRegenerate={() => handleRegenerate('photoCaptions')} regenerating={regenerating === 'photoCaptions'} />
         : null}
+      </>
+      )}
     </div>
   )
 }

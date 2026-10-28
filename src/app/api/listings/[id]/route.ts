@@ -1,10 +1,15 @@
 /** GET / PUT / DELETE /api/listings/:id — always scoped to the signed-in agent. */
+import { normalizeListing } from '@/lib/address'
+import { resolveListingPhotos } from '@/lib/photos'
 import { NextRequest, NextResponse } from 'next/server'
 import { ApiError, handleApiError, readJson, requireUserId } from '@/lib/api-utils'
 import { rateLimitListingWrite, rateLimitHeaders } from '@/lib/ratelimit'
-import { ListingInputSchema, UuidSchema } from '@/lib/listing-schemas'
+import { canAccess } from '@/lib/plans'
+import { resolvePlan } from '@/lib/plan-resolve'
+import { isCommercialInput, ListingInputSchema, UuidSchema } from '@/lib/listing-schemas'
 import { getUserWithDetails } from '@/lib/user-service'
 import { deleteOwnListing, getOwnListing, updateListing } from '@/lib/listing-service'
+import { logAudit } from '@/lib/audit'
 
 type Ctx = { params: Promise<{ id: string }> }
 
@@ -26,11 +31,11 @@ export async function GET(_req: NextRequest, ctx: Ctx) {
     // Whitelist the response — never return rawData / enrichmentData wholesale
     return NextResponse.json({
       listing: {
-        id: row.id, address: row.address, city: row.city, state: row.state, zip: row.zip,
+        id: row.id, ...normalizeListing({ address: row.address, city: row.city, state: row.state }), zip: row.zip,
         price: row.price ? Number(row.price) : null, bedrooms: row.bedrooms,
         bathrooms: row.bathrooms ? Number(row.bathrooms) : null, sqft: row.sqft, yearBuilt: row.yearBuilt,
         propertyType: row.propertyType, description: row.description, features: row.features ?? [],
-        photos: row.photos ?? [], photoKeys: row.photoKeys ?? [], source: row.source,
+        photos: resolveListingPhotos(row), photoKeys: row.photoKeys ?? [], source: row.source,
       },
     })
   } catch (err) {
@@ -44,6 +49,8 @@ export async function PUT(request: NextRequest, ctx: Ctx) {
     const rl = await rateLimitListingWrite(userId)
     if (!rl.success) throw new ApiError(429, 'Too many requests. Please slow down.', rateLimitHeaders(rl))
     const input = ListingInputSchema.parse(await readJson(request))
+    // Hard gate: commercial listings (CRE details or CRE-only property types) need the Commercial plan or above.
+    if (isCommercialInput(input) && !canAccess(resolvePlan(user), 'commercial_campaigns')) throw new ApiError(403, 'Commercial listings are part of the Commercial plan.')
     const row = await updateListing(user.id, userId, id, input)
     if (!row) throw new ApiError(404, 'Not found')
     return NextResponse.json({ id: row.id })
@@ -52,11 +59,12 @@ export async function PUT(request: NextRequest, ctx: Ctx) {
   }
 }
 
-export async function DELETE(_req: NextRequest, ctx: Ctx) {
+export async function DELETE(req: NextRequest, ctx: Ctx) {
   try {
-    const { user, id } = await resolve(ctx)
+    const { userId, user, id } = await resolve(ctx)
     const ok = await deleteOwnListing(user.id, id)
     if (!ok) throw new ApiError(404, 'Not found')
+    await logAudit({ action: 'listing.deleted', actorClerkId: userId, targetUserId: user.id, resourceType: 'listing', resourceId: id, request: req })
     return NextResponse.json({ ok: true })
   } catch (err) {
     return handleApiError(err, { route: 'listings/[id] DELETE' })

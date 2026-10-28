@@ -123,9 +123,37 @@ export const rateLimitGenerate = (userId: string) =>
 export const rateLimitAi = (userId: string, bucket: string, perHour: number) =>
   limit({ name: `ai-${bucket}`, limit: perHour, windowSeconds: 60 * 60, failClosed: true }, userId)
 
+/** Stripe checkout / portal session creation. */
+export const rateLimitBilling = (userId: string) =>
+  limit({ name: 'billing', limit: 10, windowSeconds: 60 * 60, failClosed: true }, userId)
+
+/** PDF rendering launches a headless browser — expensive. */
+export const rateLimitPdf = (userId: string) =>
+  limit({ name: 'pdf', limit: 10, windowSeconds: 10 * 60, failClosed: true }, userId)
+
+/** Visual-kit image renders (previews + downloads). Cheaper than a PDF render, but still CPU. */
+export const rateLimitVisualKit = (userId: string) =>
+  limit({ name: 'visual-kit', limit: 120, windowSeconds: 10 * 60, failClosed: true }, userId)
+
+/** Referral-code redemption (stops brute-forcing codes). */
+export const rateLimitReferral = (userId: string) =>
+  limit({ name: 'referral', limit: 10, windowSeconds: 60 * 60, failClosed: true }, userId)
+
+/** Admin mutations: generous for a human, tiny for a stolen session. */
+export const rateLimitAdmin = (adminClerkId: string) =>
+  limit({ name: 'admin', limit: 60, windowSeconds: 10 * 60, failClosed: true }, adminClerkId)
+
 /** Outreach email sends: 10 batches / day / user (each batch capped at 100 recipients in the route). */
 export const rateLimitEmailSend = (userId: string) =>
   limit({ name: 'email-send', limit: 10, windowSeconds: 24 * 60 * 60, failClosed: true }, userId)
+
+/** Team invites send email to third parties and mint seat tokens: 20 / day / user (the org-level cap in team-invite-rules is stricter). */
+export const rateLimitInvite = (userId: string) =>
+  limit({ name: 'team-invite', limit: 20, windowSeconds: 24 * 60 * 60, failClosed: true }, userId)
+
+/** Accepting an invite / claiming a referral: stops token and code brute-forcing. */
+export const rateLimitJoin = (userId: string) =>
+  limit({ name: 'team-join', limit: 20, windowSeconds: 60 * 60, failClosed: true }, userId)
 
 /** Address enrichment calls a paid third-party API. */
 export const rateLimitEnrich = (userId: string) =>
@@ -142,6 +170,38 @@ export const rateLimitListingWrite = (userId: string) =>
 /** Public contact form — keyed by IP. */
 export const rateLimitContact = (ip: string) =>
   limit({ name: 'contact', limit: 3, windowSeconds: 60 * 60, failClosed: true }, ip)
+
+/** Public microsite lead form — per visitor IP (a real buyer submits once or twice). */
+export const rateLimitLeadIp = (ip: string) =>
+  limit({ name: 'lead-ip', limit: 6, windowSeconds: 10 * 60, failClosed: true }, ip)
+
+/** Public microsite lead form — per listing, so one flooded listing can't spam an agent's inbox from many IPs. */
+export const rateLimitLeadSlug = (slug: string) =>
+  limit({ name: 'lead-slug', limit: 40, windowSeconds: 60 * 60, failClosed: true }, slug)
+
+/** Signed-in lead tools (settings, test webhook, export). */
+export const rateLimitLeadTools = (userId: string) =>
+  limit({ name: 'lead-tools', limit: 30, windowSeconds: 10 * 60, failClosed: false }, userId)
+
+/** Fair Housing scan / one-click rewrite on a campaign. */
+export const rateLimitCompliance = (userId: string) =>
+  limit({ name: 'compliance', limit: 60, windowSeconds: 10 * 60, failClosed: false }, userId)
+
+/** Public QR redirect: generous (open-house crowds share one Wi-Fi IP) and fail-open — over the limit a scan still redirects, it just isn't counted. */
+export const rateLimitQr = (ip: string) =>
+  limit({ name: 'qr-scan', limit: 300, windowSeconds: 10 * 60, failClosed: false }, ip)
+
+/** Public seller-approval submissions. */
+export const rateLimitApproval = (key: string) =>
+  limit({ name: 'approval', limit: 20, windowSeconds: 10 * 60, failClosed: true }, key)
+
+/** Signed-in QR management. */
+export const rateLimitQrManage = (userId: string) =>
+  limit({ name: 'qr-manage', limit: 60, windowSeconds: 10 * 60, failClosed: false }, userId)
+
+/** Social queue edits / planning / export. */
+export const rateLimitSocial = (userId: string) =>
+  limit({ name: 'social', limit: 120, windowSeconds: 10 * 60, failClosed: false }, userId)
 
 export const rateLimitAPI = (ip: string) =>
   limit({ name: 'api', limit: 60, windowSeconds: 60, failClosed: false }, ip)

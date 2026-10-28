@@ -1,19 +1,27 @@
 import Link from 'next/link'
-import { House, ArrowRight, CheckCircle, Zap, Star, Users, TrendingUp, Shield, Clock } from 'lucide-react'
+import { LogoMark } from '@/components/ui/logo'
+import { ArrowRight, CheckCircle, Users, TrendingUp, Shield, Clock } from 'lucide-react'
 import { PLANS } from '@/lib/plans'
 import { formatCurrency } from '@/lib/utils'
+import { JsonLd } from '@/components/seo/json-ld'
+import { softwareLd, faqLd } from '@/lib/seo'
+
+export const metadata = { alternates: { canonical: '/' } }
 
 export default function HomePage() {
   return (
     <div className="min-h-screen bg-[var(--cream)]">
+      <JsonLd data={[softwareLd(), faqLd([
+        { q: 'What does ListOps do?', a: 'ListOps turns your listing details and photos into a complete 6-week marketing campaign: social posts, email, MLS-ready description, print flyers and a listing microsite.' },
+        { q: 'Does ListOps use MLS data or scrape portals?', a: 'No. You enter or confirm listing details yourself. ListOps does not connect to an MLS, scrape listing sites or invent comps and market statistics.' },
+        { q: 'Does ListOps support commercial real estate?', a: 'Yes, on the Commercial plan and above: offering memorandum sections, teaser, one-pager, investor outreach drafts and an investment snapshot calculated from your own numbers.' },
+      ])]} />
       {/* ── Navigation ─────────────────────────────────── */}
       <nav className="fixed top-0 inset-x-0 z-50 glass border-b border-amber-100/60">
         <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
           <div className="flex items-center justify-between h-16">
             <Link href="/" className="flex items-center gap-2.5">
-              <div className="w-8 h-8 bg-slate-900 rounded-lg flex items-center justify-center">
-                <House className="w-4 h-4 text-amber-400" />
-              </div>
+              <LogoMark className="w-8 h-8" />
               <span className="font-display font-semibold text-slate-900 text-lg">ListOps</span>
             </Link>
 
@@ -51,7 +59,7 @@ export default function HomePage() {
           </h1>
 
           <p className="text-lg sm:text-xl text-slate-600 max-w-2xl mx-auto mb-10 leading-relaxed animate-fade-in animate-stagger-2">
-            Enter your listing details, add your photos, and get a complete 6-week marketing campaign — headlines, social posts, email sequences, print materials, video scripts, and a listing microsite — all generated in under 2 minutes.
+            Add your listing, upload your photos, and get a complete 6-week campaign in about 2 minutes: headlines, social posts, email sequences, print materials, video scripts, and a listing microsite.
           </p>
 
           <div className="flex flex-col sm:flex-row items-center justify-center gap-4 animate-fade-in animate-stagger-3">
@@ -74,10 +82,10 @@ export default function HomePage() {
         {/* Stats bar */}
         <div className="max-w-4xl mx-auto mt-20 grid grid-cols-2 sm:grid-cols-4 gap-px bg-slate-200 rounded-2xl overflow-hidden shadow-sm animate-fade-in animate-stagger-5">
           {[
-            { value: '<2 min', label: 'Avg. Generation Time' },
+            { value: '~2 min', label: 'Typical Generation Time' },
             { value: '10+', label: 'Content Modules' },
             { value: '6 Weeks', label: 'Of Posts & Emails' },
-            { value: '40+', label: 'Marketing Assets per Listing' },
+            { value: '35+', label: 'Marketing Assets per Listing' },
           ].map((stat) => (
             <div key={stat.label} className="bg-white px-6 py-6 text-center">
               <div className="font-display text-2xl sm:text-3xl font-semibold text-slate-900">{stat.value}</div>
@@ -93,7 +101,7 @@ export default function HomePage() {
           <div className="text-center mb-16">
             <p className="text-amber-600 font-medium text-sm uppercase tracking-widest mb-3">The Process</p>
             <h2 className="font-display text-4xl sm:text-5xl font-semibold text-slate-900">
-              From Listing to Launch <em>in Three Steps</em>
+              From Listing to Launch in <em>Three</em> Steps
             </h2>
           </div>
 
@@ -147,13 +155,13 @@ export default function HomePage() {
             {[
               { icon: '📝', tag: 'COPY', title: 'Listing Copy Suite', desc: '10 headline variations, full MLS-ready description, neighborhood story, SEO meta, Spanish translation, and tone variants for luxury, investor, and first-time buyer angles.', plan: 'All plans' },
               { icon: '📱', tag: 'FB+IG', title: '6-Week Social Calendar', desc: 'Themed posts for every week — launch, features, neighborhood, open house, investment value, and final call. Facebook and Instagram formatted separately.', plan: 'All plans' },
-              { icon: '📧', tag: 'EMAIL', title: 'Email Campaign Suite', desc: 'Just Listed and Still Available emails plus an 8-template drip sequence: buyer Day 1–30, seller update, open house invite, post-showing follow-up, and market report.', plan: 'Free (2) / Starter+ (all 8)' },
-              { icon: '🖨️', tag: 'PRINT', title: 'Print & Offline Materials', desc: 'Yard sign rider, postcard headline and body, open house info packet, brochure copy, and magazine ad — plus a fully branded print-ready PDF flyer.', plan: 'All plans' },
+              { icon: '📧', tag: 'EMAIL', title: 'Email Campaign Suite', desc: 'Just Listed and Still Available emails on every plan. Starter+ adds 8 ready-to-send templates: buyer follow-ups (Day 1, 7, 14, 30), seller update, open house invite, post-showing follow-up and market report. Copy them into your own email tool.', plan: 'Free (2 emails) / Starter+ (+8 templates)' },
+              { icon: '🖨️', tag: 'PRINT', title: 'Print & Offline Materials', desc: 'Yard sign rider, postcard headline and body, open house welcome paragraph, brochure copy, and magazine ad — plus a fully branded print-ready PDF flyer.', plan: 'All plans' },
               { icon: '📸', tag: 'PHOTO', title: 'AI Photo Captions', desc: 'Claude Vision analyzes your uploaded photos and writes: Instagram caption, SEO alt text, Stories overlay text, and a concrete staging improvement tip — per room.', plan: 'Starter+' },
               { icon: '🌐', tag: 'SITE', title: 'Listing Microsite', desc: 'Auto-generated property page at listops.io/l/[slug] with hero copy, neighborhood story, and CTA — publish or unpublish in one click. Includes view analytics.', plan: 'Starter+' },
               { icon: '🎬', tag: 'VIDEO', title: 'Video & Reel Scripts', desc: '6 weekly reel scripts with hook, full script, on-screen text, and music suggestion. Plus Matterport walkthrough, drone voice-over, 30-sec highlight reel, and timed walkthrough narration.', plan: 'Pro+' },
               { icon: '📲', tag: 'MULTI', title: 'TikTok, LinkedIn & X', desc: '6 weeks of TikTok scripts with trending audio suggestions, LinkedIn market-insight posts, X thread sequences, and Instagram/Facebook Stories slide decks.', plan: 'Pro+' },
-              { icon: '🏢', tag: 'WL', title: 'White-Label & Team Tools', desc: 'Replace all ListOps branding with your brokerage identity. Admin dashboard, per-agent analytics, compliance audit logs, and up to 25 agent seats.', plan: 'Brokerage+' },
+              { icon: '🏢', tag: 'WL', title: 'White-Label & Team Tools', desc: 'Your brokerage name, logo and colors on all generated content and flyers (via Brand Kit). Team management, per-agent performance analytics, a team activity log, CSV export of all team campaigns, and up to 25 agent seats.', plan: 'Brokerage+' },
             ].map((feature) => (
               <div key={feature.title} className="bg-white rounded-2xl p-6 border border-slate-100 card-hover">
                 <div className="flex items-start justify-between mb-4">
@@ -226,49 +234,8 @@ export default function HomePage() {
         </div>
       </section>
 
-      {/* ── Social Proof ───────────────────────────────── */}
-      <section className="py-24 px-4 sm:px-6 lg:px-8 bg-white">
-        <div className="max-w-6xl mx-auto">
-          <div className="text-center mb-12">
-            <h2 className="font-display text-3xl font-semibold text-slate-900">Loved by Real Estate Agents</h2>
-          </div>
-          <div className="grid md:grid-cols-3 gap-6">
-            {[
-              {
-                quote: "I used to spend 3 hours creating marketing content for each listing. Now it takes me under 2 minutes. ListOps paid for itself on the first listing.",
-                author: "Sarah M.",
-                role: "REALTOR® • Austin, TX",
-                rating: 5,
-              },
-              {
-                quote: "The flyers are genuinely better than what my brokerage produces. Every client asks who does our marketing. I tell them it's AI and they're shocked.",
-                author: "Marcus J.",
-                role: "Broker • Miami, FL",
-                rating: 5,
-              },
-              {
-                quote: "Upgraded to Brokerage plan and my whole team uses it. We've cut our marketing spend by $2,400/month and our listings look more professional than ever.",
-                author: "Jennifer R.",
-                role: "Team Lead • Denver, CO",
-                rating: 5,
-              },
-            ].map((review) => (
-              <div key={review.author} className="bg-slate-50 rounded-2xl p-6 border border-slate-100">
-                <div className="flex gap-0.5 mb-4">
-                  {Array.from({ length: review.rating }).map((_, i) => (
-                    <Star key={i} className="w-4 h-4 fill-amber-400 text-amber-400" />
-                  ))}
-                </div>
-                <p className="text-slate-700 text-sm leading-relaxed mb-5 italic">"{review.quote}"</p>
-                <div>
-                  <div className="font-semibold text-slate-900 text-sm">{review.author}</div>
-                  <div className="text-xs text-slate-500">{review.role}</div>
-                </div>
-              </div>
-            ))}
-          </div>
-        </div>
-      </section>
+      {/* Customer reviews/testimonials intentionally removed until we have REAL, consenting customer reviews
+          (written permission + accurate attribution; see LEGAL docs). Do not add placeholder quotes. */}
 
       {/* ── CTA ────────────────────────────────────────── */}
       <section className="py-24 px-4 sm:px-6 lg:px-8 bg-[var(--cream)]">
@@ -291,9 +258,7 @@ export default function HomePage() {
           <div className="grid sm:grid-cols-2 lg:grid-cols-4 gap-8 mb-12">
             <div>
               <div className="flex items-center gap-2 mb-4">
-                <div className="w-7 h-7 bg-amber-500 rounded-lg flex items-center justify-center">
-                  <Zap className="w-3.5 h-3.5 text-slate-900" />
-                </div>
+                <LogoMark className="w-7 h-7" tone="light" />
                 <span className="font-display font-semibold text-white">ListOps</span>
               </div>
               <p className="text-sm leading-relaxed">AI-powered marketing campaigns for real estate agents. Built from your listing and photos, Claude AI-powered.</p>

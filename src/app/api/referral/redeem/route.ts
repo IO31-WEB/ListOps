@@ -1,53 +1,38 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { auth } from '@clerk/nextjs/server'
-import { db } from '@/lib/db'
-import { users, referrals } from '@/lib/db/schema'
-import { eq } from 'drizzle-orm'
+import { z } from 'zod'
+import { claimReferral } from '@/lib/referrals'
 import { getUserWithDetails } from '@/lib/user-service'
 import { trackReferralSignup } from '@/lib/posthog'
+import { rateLimitReferral, rateLimitHeaders } from '@/lib/ratelimit'
+import { assertAdult } from '@/lib/age'
+import { handleApiError, readJson, ApiError } from '@/lib/api-utils'
+
+const Schema = z.object({ code: z.string().trim().toUpperCase().regex(/^[A-Z0-9_-]{3,32}$/) })
 
 export async function POST(req: NextRequest) {
-  const { userId } = await auth()
-  if (!userId) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
+  try {
+    const { userId } = await auth()
+    if (!userId) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
 
-  const { code } = await req.json()
-  if (!code) return NextResponse.json({ error: 'Referral code required' }, { status: 400 })
+    // Rate limit: stops brute-forcing referral codes.
+    const rl = await rateLimitReferral(userId)
+    if (!rl.success) throw new ApiError(429, 'Too many attempts. Please try again later.', rateLimitHeaders(rl))
 
-  const newUser = await getUserWithDetails(userId)
-  if (!newUser) return NextResponse.json({ error: 'User not found' }, { status: 404 })
+    const parsed = Schema.safeParse(await readJson(req, 1024))
+    if (!parsed.success) throw new ApiError(400, 'Please enter a valid referral code.')
+    const code = parsed.data.code
 
-  // Already used a referral code
-  if (newUser.referredBy) {
-    return NextResponse.json({ error: 'Referral code already applied' }, { status: 400 })
+    const newUser = await getUserWithDetails(userId)
+    if (!newUser) throw new ApiError(404, 'User not found')
+    assertAdult(newUser)
+
+    const res = await claimReferral(newUser, code)
+    if (!res.ok) throw new ApiError(res.status, res.error)
+
+    trackReferralSignup({ referrerId: res.referrerClerkId, newUserId: userId, referralCode: code })
+    return NextResponse.json({ success: true, message: 'Referral applied! It's counted as upgraded once you subscribe to a paid plan.' })
+  } catch (err) {
+    return handleApiError(err, { route: 'referral/redeem' })
   }
-
-  // Find referrer
-  const referrer = await db.query.users.findFirst({
-    where: eq(users.referralCode, code.toUpperCase()),
-  })
-
-  if (!referrer) return NextResponse.json({ error: 'Invalid referral code' }, { status: 404 })
-  if (referrer.id === newUser.id) return NextResponse.json({ error: 'Cannot refer yourself' }, { status: 400 })
-
-  // Record referral
-  await db.insert(referrals).values({
-    referrerId: referrer.id,
-    referredUserId: newUser.id,
-    referredEmail: newUser.email,
-    status: 'signed_up',
-    rewardGranted: false,
-  })
-
-  // Mark new user as referred
-  await db.update(users)
-    .set({ referredBy: referrer.id })
-    .where(eq(users.id, newUser.id))
-
-  trackReferralSignup({
-    referrerId: referrer.clerkId,
-    newUserId: userId,
-    referralCode: code,
-  })
-
-  return NextResponse.json({ success: true, message: 'Referral applied! You\'ll both get a free month when you upgrade.' })
 }

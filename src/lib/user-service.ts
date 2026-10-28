@@ -9,12 +9,16 @@
  *    consumeCampaignQuota() is the gate used by the generate route.
  */
 
+import { normalizeListing } from '@/lib/address'
+import { needsBillingReset, quotaWindow } from '@/lib/quota-period'
+import { resolveListingPhotos } from '@/lib/photos'
 import { db } from './db'
 import { users, organizations, brandKits, subscriptions, campaigns, auditLogs } from './db/schema'
-import { eq, and, desc, count, sql } from 'drizzle-orm'
+import { eq, and, desc, count, sql, isNull } from 'drizzle-orm'
 import { generateReferralCode, slugify } from './utils'
 import type { PlanTier } from './plans'
 import { CAMPAIGN_LIMITS } from './plans'
+import { resolvePlan } from './plan-resolve'
 import { clerkClient } from '@clerk/nextjs/server'
 
 // ── Get or create user from Clerk ─────────────────────────────
@@ -240,23 +244,32 @@ export async function checkCampaignQuota(clerkId: string): Promise<{
   if (!user) return { allowed: false, used: 0, limit: 0, planTier: 'free' }
 
   const sub = user.organization?.subscriptions?.[0]
-  const plan = (sub?.plan ?? 'free') as PlanTier
+  const plan = resolvePlan(user)
   const limit = CAMPAIGN_LIMITS[plan]
 
   const now = new Date()
 
   const periodEnd = sub?.stripeCurrentPeriodEnd
-  const needsReset = periodEnd
-    ? user.lastResetAt < new Date(periodEnd.getTime() - 30 * 24 * 60 * 60 * 1000)
-    : (now.getMonth() !== new Date(user.lastResetAt).getMonth() ||
-       now.getFullYear() !== new Date(user.lastResetAt).getFullYear())
+  const needsReset = needsBillingReset(user.lastResetAt, periodEnd, now)
 
-  const nextReset = periodEnd ?? new Date(now.getFullYear(), now.getMonth() + 1, 1)
+  const nextReset = quotaWindow(periodEnd, now).next
 
   // FIX: If reset is needed, return used=0 without writing to DB.
   // consumeCampaignQuota() handles the actual reset atomically.
   const effectiveUsed = needsReset ? 0 : user.campaignsUsedThisMonth
   return { allowed: limit === 'unlimited' || effectiveUsed < limit, used: effectiveUsed, limit, planTier: plan, resetsAt: nextReset }
+}
+
+/**
+ * Plan tier for a user by DB id. Read-only, no Clerk sync — for PUBLIC pages/routes (microsite lead forms)
+ * where the visitor has no session and we only need "what has the owner paid for".
+ */
+export async function getPlanTierForUserId(userId: string): Promise<PlanTier> {
+  const user = await db.query.users.findFirst({
+    where: eq(users.id, userId),
+    with: { organization: { with: { subscriptions: true } } },
+  })
+  return resolvePlan(user)
 }
 
 // ── Atomic quota gate + increment ─────────────────────────────
@@ -280,17 +293,14 @@ export async function consumeCampaignQuota(clerkId: string): Promise<{
   if (!user) return { allowed: false, used: 0, limit: 0, planTier: 'free', resetsAt: new Date() }
 
   const sub = user.organization?.subscriptions?.[0]
-  const plan = (sub?.plan ?? 'free') as PlanTier
+  const plan = resolvePlan(user)
   const limit = CAMPAIGN_LIMITS[plan]
 
   const now = new Date()
 
   // FIX: Reset based on Stripe billing period, not calendar month
   const periodEnd = sub?.stripeCurrentPeriodEnd
-  const needsReset = periodEnd
-    ? user.lastResetAt < new Date(periodEnd.getTime() - 30 * 24 * 60 * 60 * 1000)
-    : (now.getMonth() !== new Date(user.lastResetAt).getMonth() ||
-       now.getFullYear() !== new Date(user.lastResetAt).getFullYear())
+  const needsReset = needsBillingReset(user.lastResetAt, periodEnd, now)
 
   if (needsReset) {
     await db.update(users)
@@ -299,7 +309,7 @@ export async function consumeCampaignQuota(clerkId: string): Promise<{
     // After reset, counter is 0 — proceed as normal from 0
   }
 
-  const nextReset = periodEnd ?? new Date(now.getFullYear(), now.getMonth() + 1, 1)
+  const nextReset = quotaWindow(periodEnd, now).next
 
   // Unlimited plans: increment totals but don't gate
   if (limit === 'unlimited') {
@@ -357,7 +367,7 @@ export async function getDashboardStats(clerkId: string) {
   if (!user) return null
 
   const sub = user.organization?.subscriptions?.[0]
-  const planTier = (sub?.plan ?? 'free') as PlanTier
+  const planTier = resolvePlan(user)
 
   const [totalResult, recentCampaigns, genTimeResult, viewsResult] = await Promise.all([
     db.select({ count: count() }).from(campaigns).where(eq(campaigns.agentId, user.id)),
@@ -377,7 +387,7 @@ export async function getDashboardStats(clerkId: string) {
 
   const now = new Date()
   const periodEnd = sub?.stripeCurrentPeriodEnd
-  const nextReset = periodEnd ?? new Date(now.getFullYear(), now.getMonth() + 1, 1)
+  const nextReset = quotaWindow(periodEnd, now).next
   const daysUntilReset = Math.ceil((nextReset.getTime() - now.getTime()) / (1000 * 60 * 60 * 24))
 
   return {
@@ -418,7 +428,7 @@ export async function getUserCampaigns(clerkId: string, page = 1, pageLimit = 20
   ])
 
   return {
-    campaigns: allCampaigns,
+    campaigns: allCampaigns.map(c => ({ ...c, listing: normalizeListing(c.listing) })),
     total: totalResult[0]?.count ?? 0,
     pages: Math.ceil((totalResult[0]?.count ?? 0) / safeLimit),
   }
@@ -427,15 +437,18 @@ export async function getUserCampaigns(clerkId: string, page = 1, pageLimit = 20
 export async function getCampaign(campaignId: string, clerkId: string) {
   const user = await db.query.users.findFirst({ where: eq(users.clerkId, clerkId) })
   if (!user) return null
-  return db.query.campaigns.findFirst({
+  const row = await db.query.campaigns.findFirst({
     where: and(eq(campaigns.id, campaignId), eq(campaigns.agentId, user.id)),
     with: { listing: true, brandKit: true },
   })
+  if (!row) return row
+  // Display-time normalization: title-case address, and photo URLs derived from storage KEYS (never stale stored URLs).
+  return { ...row, listing: row.listing ? { ...normalizeListing(row.listing), photos: resolveListingPhotos(row.listing) } : row.listing }
 }
 
 export async function getTeamMembers(orgId: string) {
   return db.query.users.findMany({
-    where: eq(users.orgId, orgId),
+    where: and(eq(users.orgId, orgId), isNull(users.deletedAt)),
     orderBy: [desc(users.createdAt)],
     with: { brandKit: true },
   })

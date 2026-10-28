@@ -45,6 +45,20 @@
     box-sizing: border-box;
   }
 
+  /* Mobile guard: nothing may widen the page beyond the screen (a single over-wide element makes phones zoom out and
+     leave an empty strip on the right). `clip` hides overflow without creating a scroll container, so sticky headers keep working. */
+  html, body {
+    max-width: 100%;
+    overflow-x: clip;
+  }
+  /* Grid children can't shrink below their content by default, so one long word or URL stretches the whole column. */
+  .grid > * {
+    min-width: 0;
+  }
+  p, li, h1, h2, h3, h4, td, th, blockquote {
+    overflow-wrap: break-word;
+  }
+
   html {
     scroll-behavior: smooth;
     -webkit-font-smoothing: antialiased;

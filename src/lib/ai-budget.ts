@@ -16,6 +16,8 @@
 import { redisPipeline } from '@/lib/redis'
 import { ApiError } from '@/lib/api-utils'
 import { captureError } from '@/lib/monitoring'
+import { db } from '@/lib/db'
+import { aiUsage } from '@/lib/db/schema'
 
 const num = (v: string | undefined, d: number) => {
   const n = Number(v)
@@ -57,12 +59,16 @@ export async function assertBudgetAvailable(userId: string): Promise<void> {
 }
 
 /** Record spend after a call completes (best-effort; never throws). */
-export async function recordSpend(userId: string, inputTokens: number, outputTokens: number): Promise<number> {
-  return addSpend(userId, estimateCostUsd(inputTokens, outputTokens))
+export async function recordSpend(userId: string, inputTokens: number, outputTokens: number, kind = 'generate'): Promise<number> {
+  return addSpend(userId, estimateCostUsd(inputTokens, outputTokens), kind, inputTokens, outputTokens)
 }
 
 /** Add a flat dollar amount to the counters (used to reserve cost up-front for routes without token accounting). */
-export async function addSpend(userId: string, cost: number): Promise<number> {
+export async function addSpend(userId: string, cost: number, kind = 'other', inputTokens = 0, outputTokens = 0): Promise<number> {
+  // Durable ledger for the admin spend overview (best-effort: never fail a request because of bookkeeping).
+  await db.insert(aiUsage)
+    .values({ clerkId: userId, kind, inputTokens, outputTokens, costUsd: cost.toFixed(4) })
+    .catch(err => captureError(err, { context: 'ai_usage_insert' }))
   await redisPipeline([
     ['INCRBYFLOAT', `ai:spend:day:${day()}`, cost],
     ['EXPIRE', `ai:spend:day:${day()}`, 60 * 60 * 48],

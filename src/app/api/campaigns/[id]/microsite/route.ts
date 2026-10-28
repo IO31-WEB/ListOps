@@ -12,6 +12,7 @@
  * could publish/unpublish any campaign by ID.
  */
 
+import { isCommercialLocked } from '@/lib/plan-resolve'
 import { NextRequest, NextResponse } from 'next/server'
 import { auth } from '@clerk/nextjs/server'
 import { db } from '@/lib/db'
@@ -63,6 +64,7 @@ export async function POST(
   })
 
   if (!existing) return NextResponse.json({ error: 'Campaign not found' }, { status: 404 })
+  if (isCommercialLocked((existing as any).campaignType, quota.planTier)) return NextResponse.json({ error: 'Commercial campaigns are part of the Commercial plan.' }, { status: 403 })
 
   const [updated] = await db.update(campaigns)
     .set({ micrositePublished: body.publish, updatedAt: new Date() })
@@ -85,6 +87,7 @@ export async function PATCH(
 
   const campaign = await getCampaign(id, userId)
   if (!campaign) return NextResponse.json({ error: 'Not found' }, { status: 404 })
+  if (isCommercialLocked((campaign as any).campaignType, (await checkCampaignQuota(userId)).planTier)) return NextResponse.json({ error: 'Commercial campaigns are part of the Commercial plan.' }, { status: 403 })
 
   try {
     const existing = campaign.analytics as any ?? {}

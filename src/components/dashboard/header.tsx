@@ -15,11 +15,14 @@ const BREADCRUMBS: Record<string, string> = {
   '/dashboard/team': 'Team',
   '/dashboard/referral': 'Refer & Earn',
   '/dashboard/settings': 'Settings',
+  '/dashboard/account': 'Account',
 }
 
 const SEARCH_LINKS = [
   { label: 'New Campaign', href: '/dashboard/generate', desc: 'Generate a new 6-week campaign' },
   { label: 'My Campaigns', href: '/dashboard/campaigns', desc: 'View all your saved campaigns' },
+  { label: 'Leads', href: '/dashboard/leads', desc: 'Showing and info requests from your microsites' },
+  { label: 'Social Calendar', href: '/dashboard/social', desc: 'Schedule campaign posts and get daily reminders' },
   { label: 'Brand Kit', href: '/dashboard/brand', desc: 'Update your logo, colors, and agent info' },
   { label: 'Billing & Plans', href: '/dashboard/billing', desc: 'Upgrade or manage your subscription' },
   { label: 'Team', href: '/dashboard/team', desc: 'Invite and manage team members' },
@@ -46,32 +49,17 @@ function timeAgo(ms: number): string {
   return `${Math.floor(diff / 86_400_000)}d ago`
 }
 
-const NOTIF_STORAGE_KEY = 'listops_notifications_v1'
+// Read state = one "last opened the bell" timestamp. The server keeps the authoritative copy (so it follows the user
+// across devices); localStorage only avoids a flash of badge before the first response arrives.
+const SEEN_STORAGE_KEY = 'listops_notifications_seen_v2'
+const OLD_STORAGE_KEY = 'listops_notifications_v1' // retired: a cached list that never aged out and re-seeded itself
+const MAX_AGE_MS = 3 * 24 * 60 * 60 * 1000
 
-function getWelcomeNotifications(): Notification[] {
-  // Only the welcome notification — seeded once, marked read immediately
-  // Real campaign notifications come from the API
-  const now = Date.now()
-  return [
-    { id: 'welcome', type: 'info', title: 'Welcome to ListOps', body: 'Generate your first campaign to get started.', createdAt: now, read: false, href: '/dashboard/generate' },
-  ]
+function loadSeenAt(): number {
+  try { return Number(localStorage.getItem(SEEN_STORAGE_KEY)) || 0 } catch { return 0 }
 }
-
-function loadNotifications(): Notification[] {
-  if (typeof window === 'undefined') return []
-  try {
-    const saved = localStorage.getItem(NOTIF_STORAGE_KEY)
-    if (saved) {
-      const parsed = JSON.parse(saved) as Notification[]
-      // Validate it's an array with the right shape
-      if (Array.isArray(parsed) && parsed.length > 0 && parsed[0].id) return parsed
-    }
-  } catch {}
-  return getWelcomeNotifications()
-}
-
-function saveNotifications(notifs: Notification[]) {
-  try { localStorage.setItem(NOTIF_STORAGE_KEY, JSON.stringify(notifs)) } catch {}
+function saveSeenAt(ms: number) {
+  try { localStorage.setItem(SEEN_STORAGE_KEY, String(ms)) } catch {}
 }
 
 export function DashboardHeader() {
@@ -91,7 +79,10 @@ export function DashboardHeader() {
 
   // Notifications
   const [notifOpen, setNotifOpen] = useState(false)
-  const [notifications, setNotifications] = useState<Notification[]>(loadNotifications)
+  const [notifications, setNotifications] = useState<Notification[]>([])
+  const [seenAt, setSeenAt] = useState(0)
+  // While the dropdown is open, items newer than this stay highlighted even though the badge has already cleared.
+  const [highlightAfter, setHighlightAfter] = useState<number | null>(null)
   const [, setTick] = useState(0)
 
   // Re-render every 60s so timeAgo() stays current
@@ -100,26 +91,21 @@ export function DashboardHeader() {
     return () => clearInterval(interval)
   }, [])
 
-  // Persist to localStorage whenever notifications change
+  // Restore the last-seen time after mount (not in the initializer — that would differ between server and client).
   useEffect(() => {
-    saveNotifications(notifications)
-  }, [notifications])
+    try { localStorage.removeItem(OLD_STORAGE_KEY) } catch {}
+    setSeenAt(prev => Math.max(prev, loadSeenAt()))
+  }, [])
 
-  // Poll for real notifications every 2 minutes — and only while the tab is visible (was every 30s, always).
+  // Poll for notifications every 2 minutes — and only while the tab is visible.
   useEffect(() => {
     const fetchNotifs = async () => {
       try {
         const res = await fetch('/api/notifications')
         if (!res.ok) return
-        const data = await res.json()
-        if (data.notifications?.length) {
-          setNotifications(prev => {
-            const existingIds = new Set(prev.map((n: Notification) => n.id))
-            const newOnes = data.notifications.filter((n: Notification) => !existingIds.has(n.id))
-            if (!newOnes.length) return prev
-            return [...newOnes, ...prev]
-          })
-        }
+        const data = await res.json() as { notifications?: Notification[]; seenAt?: number }
+        setNotifications(Array.isArray(data.notifications) ? data.notifications : [])
+        if (typeof data.seenAt === 'number') setSeenAt(prev => Math.max(prev, data.seenAt as number))
       } catch {}
     }
     fetchNotifs()
@@ -128,19 +114,25 @@ export function DashboardHeader() {
     document.addEventListener('visibilitychange', onVisible)
     return () => { clearInterval(interval); document.removeEventListener('visibilitychange', onVisible) }
   }, [])
-  const unreadCount = notifications.filter(n => !n.read).length
+
+  // Only recent items are ever shown; unread = newer than the last time the bell was opened.
+  const visibleNotifs = notifications.filter(n => Date.now() - n.createdAt < MAX_AGE_MS)
+  const isUnread = (n: Notification) => n.createdAt > seenAt
+  const unreadCount = visibleNotifs.filter(isUnread).length
   const notifRef = useRef<HTMLDivElement>(null)
 
-  const markAllRead = () => setNotifications(prev => prev.map(n => ({ ...n, read: true })))
-
-  // Auto-mark all read when dropdown opens
-  useEffect(() => {
-    if (notifOpen) {
-      // Small delay so badge visually clears after dropdown is visible
-      const t = setTimeout(() => markAllRead(), 800)
-      return () => clearTimeout(t)
-    }
-  }, [notifOpen])
+  const markAllRead = () => {
+    const now = Date.now()
+    setSeenAt(now)
+    saveSeenAt(now)
+    fetch('/api/notifications/seen', { method: 'POST' }).catch(() => {})
+  }
+  const toggleNotifs = () => {
+    if (notifOpen) { setNotifOpen(false); setHighlightAfter(null); return }
+    setHighlightAfter(seenAt)
+    setNotifOpen(true)
+    if (unreadCount > 0) markAllRead()
+  }
 
   // Close dropdowns on outside click
   useEffect(() => {
@@ -242,13 +234,14 @@ export function DashboardHeader() {
         {/* Notifications */}
         <div ref={notifRef} className="relative">
           <button
-            onClick={() => { setNotifOpen(v => !v); if (!notifOpen) markAllRead() }}
+            onClick={toggleNotifs}
+            aria-label={unreadCount > 0 ? `Notifications, ${unreadCount} unread` : 'Notifications'}
             className="relative p-2 rounded-lg hover:bg-slate-100 transition-colors text-slate-500"
           >
             <Bell className="w-5 h-5" />
             {unreadCount > 0 && (
-              <span className="absolute top-1 right-1 w-4 h-4 bg-amber-500 rounded-full text-white text-[9px] font-bold flex items-center justify-center">
-                {unreadCount}
+              <span className="absolute top-0.5 right-0.5 min-w-4 h-4 px-1 bg-amber-500 rounded-full text-white text-[9px] font-bold flex items-center justify-center">
+                {unreadCount > 9 ? '9+' : unreadCount}
               </span>
             )}
           </button>
@@ -257,10 +250,12 @@ export function DashboardHeader() {
             <div className="absolute right-0 top-10 w-80 bg-white rounded-2xl shadow-xl border border-slate-200 overflow-hidden">
               <div className="px-4 py-3 border-b border-slate-100 flex items-center justify-between">
                 <span className="font-semibold text-sm text-slate-900">Notifications</span>
-                <button onClick={markAllRead} className="text-xs text-slate-400 hover:text-slate-600 transition-colors">Mark all read</button>
+                <button onClick={() => { markAllRead(); setHighlightAfter(null) }} className="text-xs text-slate-400 hover:text-slate-600 transition-colors">Mark all read</button>
               </div>
               <div className="divide-y divide-slate-100 max-h-80 overflow-y-auto">
-                {notifications.map(n => {
+                {visibleNotifs.length === 0 && <p className="px-4 py-6 text-center text-sm text-slate-400">You’re all caught up.</p>}
+                {visibleNotifs.map(n => {
+                  const fresh = highlightAfter !== null && n.createdAt > highlightAfter
                   const inner = (
                     <>
                       <div className="flex-shrink-0 mt-0.5">
@@ -273,12 +268,12 @@ export function DashboardHeader() {
                         <p className="text-xs text-slate-500 mt-0.5">{n.body}</p>
                         <p className="text-xs text-slate-400 mt-1">{timeAgo(n.createdAt)}</p>
                       </div>
-                      {!n.read && <span className="w-2 h-2 bg-amber-400 rounded-full flex-shrink-0 mt-1.5" />}
+                      {fresh && <span className="w-2 h-2 bg-amber-400 rounded-full flex-shrink-0 mt-1.5" />}
                     </>
                   )
-                  const baseClass = `px-4 py-3 flex gap-3 transition-colors ${!n.read ? 'bg-amber-50/40' : ''}`
+                  const baseClass = `px-4 py-3 flex gap-3 transition-colors ${fresh ? 'bg-amber-50/40' : ''}`
                   return n.href ? (
-                    <Link key={n.id} href={n.href} onClick={() => { setNotifications(prev => prev.map(x => x.id === n.id ? { ...x, read: true } : x)); setNotifOpen(false) }}
+                    <Link key={n.id} href={n.href} onClick={() => { setNotifOpen(false); setHighlightAfter(null) }}
                       className={`${baseClass} hover:bg-slate-50 cursor-pointer`}>
                       {inner}
                     </Link>

@@ -1,82 +1,99 @@
 'use client'
 
+import { LogoMark } from '@/components/ui/logo'
 import { useState } from 'react'
 import Link from 'next/link'
 import { RenewalNotice } from '@/components/billing/renewal-notice'
-import { House, ArrowRight, Check, X, HelpCircle } from 'lucide-react'
+import { PlanBadge } from '@/components/billing/plan-badge'
+import { ArrowRight, Check, X, HelpCircle } from 'lucide-react'
 import { PLANS, ENTERPRISE_PLAN } from '@/lib/plans'
 import { formatCurrency } from '@/lib/utils'
 
-const FEATURE_CATEGORIES = [
+type Cell = boolean | string
+interface FeatureRow { name: string; free: Cell; starter: Cell; pro: Cell; commercial: Cell; brokerage: Cell }
+const FEATURE_CATEGORIES: { name: string; features: FeatureRow[] }[] = [
   {
     name: 'Content Generation',
     features: [
-      { name: 'Campaigns per month',                          free: '3',     starter: '5',     pro: 'Unlimited', brokerage: 'Unlimited' },
-      { name: 'Public-records address auto-fill',             free: true,    starter: true,    pro: true,        brokerage: true },
-      { name: '10 headline variations',                       free: true,    starter: true,    pro: true,        brokerage: true },
-      { name: 'Full MLS-ready description + bullet points',         free: true,    starter: true,    pro: true,        brokerage: true },
-      { name: 'Neighborhood story + SEO meta',                free: true,    starter: true,    pro: true,        brokerage: true },
-      { name: 'Tone variants (luxury / investor / FTB)',      free: true,    starter: true,    pro: true,        brokerage: true },
-      { name: 'Spanish listing description',                  free: true,    starter: true,    pro: true,        brokerage: true },
-      { name: '6-week Facebook calendar',                     free: true,    starter: true,    pro: true,        brokerage: true },
-      { name: '6-week Instagram calendar',                    free: true,    starter: true,    pro: true,        brokerage: true },
-      { name: 'Just Listed + Still Available emails',         free: true,    starter: true,    pro: true,        brokerage: true },
-      { name: 'Print materials (yard sign, postcard, brochure, magazine ad)', free: true, starter: true, pro: true, brokerage: true },
-      { name: 'Print-ready listing flyer (PDF)',              free: true,    starter: true,    pro: true,        brokerage: true },
-      { name: 'Email drip (8 templates: buyer + seller)',     free: false,   starter: true,    pro: true,        brokerage: true },
-      { name: 'AI photo captions (from your uploaded photos)',            free: false,   starter: true,    pro: true,        brokerage: true },
-      { name: 'Microsite copy editor',                        free: false,   starter: true,    pro: true,        brokerage: true },
-      { name: '6-week video & reel scripts',                  free: false,   starter: false,   pro: true,        brokerage: true },
-      { name: 'Virtual tour narration (4 script types)',      free: false,   starter: false,   pro: true,        brokerage: true },
-      { name: '6-week TikTok scripts',                        free: false,   starter: false,   pro: true,        brokerage: true },
-      { name: '6-week LinkedIn posts',                        free: false,   starter: false,   pro: true,        brokerage: true },
-      { name: '6-week X (Twitter) threads',                   free: false,   starter: false,   pro: true,        brokerage: true },
-      { name: '6-week Stories (IG + FB)',                     free: false,   starter: false,   pro: true,        brokerage: true },
-      { name: 'Hashtag strategy packs (3 packs)',             free: false,   starter: false,   pro: true,        brokerage: true },
+      { name: 'Campaigns per month',                          free: '3',     starter: '5',     pro: 'Unlimited', commercial: 'Unlimited', brokerage: 'Unlimited' },
+      { name: 'Public-records address auto-fill',             free: true,    starter: true,    pro: true, commercial: true,        brokerage: true },
+      { name: '10 headline variations',                       free: true,    starter: true,    pro: true, commercial: true,        brokerage: true },
+      { name: 'Full MLS-ready description + bullet points',         free: true,    starter: true,    pro: true, commercial: true,        brokerage: true },
+      { name: 'Neighborhood story + SEO meta',                free: true,    starter: true,    pro: true, commercial: true,        brokerage: true },
+      { name: 'Tone variants (luxury / investor / FTB)',      free: true,    starter: true,    pro: true, commercial: true,        brokerage: true },
+      { name: 'Spanish listing description',                  free: true,    starter: true,    pro: true, commercial: true,        brokerage: true },
+      { name: '6-week Facebook calendar',                     free: true,    starter: true,    pro: true, commercial: true,        brokerage: true },
+      { name: '6-week Instagram calendar',                    free: true,    starter: true,    pro: true, commercial: true,        brokerage: true },
+      { name: 'Just Listed + Still Available emails',         free: true,    starter: true,    pro: true, commercial: true,        brokerage: true },
+      { name: 'Print materials (yard sign, postcard, brochure, magazine ad)', free: true, starter: true, pro: true, commercial: true, brokerage: true },
+      { name: 'Print-ready listing flyer (PDF)',              free: true,    starter: true,    pro: true, commercial: true,        brokerage: true },
+      { name: 'Email templates (8: buyer follow-ups, seller update & more)',     free: false,   starter: true,    pro: true, commercial: true,        brokerage: true },
+      { name: 'AI photo captions (from your uploaded photos)',            free: false,   starter: true,    pro: true, commercial: true,        brokerage: true },
+      { name: '6-week video & reel scripts',                  free: false,   starter: false,   pro: true, commercial: true,        brokerage: true },
+      { name: 'Virtual tour narration (4 script types)',      free: false,   starter: false,   pro: true, commercial: true,        brokerage: true },
+      { name: '6-week TikTok scripts',                        free: false,   starter: false,   pro: true, commercial: true,        brokerage: true },
+      { name: '6-week LinkedIn posts',                        free: false,   starter: false,   pro: true, commercial: true,        brokerage: true },
+      { name: '6-week X (Twitter) threads',                   free: false,   starter: false,   pro: true, commercial: true,        brokerage: true },
+      { name: '6-week Stories (IG + FB)',                     free: false,   starter: false,   pro: true, commercial: true,        brokerage: true },
+      { name: 'Hashtag strategy packs (3 packs)',             free: false,   starter: false,   pro: true, commercial: true,        brokerage: true },
     ],
   },
   {
     name: 'Brand & Customization',
     features: [
-      { name: 'Brand kit (logo, colors, headshot)',           free: false,   starter: true,    pro: true,        brokerage: true },
-      { name: 'AI writing persona (tone selector)',           free: false,   starter: true,    pro: true,        brokerage: true },
-      { name: 'Custom agent tagline',                         free: false,   starter: true,    pro: true,        brokerage: true },
-      { name: 'Remove ListOps branding',                      free: false,   starter: true,    pro: true,        brokerage: true },
-      { name: 'Flyer templates',                              free: '1',     starter: '3',     pro: '15+',       brokerage: '15+ Custom' },
-      { name: 'White-label all outputs',                      free: false,   starter: false,   pro: false,       brokerage: true },
-      { name: 'Custom app name & logo',                       free: false,   starter: false,   pro: false,       brokerage: true },
-      { name: 'Brokerage brand override on all content',      free: false,   starter: false,   pro: false,       brokerage: true },
+      { name: 'Brand kit (logo, colors, headshot)',           free: false,   starter: true,    pro: true, commercial: true,        brokerage: true },
+      { name: 'AI writing persona (tone selector)',           free: false,   starter: true,    pro: true, commercial: true,        brokerage: true },
+      { name: 'Custom agent tagline',                         free: false,   starter: true,    pro: true, commercial: true,        brokerage: true },
+      { name: 'Flyer templates',                              free: '1',     starter: '3',     pro: '3 + 5 color schemes', commercial: '3 + 5 color schemes', brokerage: '3 + 5 color schemes' },
+      { name: 'Brokerage brand override on all content',      free: false,   starter: false,   pro: false, commercial: false,       brokerage: true },
+      { name: 'Fair Housing language check + one-click rewrites', free: true,  starter: true,    pro: true, commercial: true,        brokerage: true },
+      { name: 'Brokerage compliance profile (required disclaimer, locked fields)', free: false, starter: false, pro: false, commercial: false, brokerage: true },
     ],
   },
   {
     name: 'Microsites & Publishing',
     features: [
-      { name: 'Copy to clipboard',                            free: true,    starter: true,    pro: true,        brokerage: true },
-      { name: 'Auto-generated listing microsite',             free: false,   starter: true,    pro: true,        brokerage: true },
-      { name: 'Microsite publish / unpublish',                free: false,   starter: true,    pro: true,        brokerage: true },
-      { name: 'Microsite view analytics',                     free: false,   starter: true,    pro: true,        brokerage: true },
+      { name: 'Copy to clipboard',                            free: true,    starter: true,    pro: true, commercial: true,        brokerage: true },
+      { name: 'Auto-generated listing microsite',             free: false,   starter: true,    pro: true, commercial: true,        brokerage: true },
+      { name: 'Lead forms (Schedule a Showing / Request Info) + email alerts', free: false, starter: true, pro: true, commercial: true, brokerage: true },
+      { name: 'Lead CSV export + Zapier-ready webhook',       free: false,   starter: false,   pro: true, commercial: true,        brokerage: true },
+      { name: 'Microsite publish / unpublish',                free: false,   starter: true,    pro: true, commercial: true,        brokerage: true },
+      { name: 'Microsite view analytics',                     free: false,   starter: true,    pro: true, commercial: true,        brokerage: true },
+      { name: 'Per-listing performance dashboard (real tracked counts)', free: false, starter: true, pro: true, commercial: true, brokerage: true },
+      { name: 'Trackable QR codes (auto on flyers, scan counts per placement)', free: false, starter: true, pro: true, commercial: true, brokerage: true },
+      { name: 'Shareable branded seller report',              free: false,   starter: false,   pro: true, commercial: true,        brokerage: true },
+      { name: 'Seller approval portal (private link, per-item approve / request changes)', free: false, starter: false, pro: true, commercial: true, brokerage: true },
+      { name: 'Social post calendar + daily "due" email + CSV/calendar export', free: false, starter: false, pro: true, commercial: true, brokerage: true },
+    ],
+  },
+  {
+    name: 'Commercial Real Estate',
+    features: [
+      { name: 'Commercial campaigns (Commercial/Residential switch)', free: false, starter: false, pro: false, commercial: true, brokerage: true },
+      { name: 'Offering memorandum sections, teaser, one-pager & brochure', free: false, starter: false, pro: false, commercial: true, brokerage: true },
+      { name: 'Investment snapshot, financing scenario & Offering Readiness score', free: false, starter: false, pro: false, commercial: true, brokerage: true },
+      { name: 'Investor / tenant outreach drafts + sending', free: false, starter: false, pro: false, commercial: true, brokerage: true },
     ],
   },
   {
     name: 'Team & Brokerage',
     features: [
-      { name: 'Team seats',                                   free: '1',     starter: '1',     pro: '3',         brokerage: '25' },
-      { name: 'Agent performance dashboard',                  free: false,   starter: false,   pro: false,       brokerage: true },
-      { name: 'Admin controls',                               free: false,   starter: false,   pro: false,       brokerage: true },
-      { name: 'Compliance & audit logs',                      free: false,   starter: false,   pro: false,       brokerage: true },
-      { name: 'CSV/PDF export of campaigns',                  free: false,   starter: false,   pro: false,       brokerage: true },
-      { name: 'Board / association-wide deployment',                   free: false,   starter: false,   pro: false,       brokerage: true },
+      { name: 'Team seats',                                   free: '1',     starter: '1',     pro: '3', commercial: '3',         brokerage: '25' },
+      { name: 'Agent performance dashboard',                  free: false,   starter: false,   pro: false, commercial: false,       brokerage: true },
+      { name: 'Team management (invites & roles)',                               free: false,   starter: false,   pro: false, commercial: false,       brokerage: true },
+      { name: 'Team activity log',                      free: false,   starter: false,   pro: false, commercial: false,       brokerage: true },
+      { name: 'CSV export of all team campaigns',                  free: false,   starter: false,   pro: false, commercial: false,       brokerage: true },
+      { name: 'Board / association-wide deployment',                   free: false,   starter: false,   pro: false, commercial: false,       brokerage: true },
     ],
   },
   {
     name: 'Performance & Support',
     features: [
-      { name: 'Campaign history',                             free: false,   starter: '30 days', pro: 'Unlimited', brokerage: 'Unlimited' },
-      { name: 'Priority AI generation (<30s)',                free: false,   starter: false,   pro: true,        brokerage: true },
-      { name: 'Analytics dashboard',                          free: false,   starter: false,   pro: false,       brokerage: true },
-      { name: 'Email support',                                free: true,    starter: true,    pro: true,        brokerage: true },
-      { name: 'Priority support',                             free: false,   starter: false,   pro: true,        brokerage: true },
-      { name: 'Dedicated Slack channel',                      free: false,   starter: false,   pro: false,       brokerage: true },
+      { name: 'Campaign history',                             free: true,    starter: true,    pro: true, commercial: true,    brokerage: true },
+      { name: 'Analytics dashboard',                          free: false,   starter: false,   pro: false, commercial: false,       brokerage: true },
+      { name: 'Email support',                                free: true,    starter: true,    pro: true, commercial: true,        brokerage: true },
+      { name: 'Priority support',                             free: false,   starter: false,   pro: true, commercial: true,        brokerage: true },
+      { name: 'Dedicated Slack channel',                      free: false,   starter: false,   pro: false, commercial: false,       brokerage: true },
     ],
   },
 ]
@@ -96,9 +113,7 @@ export default function PricingPage() {
       <nav className="fixed top-0 inset-x-0 z-50 glass border-b border-amber-100/60">
         <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 h-16 flex items-center justify-between">
           <Link href="/" className="flex items-center gap-2.5">
-            <div className="w-8 h-8 bg-slate-900 rounded-lg flex items-center justify-center">
-              <House className="w-4 h-4 text-amber-400" />
-            </div>
+            <LogoMark className="w-8 h-8" />
             <span className="font-display font-semibold text-slate-900 text-lg">ListOps</span>
           </Link>
           <div className="flex items-center gap-3">
@@ -148,9 +163,7 @@ export default function PricingPage() {
                 <div key={plan.id} className={`rounded-2xl flex flex-col relative overflow-hidden ${plan.highlighted ? 'bg-slate-900 text-white ring-2 ring-amber-400' : 'bg-white border border-slate-200'}`}>
                   {plan.badge && (
                     <div className="absolute top-4 right-4">
-                      <span className={`text-xs font-bold px-2.5 py-1 rounded-full ${plan.highlighted ? 'bg-amber-400 text-slate-900' : 'bg-amber-100 text-amber-700'}`}>
-                        {plan.badge}
-                      </span>
+                      <PlanBadge tone={plan.highlighted ? 'highlight' : 'neutral'}>{plan.badge}</PlanBadge>
                     </div>
                   )}
 
@@ -210,11 +223,11 @@ export default function PricingPage() {
           <div className="mb-20">
             <h2 className="font-display text-3xl font-semibold text-slate-900 text-center mb-10">Full Feature Comparison</h2>
 
-            <div className="bg-white rounded-2xl border border-slate-200 overflow-hidden">
+            <div className="bg-white rounded-2xl border border-slate-200 overflow-x-auto"><div className="min-w-[640px]">
               {/* Table header - sticky so plan names stay visible while scrolling */}
-              <div className="grid grid-cols-5 bg-slate-50 border-b border-slate-200 sticky top-[64px] z-10 shadow-sm">
+              <div className="grid grid-cols-[minmax(180px,2fr)_repeat(5,minmax(64px,1fr))] bg-slate-50 border-b border-slate-200 sticky top-[64px] z-10 shadow-sm">
                 <div className="p-4 text-sm font-semibold text-slate-600">Feature</div>
-                {['Free', 'Starter', 'Pro', 'Brokerage'].map((name) => (
+                {['Free', 'Starter', 'Pro', 'Commercial', 'Brokerage'].map((name) => (
                   <div key={name} className="p-4 text-center">
                     <div className={`text-sm font-bold ${name === 'Pro' ? 'text-amber-600' : 'text-slate-900'}`}>{name}</div>
                   </div>
@@ -227,17 +240,18 @@ export default function PricingPage() {
                     <span className="text-xs font-bold text-slate-500 uppercase tracking-widest">{cat.name}</span>
                   </div>
                   {cat.features.map((feature, i) => (
-                    <div key={feature.name} className={`grid grid-cols-5 border-b border-slate-100 last:border-0 ${i % 2 === 0 ? 'bg-white' : 'bg-slate-50/50'}`}>
+                    <div key={feature.name} className={`grid grid-cols-[minmax(180px,2fr)_repeat(5,minmax(64px,1fr))] border-b border-slate-100 last:border-0 ${i % 2 === 0 ? 'bg-white' : 'bg-slate-50/50'}`}>
                       <div className="p-4 text-sm text-slate-700 flex items-center">{feature.name}</div>
                       <div className="p-4 flex items-center justify-center"><FeatureValue value={feature.free} /></div>
                       <div className="p-4 flex items-center justify-center"><FeatureValue value={feature.starter} /></div>
                       <div className="p-4 flex items-center justify-center"><FeatureValue value={feature.pro} /></div>
+                      <div className="p-4 flex items-center justify-center"><FeatureValue value={feature.commercial} /></div>
                       <div className="p-4 flex items-center justify-center"><FeatureValue value={feature.brokerage} /></div>
                     </div>
                   ))}
                 </div>
               ))}
-            </div>
+            </div></div>
           </div>
 
           {/* Enterprise Card */}
@@ -280,7 +294,7 @@ export default function PricingPage() {
                 },
                 {
                   q: 'What exactly does each campaign include?',
-                  a: 'Every campaign generates: 10 headline variations, a full MLS-ready description, neighborhood story, SEO meta, Spanish description, 6-week Facebook calendar, 6-week Instagram calendar, Just Listed and Still Available emails, plus print materials (yard sign copy, postcard, brochure). Starter adds email drip sequences, AI photo captions, and microsite copy. Pro adds video/reel scripts, virtual tour narration, TikTok, LinkedIn, X, and Stories content.',
+                  a: 'Every campaign generates: 10 headline variations, a full MLS-ready description, neighborhood story, SEO meta, Spanish description, 6-week Facebook calendar, 6-week Instagram calendar, Just Listed and Still Available emails, plus print materials (yard sign copy, postcard, brochure). Starter adds 8 ready-to-send email templates, AI photo captions, and microsite copy. Pro adds video/reel scripts, virtual tour narration, TikTok, LinkedIn, X, and Stories content.',
                 },
                 {
                   q: 'Can I cancel anytime?',
@@ -292,7 +306,7 @@ export default function PricingPage() {
                 },
                 {
                   q: 'Can multiple agents share one account?',
-                  a: 'Pro includes 3 seats. Brokerage supports up to 25 agents under one account with an admin dashboard and per-agent analytics. Enterprise is unlimited.',
+                  a: 'Pro and Commercial include 2 seats (you plus one teammate); Free and Starter are single-seat. Teammates join from an email invite and share your plan only while your subscription is active. Brokerage supports up to 25 agents under one account with team management, per-agent analytics, a team activity log and CSV export. Enterprise is unlimited.',
                 },
                 {
                   q: 'Is my listing data secure?',

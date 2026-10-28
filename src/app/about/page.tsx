@@ -2,15 +2,16 @@ import type { Metadata } from 'next'
 import Link from 'next/link'
 
 export const metadata: Metadata = {
-  title: 'About — ListOps',
-  description: 'We help real estate agents generate professional marketing campaigns in 90 seconds.',
+  title: 'About ListOps',
+  description: 'ListOps helps real estate agents and commercial brokers turn listing details into complete marketing campaigns in minutes, without MLS scraping or invented data.',
+  alternates: { canonical: 'https://listops.io/about' },
 }
 
 export default function AboutPage() {
   return (
     <div style={{ fontFamily: 'system-ui, sans-serif', background: '#f8fafc', minHeight: '100vh' }}>
       {/* Nav */}
-      <nav style={{ background: '#0f172a', padding: '16px 40px', display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
+      <nav style={{ background: '#0f172a', padding: '16px clamp(16px, 5vw, 40px)', display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
         <Link href="/" style={{ color: 'white', fontWeight: 800, fontSize: 20, textDecoration: 'none', letterSpacing: -0.5 }}>
           ListOps
         </Link>
@@ -20,7 +21,7 @@ export default function AboutPage() {
       </nav>
 
       {/* Hero */}
-      <div style={{ background: '#0f172a', color: 'white', padding: '80px 40px', textAlign: 'center' }}>
+      <div style={{ background: '#0f172a', color: 'white', padding: '80px clamp(16px, 5vw, 40px)', textAlign: 'center' }}>
         <div style={{ maxWidth: 700, margin: '0 auto' }}>
           <div style={{ fontSize: 12, letterSpacing: 4, color: '#f59e0b', textTransform: 'uppercase', marginBottom: 16, fontWeight: 700 }}>About Us</div>
           <h1 style={{ fontSize: 'clamp(32px, 5vw, 52px)', fontWeight: 800, margin: '0 0 20px', lineHeight: 1.15 }}>
@@ -33,11 +34,11 @@ export default function AboutPage() {
       </div>
 
       {/* Story */}
-      <div style={{ maxWidth: 760, margin: '0 auto', padding: '64px 40px' }}>
+      <div style={{ maxWidth: 760, margin: '0 auto', padding: '64px clamp(16px, 5vw, 40px)' }}>
         <div style={{ background: 'white', borderRadius: 20, padding: '48px', boxShadow: '0 1px 3px rgba(0,0,0,0.08)', marginBottom: 32 }}>
           <h2 style={{ fontSize: 28, fontWeight: 800, color: '#0f172a', marginBottom: 20 }}>The problem we saw</h2>
           <p style={{ fontSize: 16, color: '#475569', lineHeight: 1.8, marginBottom: 16 }}>
-            The average real estate agent spends 6–8 hours per listing creating marketing content — Facebook posts, Instagram captions, email copy, print flyers. That's time not spent with clients, not spent on prospecting, not spent closing deals.
+            Many real estate agents spend hours on every listing creating marketing content — Facebook posts, Instagram captions, email copy, print flyers. That's time not spent with clients, not spent on prospecting, not spent closing deals.
           </p>
           <p style={{ fontSize: 16, color: '#475569', lineHeight: 1.8, marginBottom: 0 }}>
             The tools that existed were either too generic, too expensive, or required a marketing degree to use. Agents deserved something purpose-built.
@@ -49,7 +50,7 @@ export default function AboutPage() {
           <p style={{ fontSize: 16, color: '#475569', lineHeight: 1.8, marginBottom: 16 }}>
             ListOps reads your listing details and photos and generates a complete 6-week marketing campaign in about 90 seconds. Six content types, all on-brand, all ready to post or print.
           </p>
-          <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(200px, 1fr))', gap: 12, marginTop: 24 }}>
+          <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(min(100%, 200px), 1fr))', gap: 12, marginTop: 24 }}>
             {['Facebook Posts (6 weeks)', 'Instagram Captions', 'Just Listed Email', 'Still Available Email', 'Print-Ready Flyer', 'Listing Microsite'].map(item => (
               <div key={item} style={{ background: '#f8fafc', border: '1px solid #e2e8f0', borderRadius: 10, padding: '12px 16px', fontSize: 14, fontWeight: 600, color: '#334155' }}>
                 ✓ {item}

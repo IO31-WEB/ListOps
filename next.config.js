@@ -54,6 +54,13 @@ const nextConfig = {
       { protocol: 'https', hostname: 'placehold.co' },
     ],
   },
+  // Blog slugs that dropped the year suffix: keep old inbound links and indexed URLs alive (308 = permanent).
+  async redirects() {
+    return [
+      { source: '/blog/real-estate-marketing-tools-2025', destination: '/blog/real-estate-marketing-tools', permanent: true },
+      { source: '/blog/real-estate-social-media-strategy-2025', destination: '/blog/real-estate-social-media-strategy', permanent: true },
+    ]
+  },
   async headers() {
     return [{ source: '/:path*', headers: securityHeaders }]
   },

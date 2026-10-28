@@ -1,9 +1,23 @@
 import { SignUp } from '@clerk/nextjs'
+import { LogoMark } from '@/components/ui/logo'
 import Link from 'next/link'
-import { House, Check } from 'lucide-react'
+import { Check } from 'lucide-react'
 import { AgeGate } from '@/components/auth/age-gate'
+import { describeInvite } from '@/lib/team-invites'
 
-export default function SignUpPage() {
+export const metadata = { title: 'Create your ListOps account', robots: { index: false, follow: true }, alternates: { canonical: '/sign-up' } }
+
+const INVITE_TOKEN_RE = /^[A-Za-z0-9_-]{43}$/
+const REF_RE = /^[A-Za-z0-9_-]{3,32}$/
+
+export default async function SignUpPage({ searchParams }: { searchParams: Promise<{ invite?: string; ref?: string }> }) {
+  const sp = await searchParams
+  // Where to land after sign-up. A seat invite goes to /invite/<token> (attaches the new account to the inviting team);
+  // a shared referral link goes to /join (records the referral). Both then continue to /dashboard, where the age gate applies.
+  const invite = typeof sp.invite === 'string' && INVITE_TOKEN_RE.test(sp.invite) ? sp.invite : null
+  const ref = !invite && typeof sp.ref === 'string' && REF_RE.test(sp.ref) ? sp.ref : null
+  const after = invite ? `/invite/${invite}` : ref ? `/join?ref=${encodeURIComponent(ref)}` : '/dashboard'
+  const invitedEmail = invite ? (await describeInvite(invite))?.email : undefined
   return (
     <div className="min-h-screen bg-[var(--cream)] flex flex-col lg:flex-row">
       {/* Left side — value prop */}
@@ -13,9 +27,7 @@ export default function SignUpPage() {
 
         <div className="relative">
           <Link href="/" className="flex items-center gap-2.5">
-            <div className="w-9 h-9 bg-amber-500 rounded-xl flex items-center justify-center">
-              <House className="w-4.5 h-4.5 text-slate-900" />
-            </div>
+            <LogoMark className="w-9 h-9" tone="light" />
             <span className="font-display font-semibold text-white text-xl">ListOps</span>
           </Link>
         </div>
@@ -41,18 +53,6 @@ export default function SignUpPage() {
             ))}
           </ul>
 
-          <div className="mt-10 bg-slate-800/60 rounded-xl p-5 border border-slate-700">
-            <p className="text-slate-300 text-sm italic mb-3">
-              "I used to spend 3 hours on marketing per listing. Now it takes about 2 minutes."
-            </p>
-            <div className="flex items-center gap-2">
-              <div className="w-8 h-8 rounded-full bg-amber-500/20 flex items-center justify-center text-xs font-bold text-amber-400">SM</div>
-              <div>
-                <div className="text-white text-xs font-semibold">Sarah M.</div>
-                <div className="text-slate-500 text-xs">REALTOR® • Austin, TX</div>
-              </div>
-            </div>
-          </div>
         </div>
 
         <div className="relative text-xs text-slate-600">
@@ -64,15 +64,14 @@ export default function SignUpPage() {
       <div className="flex-1 flex flex-col items-center justify-center px-4 py-16">
         {/* Mobile logo */}
         <Link href="/" className="flex lg:hidden items-center gap-2.5 mb-10">
-          <div className="w-9 h-9 bg-slate-900 rounded-xl flex items-center justify-center">
-            <House className="w-4.5 h-4.5 text-amber-400" />
-          </div>
+          <LogoMark className="w-9 h-9" />
           <span className="font-display font-semibold text-slate-900 text-xl">ListOps</span>
         </Link>
         <AgeGate>
         <SignUp
-          forceRedirectUrl="/dashboard"
-          fallbackRedirectUrl="/dashboard"
+          forceRedirectUrl={after}
+          fallbackRedirectUrl={after}
+          initialValues={invitedEmail ? { emailAddress: invitedEmail } : undefined}
           appearance={{
             elements: {
               rootBox: 'w-full max-w-md',

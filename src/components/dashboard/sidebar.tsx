@@ -1,23 +1,27 @@
 'use client'
 
+import { LogoMark } from '@/components/ui/logo'
 import { getBillingInfo } from '@/lib/billing-client'
 import { useState, useEffect } from 'react'
 import Link from 'next/link'
 import { usePathname } from 'next/navigation'
 import { UserButton } from '@clerk/nextjs'
 import {
-  House, Zap, LayoutDashboard, FolderOpen, Plus, Palette,
+  Zap, LayoutDashboard, FolderOpen, Plus, Palette,
   CreditCard, Users, BarChart2, Settings, ChevronLeft, Gift,
-  ChevronRight, Menu, X, HelpCircle, Building2
+  ChevronRight, Menu, X, HelpCircle, Building2, Inbox, CalendarDays
 } from 'lucide-react'
 import { cn } from '@/lib/utils'
+import { canAccess, type PlanTier } from '@/lib/plans'
 
 const NAV_ITEMS = [
   { label: 'Dashboard', href: '/dashboard', icon: LayoutDashboard },
   { label: 'New Campaign', href: '/dashboard/generate', icon: Plus, highlight: true },
   { label: 'My Campaigns', href: '/dashboard/campaigns', icon: FolderOpen },
+  { label: 'Leads', href: '/dashboard/leads', icon: Inbox },
+  { label: 'Social Calendar', href: '/dashboard/social', icon: CalendarDays },
   { label: 'Brand Kit', href: '/dashboard/brand', icon: Palette },
-  { label: 'Commercial', href: '/dashboard/commercial', icon: Building2 },
+  { label: 'Commercial', href: '/dashboard/commercial', icon: Building2, feature: 'commercial_campaigns' as const },
   { label: 'Analytics', href: '/dashboard/analytics', icon: BarChart2 },
 ]
 
@@ -57,34 +61,33 @@ export function DashboardSidebar() {
   const isAtLimit = billing && billing.campaignLimit !== 'unlimited' &&
     billing.campaignsUsed >= (billing.campaignLimit as number)
 
-  const SidebarContent = () => (
-    <div className={cn('flex flex-col h-full', collapsed ? 'items-center' : '')}>
+  const SidebarContent = ({ mobile = false }: { mobile?: boolean }) => {
+    // The slide-out drawer is always the full, expanded menu — the desktop "collapsed" state never applies to it.
+    const isCollapsed = collapsed && !mobile
+    return (
+    <div className={cn('flex flex-col h-full', isCollapsed ? 'items-center' : '')}>
       {/* Logo */}
-      <div className={cn('flex items-center py-5 px-4 border-b border-slate-100', collapsed ? 'justify-center' : 'justify-between')}>
-        {!collapsed && (
+      <div className={cn('flex items-center py-5 px-4 border-b border-slate-100', isCollapsed ? 'justify-center' : 'justify-between')}>
+        {!isCollapsed && (
           <Link href="/dashboard" className="flex items-center gap-2.5">
-            <div className="w-8 h-8 bg-slate-900 rounded-lg flex items-center justify-center flex-shrink-0">
-              <House className="w-4 h-4 text-amber-400" />
-            </div>
+            <LogoMark className="w-8 h-8 flex-shrink-0" />
             <span className="font-display font-semibold text-slate-900">ListOps</span>
           </Link>
         )}
-        {collapsed && (
-          <div className="w-8 h-8 bg-slate-900 rounded-lg flex items-center justify-center">
-            <House className="w-4 h-4 text-amber-400" />
-          </div>
+        {isCollapsed && (
+          <LogoMark className="w-8 h-8" />
         )}
         <button
           onClick={() => setCollapsed(!collapsed)}
           className="hidden lg:flex p-1.5 rounded-lg hover:bg-slate-100 transition-colors text-slate-500"
         >
-          {collapsed ? <ChevronRight className="w-4 h-4" /> : <ChevronLeft className="w-4 h-4" />}
+          {isCollapsed ? <ChevronRight className="w-4 h-4" /> : <ChevronLeft className="w-4 h-4" />}
         </button>
       </div>
 
       {/* Main nav */}
-      <nav className="flex-1 p-3 space-y-1 overflow-y-auto">
-        {NAV_ITEMS.map((item) => {
+      <nav className={cn('flex-1 p-3 overflow-y-auto', mobile ? 'space-y-2' : 'space-y-1')}>
+        {NAV_ITEMS.filter(item => !('feature' in item) || (!!billing && canAccess(billing.planTier as PlanTier, item.feature))).map((item) => {
           const isActive = pathname === item.href || (item.href !== '/dashboard' && pathname.startsWith(item.href))
           return (
             <Link
@@ -92,8 +95,9 @@ export function DashboardSidebar() {
               href={item.href}
               onClick={() => setMobileOpen(false)}
               className={cn(
-                'flex items-center gap-3 px-3 py-2.5 rounded-xl text-sm font-medium transition-all group',
-                collapsed && 'justify-center px-2',
+                'flex items-center gap-3 px-3 rounded-xl text-sm font-medium transition-all group',
+                mobile ? 'py-3' : 'py-2.5',
+                isCollapsed && 'justify-center px-2',
                 item.highlight
                   ? 'bg-slate-900 text-amber-50 hover:bg-slate-800 shadow-sm'
                   : isActive
@@ -101,15 +105,15 @@ export function DashboardSidebar() {
                     : 'text-slate-600 hover:bg-slate-100 hover:text-slate-900'
               )}
             >
-              <item.icon className={cn('flex-shrink-0', collapsed ? 'w-5 h-5' : 'w-4 h-4')} />
-              {!collapsed && <span>{item.label}</span>}
+              <item.icon className={cn('flex-shrink-0', isCollapsed ? 'w-5 h-5' : 'w-4 h-4')} />
+              {!isCollapsed && <span>{item.label}</span>}
             </Link>
           )
         })}
       </nav>
 
       {/* Plan banner — only show if not collapsed */}
-      {!collapsed && billing && (
+      {!isCollapsed && billing && (
         <>
           {/* FREE: show usage + upgrade */}
           {!isPaid && (
@@ -153,7 +157,7 @@ export function DashboardSidebar() {
       )}
 
       {/* Bottom nav */}
-      <div className="border-t border-slate-100 p-3 space-y-1">
+      <div className={cn('border-t border-slate-100 p-3', mobile ? 'space-y-1.5' : 'space-y-1')}>
         {BOTTOM_ITEMS.map((item) => {
           const isActive = pathname === item.href
           return (
@@ -162,23 +166,25 @@ export function DashboardSidebar() {
               href={item.href}
               onClick={() => setMobileOpen(false)}
               className={cn(
-                'flex items-center gap-3 px-3 py-2 rounded-xl text-sm font-medium transition-all',
-                collapsed && 'justify-center px-2',
+                'flex items-center gap-3 px-3 rounded-xl text-sm font-medium transition-all',
+                mobile ? 'py-2.5' : 'py-2',
+                isCollapsed && 'justify-center px-2',
                 isActive ? 'bg-amber-50 text-amber-900' : 'text-slate-500 hover:bg-slate-100 hover:text-slate-700'
               )}
             >
-              <item.icon className={cn('flex-shrink-0', collapsed ? 'w-5 h-5' : 'w-4 h-4')} />
-              {!collapsed && <span>{item.label}</span>}
+              <item.icon className={cn('flex-shrink-0', isCollapsed ? 'w-5 h-5' : 'w-4 h-4')} />
+              {!isCollapsed && <span>{item.label}</span>}
             </Link>
           )
         })}
-        <div className={cn('flex items-center gap-3 px-3 py-2 mt-2', collapsed && 'justify-center')}>
-          <UserButton afterSignOutUrl="/" appearance={{ elements: { avatarBox: 'w-8 h-8' } }} />
-          {!collapsed && <span className="text-sm text-slate-600">Account</span>}
+        <div className={cn('flex items-center gap-3 px-3 py-2 mt-2', isCollapsed && 'justify-center')}>
+          <UserButton afterSignOutUrl="/" userProfileMode="navigation" userProfileUrl="/dashboard/account" appearance={{ elements: { avatarBox: 'w-8 h-8' } }} />
+          {!isCollapsed && <span className="text-sm text-slate-600">Account</span>}
         </div>
       </div>
     </div>
   )
+  }
 
   return (
     <>
@@ -203,7 +209,7 @@ export function DashboardSidebar() {
             <button onClick={() => setMobileOpen(false)} className="absolute top-4 right-4 p-2 rounded-lg hover:bg-slate-100">
               <X className="w-4 h-4 text-slate-500" />
             </button>
-            <SidebarContent />
+            <SidebarContent mobile />
           </aside>
         </div>
       )}

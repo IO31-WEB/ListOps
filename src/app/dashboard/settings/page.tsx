@@ -1,10 +1,10 @@
 'use client'
 
 import { useState, useEffect } from 'react'
-import { Save, Loader2, Check, User, Bell, Lock, Globe, Shield, Zap, AlertTriangle } from 'lucide-react'
+import { Save, Loader2, Check, User, Bell, Lock, Globe, Shield, Gift, AlertTriangle } from 'lucide-react'
 import toast from 'react-hot-toast'
 import Link from 'next/link'
-import { useClerk } from '@clerk/nextjs'
+import { useRouter } from 'next/navigation'
 
 interface ProfileForm {
   firstName: string; lastName: string; phone: string
@@ -17,7 +17,8 @@ const TIMEZONES = [
 ]
 
 export default function SettingsPage() {
-  const { openUserProfile } = useClerk()
+  const router = useRouter()
+  const openAccount = () => router.push('/dashboard/account')
   const [profile, setProfile] = useState<ProfileForm>({
     firstName: '', lastName: '', phone: '', licenseNumber: '', mlsAgentId: '', timezone: 'America/New_York',
   })
@@ -82,17 +83,17 @@ export default function SettingsPage() {
     {
       label: 'Email & Password',
       desc: 'Update your email address or change your password',
-      onClick: () => openUserProfile(),
+      onClick: openAccount,
     },
     {
       label: 'Two-Factor Authentication',
       desc: 'Add an extra layer of security to your account',
-      onClick: () => openUserProfile(),
+      onClick: openAccount,
     },
     {
       label: 'Active Sessions',
       desc: 'View and revoke active login sessions',
-      onClick: () => openUserProfile(),
+      onClick: openAccount,
     },
   ]
 
@@ -151,7 +152,7 @@ export default function SettingsPage() {
         </div>
       </div>
 
-      {/* Account security — opens Clerk's hosted UserProfile modal */}
+      {/* Account security — opens the in-app Account page */}
       <div className="bg-white rounded-2xl border border-slate-200 p-6">
         <div className="flex items-center gap-2 mb-5">
           <Lock className="w-4 h-4 text-amber-600" />
@@ -178,11 +179,11 @@ export default function SettingsPage() {
       {/* Referral program */}
       <div className="bg-white rounded-2xl border border-slate-200 p-6">
         <div className="flex items-center gap-2 mb-3">
-          <Zap className="w-4 h-4 text-amber-600" />
+          <Gift className="w-4 h-4 text-amber-600" />
           <h2 className="font-display font-semibold text-slate-900">Referral Program</h2>
         </div>
         <p className="text-sm text-slate-600 mb-4">
-          Refer a colleague and get <strong>1 free month</strong> when they upgrade to any paid plan.
+          Refer a colleague and earn a <strong>free month</strong> once they subscribe to a paid plan (credited by our team).
         </p>
         <div className="bg-amber-50 border border-amber-200 rounded-xl p-4">
           <p className="text-xs font-semibold text-amber-800 mb-2">Your Referral Link</p>

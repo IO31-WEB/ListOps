@@ -22,9 +22,10 @@ export const FEATURE_GATES = {
   // FIX: starter now correctly gets listing_microsite (was blocked in stripe.ts despite pricing page promise)
   listing_microsite:    ['starter', 'pro', 'commercial', 'brokerage', 'enterprise'],
   unlimited_campaigns:  ['pro', 'commercial', 'brokerage', 'enterprise'],
+  qr_codes:             ['starter', 'pro', 'commercial', 'brokerage', 'enterprise'],
   social_scheduling:    ['pro', 'commercial', 'brokerage', 'enterprise'],
   video_script:         ['pro', 'commercial', 'brokerage', 'enterprise'],
-  team_seats:           ['pro', 'commercial', 'brokerage', 'enterprise'],
+  team_seats:           ['pro', 'commercial', 'brokerage', 'enterprise'],                    // seat COUNTS live in SEAT_LIMITS below
   priority_generation:  ['pro', 'commercial', 'brokerage', 'enterprise'],
   white_label:          ['brokerage', 'enterprise'],
   analytics:            ['brokerage', 'enterprise'],
@@ -42,10 +43,31 @@ export const FEATURE_GATES = {
   microsite_copy:       ['starter', 'pro', 'commercial', 'brokerage', 'enterprise'],
   expanded_social:      ['pro', 'commercial', 'brokerage', 'enterprise'],   // TikTok, LinkedIn, X, Stories
   virtual_tour_scripts: ['pro', 'commercial', 'brokerage', 'enterprise'],
-  // Commercial plan gates
-  site_analysis:        ['commercial', 'brokerage', 'enterprise'],
-  property_grading:     ['commercial', 'brokerage', 'enterprise'],
-  attom_enrichment:     ['commercial', 'brokerage', 'enterprise'],
+  // Branded Visual Kit + flyers (Round 6)
+  visual_kit:           ['free', 'starter', 'pro', 'commercial', 'brokerage', 'enterprise'], // Instagram square (watermarked on Free)
+  visual_kit_full:      ['starter', 'pro', 'commercial', 'brokerage', 'enterprise'],         // every graphic, no watermark
+  visual_kit_pdf:       ['pro', 'commercial', 'brokerage', 'enterprise'],                    // PDF export of graphics
+  flyer_templates:      ['starter', 'pro', 'commercial', 'brokerage', 'enterprise'],         // Luxury + Modern (Classic is free)
+  flyer_variants:       ['starter', 'pro', 'commercial', 'brokerage', 'enterprise'],         // Open House / Price Improvement flyers
+  flyer_schemes:        ['pro', 'commercial', 'brokerage', 'enterprise'],                    // 5 color schemes
+  // Microsite lead capture (Round 7)
+  lead_capture:         ['starter', 'pro', 'commercial', 'brokerage', 'enterprise'],         // forms on the microsite + leads inbox + email alert
+  lead_export:          ['pro', 'commercial', 'brokerage', 'enterprise'],                    // CSV export
+  lead_webhook:         ['pro', 'commercial', 'brokerage', 'enterprise'],                    // signed webhook (Zapier "Catch Hook" ready)
+  lead_sms:             ['pro', 'commercial', 'brokerage', 'enterprise'],                    // SMS alert to the agent (needs Twilio configured)
+  // Compliance (Round 8)
+  fair_housing_scan:    ['free', 'starter', 'pro', 'commercial', 'brokerage', 'enterprise'], // protective, so every plan
+  compliance_profile:   ['brokerage', 'enterprise'],                                         // org-wide required disclaimer + locked brand fields
+  // Performance (Round 9)
+  performance_dashboard: ['starter', 'pro', 'commercial', 'brokerage', 'enterprise'],        // per-listing real activity (views, clicks, leads, downloads)
+  seller_approval:      ['pro', 'commercial', 'brokerage', 'enterprise'],
+  seller_report:        ['pro', 'commercial', 'brokerage', 'enterprise'],                    // shareable branded report link for the seller
+  // Commercial (CRE). Hard-gated: Free / Starter / Pro are residential-only. Enforced server-side in /api/generate,
+  // /api/listings, regenerate, outreach, the public microsite/flyer/brochure renderers and the dashboard UI.
+  commercial_campaigns: ['commercial', 'brokerage', 'enterprise'],                           // the Commercial tab + every CRE campaign type/output
+  commercial_om:        ['commercial', 'brokerage', 'enterprise'],                           // section-by-section OM-style copy in the package
+  commercial_underwriting: ['commercial', 'brokerage', 'enterprise'],                        // Investment Snapshot + Offering Readiness (pure math, zero API cost)
+  outreach_send:        ['commercial', 'brokerage', 'enterprise'],                           // send the email sequence to a prospect list (compliant sender, daily cron follow-ups)
 } as const satisfies Record<string, readonly PlanTier[]>
 
 export type Feature = keyof typeof FEATURE_GATES
@@ -66,6 +88,22 @@ export const CAMPAIGN_LIMITS: Record<PlanTier, number | 'unlimited'> = {
   commercial: 'unlimited',
   brokerage: 'unlimited',
   enterprise: 'unlimited',
+}
+
+// ── Seat Limits (HARD) ─────────────────────────────────────────
+// Total people in one organization (the owner counts as a seat). Enforced on invite, on invite acceptance,
+// and again whenever a subscription changes (extra members are detached). Single source of truth.
+export const SEAT_LIMITS: Record<PlanTier, number> = {
+  free: 1,
+  starter: 1,
+  pro: 2,
+  commercial: 2,
+  brokerage: 25,
+  enterprise: 999, // custom contract: unlimited in practice
+}
+
+export function seatLimitFor(plan: PlanTier | string | null | undefined): number {
+  return SEAT_LIMITS[(plan ?? 'free') as PlanTier] ?? 1
 }
 
 // ── Plan Definitions ───────────────────────────────────────────
@@ -101,7 +139,7 @@ export const PLANS: Plan[] = [
     highlighted: false,
     cta: 'Start Free',
     campaignsPerMonth: 3,
-    maxAgents: 1,
+    maxAgents: SEAT_LIMITS.free,
     features: [
       { text: '3 campaigns / month', included: true },
       { text: 'Address auto-fill from public records', included: true },
@@ -110,11 +148,14 @@ export const PLANS: Plan[] = [
       { text: 'Just Listed + Still Available emails', included: true },
       { text: 'Print materials (yard sign, postcard, brochure)', included: true },
       { text: 'Print-ready listing flyer (PDF)', included: true },
+      { text: 'Branded Instagram graphic (PNG, ListOps watermark)', included: true },
       { text: 'Copy to clipboard', included: true },
+      { text: 'Fair Housing language check with one-click rewrites', included: true },
       { text: 'Brand kit', included: false },
-      { text: 'Email drip sequences (8 templates)', included: false },
+      { text: 'Email templates (8: buyer follow-ups, seller update & more)', included: false },
       { text: 'AI photo captions (per room)', included: false },
       { text: 'Listing microsite', included: false },
+      { text: 'Lead capture forms + leads inbox', included: false },
       { text: 'Video & reel scripts', included: false },
       { text: 'TikTok, LinkedIn, X, Stories content', included: false },
       { text: 'White-label outputs', included: false },
@@ -131,18 +172,19 @@ export const PLANS: Plan[] = [
     highlighted: false,
     cta: 'Start Starter',
     campaignsPerMonth: 5,
-    maxAgents: 1,
+    maxAgents: SEAT_LIMITS.starter,
     features: [
       { text: '5 campaigns / month', included: true },
       { text: 'Everything in Free', included: true },
       { text: 'Brand kit (logo, colors, headshot, tone)', included: true, highlight: true },
-      { text: 'Remove ListOps branding', included: true },
-      { text: 'Email drip sequences (8 templates)', included: true, highlight: true },
+      { text: 'Email templates (8: buyer follow-ups, seller update & more)', included: true, highlight: true },
       { text: 'AI photo captions from your uploaded photos', included: true },
       { text: 'Auto-generated listing microsite', included: true },
-      { text: 'Microsite copy editor', included: true },
-      { text: 'Campaign history (30 days)', included: true },
-      { text: '3 flyer templates (Classic, Luxury, Modern)', included: true },
+      { text: 'Lead capture on every microsite (Schedule a Showing + Request Info) with instant email alerts', included: true, highlight: true },
+      { text: 'Per-listing performance: real views, call/email clicks, inquiries and downloads', included: true },
+      { text: 'Trackable QR codes for flyers, signs and brochures (real scan counts)', included: true },
+      { text: '3 premium flyer templates + Open House & Price Improvement flyers', included: true },
+      { text: 'Full branded visual kit: Instagram square & Stories, Facebook post & cover, open house, price improvement (PNG)', included: true, highlight: true },
       { text: 'Video & reel scripts', included: false },
       { text: 'TikTok, LinkedIn, X, Stories content', included: false },
       { text: 'Virtual tour narration scripts', included: false },
@@ -161,21 +203,23 @@ export const PLANS: Plan[] = [
     badge: 'Most Popular',
     cta: 'Go Pro',
     campaignsPerMonth: 'unlimited',
-    maxAgents: 3,
+    maxAgents: SEAT_LIMITS.pro,
     features: [
       { text: 'Unlimited campaigns', included: true, highlight: true },
       { text: 'Everything in Starter', included: true },
       { text: '6-week video & reel scripts', included: true, highlight: true },
       { text: 'Virtual tour narration (4 script types)', included: true },
       { text: 'TikTok, LinkedIn, X & Stories content', included: true, highlight: true },
-      { text: '6-week hashtag strategy packs', included: true },
-      { text: '3 team seats', included: true },
-      { text: 'Priority generation (<30s)', included: true },
-      { text: 'Campaign history (unlimited)', included: true },
+      { text: 'Hashtag strategy packs (3 sets)', included: true },
+      { text: '2 team seats (you + 1 teammate)', included: true },
       { text: '3 flyer templates + 5 color schemes', included: true },
+      { text: 'Visual kit PDF export', included: true },
+      { text: 'Lead CSV export + Zapier-ready webhook', included: true },
+      { text: 'Shareable branded seller report (always current)', included: true, highlight: true },
+      { text: 'Seller approval portal: private link, approve or request changes per item, you get emailed', included: true, highlight: true },
+      { text: 'Social post calendar: dated queue, daily "due today" email, CSV + calendar export', included: true, highlight: true },
       { text: 'White-label outputs', included: false },
       { text: 'Agent performance analytics', included: false },
-      { text: 'Admin dashboard', included: false },
     ],
   },
   {
@@ -190,25 +234,21 @@ export const PLANS: Plan[] = [
     badge: 'Best Value',
     cta: 'Start Brokerage Trial',
     campaignsPerMonth: 'unlimited',
-    maxAgents: 25,
+    maxAgents: SEAT_LIMITS.brokerage,
     features: [
-      { text: 'Everything in Pro', included: true, highlight: true },
+      { text: 'Everything in Commercial (residential + commercial campaigns)', included: true, highlight: true },
+      { text: 'Brokerage compliance profile: required disclaimer + locked brand fields for every agent', included: true, highlight: true },
       { text: 'Up to 25 agent seats', included: true, highlight: true },
-      { text: 'White-label all outputs', included: true, highlight: true },
-      { text: 'Custom app name & logo', included: true },
+      { text: 'Your brokerage branding on all outputs', included: true, highlight: true },
       { text: 'Brokerage brand override on all content', included: true },
       { text: 'Agent performance analytics', included: true },
-      { text: 'Admin dashboard', included: true },
-      { text: 'Compliance & audit logs', included: true },
-      { text: 'CSV/PDF export of all campaigns', included: true },
+      { text: 'Team activity log', included: true },
+      { text: 'CSV export of all team campaigns', included: true },
       { text: 'Board / association-wide deployment', included: true },
       { text: 'Dedicated Slack support', included: true },
-      { text: 'SSO / SAML (add-on)', included: true },
     ],
   },
 ]
-
-export const PLAN_MAP = Object.fromEntries(PLANS.map(p => [p.id, p])) as Record<PlanId, Plan>
 
 // ENTERPRISE_PLAN is UI-only data (no Stripe price IDs) — safe to import in client components.
 // stripe.ts re-exports this for backwards-compat server-side imports.
@@ -221,13 +261,7 @@ export const ENTERPRISE_PLAN = {
     'All Brokerage features',
     'Unlimited agents',
     'Board & association licensing',
-    'Custom domain (marketing.yourbrokerage.com)',
-    'SSO/SAML + SCIM provisioning',
-    'Dedicated Customer Success Manager',
-    'SLA guarantee (99.9% uptime)',
-    'Custom AI fine-tuning for your market',
-    'Zapier / Make / API marketplace access',
-    'Custom integrations & professional services',
+    'Custom integrations & professional services (scoped per contract)',
     'Annual invoicing (no credit card required)',
   ],
 }
@@ -252,21 +286,53 @@ export const ENTERPRISE_PLAN = {
     badge: 'Commercial RE',
     cta: 'Go Commercial',
     campaignsPerMonth: 'unlimited',
-    maxAgents: 3,
+    maxAgents: SEAT_LIMITS.commercial,
     features: [
       { text: 'Everything in Pro', included: true, highlight: true },
-      { text: 'AI-powered commercial site analysis & PDF parsing', included: true, highlight: true },
-      { text: 'AI property grading card (A–F)', included: true, highlight: true },
-      { text: 'Traffic count scoring', included: true },
-      { text: 'Consumer spend analysis (1/3/5 mi)', included: true },
-      { text: 'Household income grading', included: true },
-      { text: 'Big-box & anchor tenant detection', included: true },
-      { text: 'ATTOM Data enrichment (demographics, spend)', included: true, highlight: true },
-      { text: 'Direct API data push integration', included: true },
-      { text: 'Demographic scoring', included: true },
-      { text: 'AI site narrative & risk flags', included: true },
-      { text: 'PDF grade card export', included: true },
+      { text: 'Unlimited commercial campaigns: offering teaser, one-pager and long narrative', included: true, highlight: true },
+      { text: 'LinkedIn-first 6-week social + Facebook posts for brokers and investors', included: true, highlight: true },
+      { text: '4-touch broker / investor email sequence, written for you', included: true, highlight: true },
+      { text: 'Send the sequence to your prospect list (compliant sender, automatic follow-ups)', included: true, highlight: true },
+      { text: 'OM-style sectioned copy you can edit and export', included: true },
+      { text: 'Investment Snapshot: price/SF, price/unit, implied cap rate and financing scenario math from your own numbers', included: true, highlight: true },
+      { text: 'Offering Readiness score: what a buyer or broker will ask for that your listing is still missing', included: true },
+      { text: '2 team seats (you + 1 teammate)', included: true },
+      { text: 'Commercial teaser microsite with Request Info lead form', included: true },
+      { text: 'One-sheet flyer copy, trackable QR codes, seller approval', included: true },
       { text: 'White-label outputs', included: false },
     ],
   })
 })()
+
+// Built AFTER the Commercial plan is injected above: building it earlier left PLAN_MAP.commercial undefined at runtime.
+export const PLAN_MAP = Object.fromEntries(PLANS.map(p => [p.id, p])) as Record<PlanId, Plan>
+
+// ── Plan comparison (single source of truth for Upgrade / Downgrade labels) ───
+// Rank is by monthly price, NOT by a hard-coded tier list: the old list omitted 'commercial', so every
+// Commercial card compared as index -1 and was labelled "Downgrade" for everyone. Enterprise (custom pricing,
+// not in PLANS) ranks above everything.
+export function planRank(id: string): number {
+  if (id === 'enterprise') return Number.MAX_SAFE_INTEGER
+  const p = PLANS.find(x => x.id === id)
+  return p?.monthlyPrice ?? 0
+}
+
+export type PlanChange = 'current' | 'upgrade' | 'downgrade'
+
+export function comparePlan(currentId: string, targetId: string): PlanChange {
+  if (currentId === targetId) return 'current'
+  return planRank(targetId) > planRank(currentId) ? 'upgrade' : 'downgrade'
+}
+
+// ── Stripe price id -> plan (shared by the webhook and the billing sync route so they can never disagree) ──
+export function planFromPriceId(priceId: string | null | undefined): PlanTier {
+  if (!priceId) return 'free'
+  const env = process.env
+  const map: Array<[string | undefined, PlanTier]> = [
+    [env.STRIPE_STARTER_MONTHLY_PRICE_ID, 'starter'], [env.STRIPE_STARTER_YEARLY_PRICE_ID, 'starter'],
+    [env.STRIPE_PRO_MONTHLY_PRICE_ID, 'pro'], [env.STRIPE_PRO_YEARLY_PRICE_ID, 'pro'],
+    [env.STRIPE_COMMERCIAL_MONTHLY_PRICE_ID, 'commercial'], [env.STRIPE_COMMERCIAL_YEARLY_PRICE_ID, 'commercial'],
+    [env.STRIPE_BROKERAGE_MONTHLY_PRICE_ID, 'brokerage'], [env.STRIPE_BROKERAGE_YEARLY_PRICE_ID, 'brokerage'],
+  ]
+  return map.find(([id]) => !!id && id === priceId)?.[1] ?? 'free'
+}

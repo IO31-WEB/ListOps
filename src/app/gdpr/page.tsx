@@ -2,14 +2,14 @@ import type { Metadata } from 'next'
 import Link from 'next/link'
 
 export const metadata: Metadata = {
-  title: 'GDPR & Privacy Rights — ListOps',
+  title: 'GDPR & Privacy Rights',
   description: 'Your rights under GDPR and how ListOps handles personal data.',
 }
 
 export default function GdprPage() {
   return (
     <div style={{ fontFamily: 'system-ui, sans-serif', background: '#f8fafc', minHeight: '100vh' }}>
-      <nav style={{ background: '#0f172a', padding: '16px 40px', display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
+      <nav style={{ background: '#0f172a', padding: '16px clamp(16px, 5vw, 40px)', display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
         <Link href="/" style={{ color: 'white', fontWeight: 800, fontSize: 20, textDecoration: 'none' }}>
           ListOps
         </Link>
@@ -18,7 +18,7 @@ export default function GdprPage() {
         </Link>
       </nav>
 
-      <div style={{ background: '#0f172a', color: 'white', padding: '72px 40px', textAlign: 'center' }}>
+      <div style={{ background: '#0f172a', color: 'white', padding: '72px clamp(16px, 5vw, 40px)', textAlign: 'center' }}>
         <div style={{ maxWidth: 660, margin: '0 auto' }}>
           <div style={{ fontSize: 12, letterSpacing: 4, color: '#f59e0b', textTransform: 'uppercase', marginBottom: 16, fontWeight: 700 }}>GDPR</div>
           <h1 style={{ fontSize: 'clamp(28px, 4vw, 44px)', fontWeight: 800, margin: '0 0 16px' }}>Your Privacy Rights</h1>
@@ -28,7 +28,7 @@ export default function GdprPage() {
         </div>
       </div>
 
-      <div style={{ maxWidth: 760, margin: '0 auto', padding: '56px 40px' }}>
+      <div style={{ maxWidth: 760, margin: '0 auto', padding: '56px clamp(16px, 5vw, 40px)' }}>
         {[
           { title: 'Right to Access', body: 'You have the right to request a copy of all personal data we hold about you. This includes your account information, usage history, and any content generated using your data. To request a data export, email us at privacy@listops.io.' },
           { title: 'Right to Rectification', body: 'If any personal data we hold is inaccurate or incomplete, you have the right to have it corrected. You can update most information directly in your account Settings page, or contact us for other changes.' },

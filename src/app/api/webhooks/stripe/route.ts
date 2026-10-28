@@ -13,28 +13,18 @@ import { NextRequest, NextResponse } from 'next/server'
 import { stripe } from '@/lib/stripe'
 import { headers } from 'next/headers'
 import { db } from '@/lib/db'
-import { organizations, subscriptions } from '@/lib/db/schema'
+import { organizations, subscriptions, stripeEvents } from '@/lib/db/schema'
 import { eq } from 'drizzle-orm'
 import { syncSubscription, downgradeToFree } from '@/lib/user-service'
+import { enforceSeatLimits, markReferralsUpgraded } from '@/lib/team-invites'
 import { trackPlanUpgraded } from '@/lib/posthog'
 import { captureError } from '@/lib/monitoring'
+import { planFromPriceId } from '@/lib/plans'
 import type Stripe from 'stripe'
 
 export const runtime = 'nodejs'
 
-function getPlanFromPriceId(priceId: string): 'starter' | 'pro' | 'commercial' | 'brokerage' | 'enterprise' | 'free' {
-  const map: Record<string, 'starter' | 'pro' | 'commercial' | 'brokerage' | 'enterprise'> = {
-    [process.env.STRIPE_STARTER_MONTHLY_PRICE_ID || '__unset__']: 'starter',
-    [process.env.STRIPE_STARTER_YEARLY_PRICE_ID  || '__unset__']: 'starter',
-    [process.env.STRIPE_PRO_MONTHLY_PRICE_ID     || '__unset__']: 'pro',
-    [process.env.STRIPE_PRO_YEARLY_PRICE_ID      || '__unset__']: 'pro',
-    [process.env.STRIPE_COMMERCIAL_MONTHLY_PRICE_ID || '__unset__']: 'commercial',
-    [process.env.STRIPE_COMMERCIAL_YEARLY_PRICE_ID  || '__unset__']: 'commercial',
-    [process.env.STRIPE_BROKERAGE_MONTHLY_PRICE_ID || '__unset__']: 'brokerage',
-    [process.env.STRIPE_BROKERAGE_YEARLY_PRICE_ID  || '__unset__']: 'brokerage',
-  }
-  return map[priceId] ?? 'free'
-}
+const getPlanFromPriceId = planFromPriceId
 
 /**
  * FIX: Resolve org from webhook event using only reliable strategies.
@@ -102,6 +92,12 @@ export async function POST(request: NextRequest) {
     return NextResponse.json({ error: 'Invalid signature' }, { status: 400 })
   }
 
+  // IDEMPOTENCY: Stripe delivers events at-least-once (retries on timeouts / 5xx). Claim the event id first; if it
+  // was already claimed, acknowledge without re-running side effects. The claim is released on failure (below) so
+  // Stripe's retry still gets processed.
+  const claimed = await db.insert(stripeEvents).values({ id: event.id, type: event.type }).onConflictDoNothing().returning({ id: stripeEvents.id })
+  if (claimed.length === 0) return NextResponse.json({ received: true, duplicate: true })
+
   try {
     switch (event.type) {
 
@@ -163,12 +159,12 @@ export async function POST(request: NextRequest) {
           cancelAtPeriodEnd: sub.cancel_at_period_end,
         })
 
-        const agentLimits: Record<string, number> = {
-          starter: 1, pro: 3, brokerage: 25, enterprise: 999,
-        }
-        await db.update(organizations)
-          .set({ maxAgents: agentLimits[plan] ?? 1 })
-          .where(eq(organizations.id, org.id))
+        // Seats: single source of truth is SEAT_LIMITS (lib/plans.ts). Shrinking plans detach surplus members and revoke surplus invites.
+        const seat = await enforceSeatLimits(org.id)
+        if (seat.detached || seat.revoked) console.log(`[webhook] seat limits enforced for org ${org.id}: detached ${seat.detached}, revoked ${seat.revoked}`)
+
+        // Referral conversion: a link referral becomes "upgraded" only when that person's own org has an ACTIVE paid subscription.
+        if (plan !== 'free' && (sub.status === 'active' || sub.status === 'trialing')) await markReferralsUpgraded(org.id)
 
         console.log(`✅ Plan updated to ${plan} for org ${org.id}`)
 
@@ -187,6 +183,7 @@ export async function POST(request: NextRequest) {
         const org = await findOrgByEvent(sub.customer as string, sub.metadata?.orgId)
         if (org) {
           await downgradeToFree(org.id)
+          await enforceSeatLimits(org.id) // plan is now free: 1 seat. Members are detached, pending invites revoked.
           console.log(`❌ Subscription canceled, org ${org.id} downgraded to free`)
         }
         break
@@ -235,6 +232,7 @@ export async function POST(request: NextRequest) {
   } catch (err) {
     console.error('Webhook handler error:', err)
     captureError(err, { eventType: event.type, eventId: event.id })
+    await db.delete(stripeEvents).where(eq(stripeEvents.id, event.id)).catch(() => {}) // release claim so the retry is processed
     return NextResponse.json({ error: 'Webhook handler failed' }, { status: 500 })
   }
 }

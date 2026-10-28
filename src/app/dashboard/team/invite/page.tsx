@@ -7,7 +7,7 @@ import Link from 'next/link'
 
 const ROLE_OPTIONS = [
   { value: 'agent', label: 'Agent', desc: 'Can create campaigns and manage their own listings' },
-  { value: 'admin', label: 'Admin', desc: 'Full access except billing and owner settings' },
+  { value: 'admin', label: 'Admin', desc: 'Can invite agents and viewers and remove members (owner only can invite admins)' },
   { value: 'viewer', label: 'Viewer', desc: 'Can view campaigns but not create or edit' },
 ]
 
@@ -17,6 +17,7 @@ export default function InviteAgentPage() {
   const [role, setRole] = useState('agent')
   const [status, setStatus] = useState<'idle' | 'loading' | 'success' | 'error'>('idle')
   const [errorMsg, setErrorMsg] = useState('')
+  const [shareUrl, setShareUrl] = useState('')
 
   const handleSubmit = async () => {
     if (!email.trim() || !email.includes('@')) {
@@ -43,6 +44,7 @@ export default function InviteAgentPage() {
         return
       }
 
+      setShareUrl(data.delivered === false ? (data.inviteUrl ?? '') : '')
       setStatus('success')
     } catch {
       setErrorMsg('Network error. Please try again.')
@@ -60,8 +62,11 @@ export default function InviteAgentPage() {
           <h2 className="font-display text-2xl font-semibold text-slate-900 mb-2">Invite sent!</h2>
           <p className="text-slate-500 mb-6">
             We sent an invite to <span className="font-semibold text-slate-700">{email}</span>.
-            They'll receive an email with a link to join your team.
+            They'll receive an email with a one-time link. They must sign up or sign in with that same email address to join.
           </p>
+          {shareUrl && (
+            <p className="text-xs text-left bg-amber-50 border border-amber-200 text-amber-900 rounded-xl p-3 mb-6 break-all">The email could not be sent. Share this link with them directly: {shareUrl}</p>
+          )}
           <div className="flex gap-3 justify-center">
             <button
               onClick={() => { setEmail(''); setRole('agent'); setStatus('idle') }}

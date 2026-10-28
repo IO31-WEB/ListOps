@@ -12,6 +12,14 @@ import { auth } from '@clerk/nextjs/server'
 import { z } from 'zod'
 import { captureError } from '@/lib/monitoring'
 
+/** True for a Postgres unique-constraint violation (23505), including errors wrapped by drizzle (`cause`). */
+export function isUniqueViolation(err: unknown): boolean {
+  const e = err as { code?: string; message?: string; cause?: unknown } | null
+  if (!e) return false
+  if (e.code === '23505' || /duplicate key value violates unique constraint/i.test(e.message ?? '')) return true
+  return e.cause ? isUniqueViolation(e.cause) : false
+}
+
 export class ApiError extends Error {
   constructor(
     public status: number,

@@ -1,17 +1,20 @@
 import type { Metadata } from 'next'
+import { LogoMark } from '@/components/ui/logo'
 import Link from 'next/link'
-import { House, ArrowRight, Clock, Tag } from 'lucide-react'
+import { ArrowRight, Clock, Tag } from 'lucide-react'
 import { BLOG_POSTS } from '@/lib/blog-posts'
 
 export const metadata: Metadata = {
-  title: 'Blog — Real Estate Marketing Guides & Best Practices',
+  title: 'Real Estate Marketing Blog for Agents and Commercial Brokers',
   description: 'Practical guides on real estate listing marketing, social media strategy, email campaigns, and AI tools for agents who want to close more deals.',
   openGraph: {
-    title: 'ListOps Blog — Real Estate Marketing Guides',
+    title: 'ListOps Blog: Real Estate and Commercial Marketing Guides',
     description: 'Practical marketing guides for real estate agents. Social media, email, AI tools, listing copy, and everything in between.',
     url: 'https://listops.io/blog',
     type: 'website',
+    siteName: 'ListOps',
   },
+  twitter: { card: 'summary_large_image', title: 'ListOps Blog', description: 'Practical listing-marketing guides for agents and commercial brokers.' },
   alternates: {
     canonical: 'https://listops.io/blog',
   },
@@ -36,9 +39,7 @@ export default function BlogIndexPage() {
       <nav className="fixed top-0 inset-x-0 z-50 glass border-b border-amber-100/60">
         <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 h-16 flex items-center justify-between">
           <Link href="/" className="flex items-center gap-2.5">
-            <div className="w-8 h-8 bg-slate-900 rounded-lg flex items-center justify-center">
-              <House className="w-4 h-4 text-amber-400" />
-            </div>
+            <LogoMark className="w-8 h-8" />
             <span className="font-display font-semibold text-slate-900 text-lg">ListOps</span>
           </Link>
           <div className="flex items-center gap-3">
@@ -172,9 +173,7 @@ export default function BlogIndexPage() {
       <footer className="border-t border-slate-200 py-8 px-4">
         <div className="max-w-6xl mx-auto flex flex-col sm:flex-row items-center justify-between gap-4">
           <div className="flex items-center gap-2">
-            <div className="w-6 h-6 bg-slate-900 rounded flex items-center justify-center">
-              <House className="w-3 h-3 text-amber-400" />
-            </div>
+            <LogoMark className="w-6 h-6" />
             <span className="text-sm font-semibold text-slate-600">ListOps</span>
           </div>
           <div className="flex items-center gap-6 text-xs text-slate-400">

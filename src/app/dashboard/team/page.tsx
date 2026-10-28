@@ -3,6 +3,9 @@ import { redirect } from 'next/navigation'
 import Link from 'next/link'
 import { Users, Plus, Mail, Lock, ArrowRight, Crown, Shield, User } from 'lucide-react'
 import { getDashboardStats, getTeamMembers } from '@/lib/user-service'
+import { listPendingInvites } from '@/lib/team-invites'
+import { canAccess, seatLimitFor } from '@/lib/plans'
+import { RemoveMemberButton, RevokeInviteButton } from './member-actions'
 
 export const metadata = { title: 'Team' }
 
@@ -21,18 +24,15 @@ export default async function TeamPage() {
   if (!stats) redirect('/onboarding')
 
   const { planTier, user } = stats
-  const canManageTeam = ['pro', 'commercial', 'brokerage', 'enterprise'].includes(planTier)
+  const canManageTeam = canAccess(planTier, 'team_seats')
+  const isManager = user.role === 'owner' || user.role === 'admin'
   const teamMembers = canManageTeam && user.orgId ? await getTeamMembers(user.orgId) : [user]
+  const pendingInvites = canManageTeam && isManager && user.orgId ? await listPendingInvites(user.orgId) : []
 
-  const maxAgents = {
-  free: 1,
-  starter: 1,
-  pro: 3,
-  brokerage: 25,
-  enterprise: 999,
-  commercial: 50,  // ← Add this! Adjust the number to whatever limit you want for commercial tier (e.g., 50 agents, unlimited-ish, etc.)
-}[planTier] ?? 1;
-  const canAddMore = teamMembers.length < maxAgents
+  // HARD seat limit from the single source of truth (lib/plans.ts). Pending invites hold a seat too.
+  const maxAgents = seatLimitFor(planTier)
+  const seatsUsed = teamMembers.length + pendingInvites.length
+  const canAddMore = seatsUsed < maxAgents
 
   return (
     <div className="max-w-4xl mx-auto space-y-6">
@@ -41,10 +41,15 @@ export default async function TeamPage() {
         <div>
           <h1 className="font-display text-2xl font-semibold text-slate-900">Team</h1>
           <p className="text-sm text-slate-500 mt-1">
-            {teamMembers.length} of {maxAgents === 999 ? 'unlimited' : maxAgents} seats used
+            {seatsUsed} of {maxAgents === 999 ? 'unlimited' : maxAgents} seats used{pendingInvites.length > 0 ? ` (${pendingInvites.length} pending invite${pendingInvites.length === 1 ? '' : 's'})` : ''}
           </p>
         </div>
-        {canManageTeam && canAddMore && (
+        {['brokerage', 'enterprise'].includes(planTier) && (
+          <Link href="/dashboard/team/compliance" className="inline-flex items-center gap-2 border border-slate-200 bg-white text-slate-700 text-sm font-semibold px-5 py-2.5 rounded-xl hover:bg-slate-50 transition-colors">
+            Compliance profile
+          </Link>
+        )}
+        {canManageTeam && isManager && canAddMore && (
           <Link
             href="/dashboard/team/invite"
             className="inline-flex items-center gap-2 bg-slate-900 text-white text-sm font-semibold px-5 py-2.5 rounded-xl hover:bg-slate-800 transition-colors"
@@ -65,7 +70,7 @@ export default async function TeamPage() {
             <div className="flex-1">
               <h3 className="font-semibold text-slate-900 mb-1">Team features require Pro+</h3>
               <p className="text-sm text-slate-600 mb-4 leading-relaxed">
-                Pro plan includes 3 agent seats. Brokerage plan includes 25 seats with admin dashboard, 
+                Pro and Commercial include 2 seats (you plus one teammate). Brokerage includes 25 seats with agent performance analytics, 
                 white-label outputs, and compliance tools.
               </p>
               <div className="flex flex-wrap gap-3">
@@ -91,7 +96,7 @@ export default async function TeamPage() {
             const roleConfig = ROLE_LABELS[member.role] ?? ROLE_LABELS.agent
             const RoleIcon = roleConfig.icon
             return (
-              <div key={member.id} className="flex items-center gap-4 px-6 py-4">
+              <div key={member.id} className="flex flex-wrap sm:flex-nowrap items-center gap-x-4 gap-y-2 px-4 sm:px-6 py-4">
                 {member.avatarUrl ? (
                   <img src={member.avatarUrl} alt={member.firstName ?? ''} className="w-10 h-10 rounded-xl object-cover flex-shrink-0" />
                 ) : (
@@ -102,12 +107,13 @@ export default async function TeamPage() {
                   </div>
                 )}
                 <div className="flex-1 min-w-0">
-                  <p className="text-sm font-semibold text-slate-900">
+                  <p className="text-sm font-semibold text-slate-900 truncate">
                     {[member.firstName, member.lastName].filter(Boolean).join(' ') || member.email}
                   </p>
-                  <p className="text-xs text-slate-500">{member.email}</p>
+                  <p className="text-xs text-slate-500 truncate">{member.email}</p>
                 </div>
-                <div className="flex items-center gap-2">
+                {/* Below the name/email on phones (full row, indented past the avatar); inline on sm+ */}
+                <div className="flex items-center gap-2 flex-shrink-0 w-full pl-14 sm:w-auto sm:pl-0">
                   <span className={`inline-flex items-center gap-1.5 text-xs font-medium px-2.5 py-1 rounded-full ${roleConfig.color}`}>
                     <RoleIcon className="w-3 h-3" />
                     {roleConfig.label}
@@ -115,17 +121,37 @@ export default async function TeamPage() {
                   {member.id === user.id && (
                     <span className="text-xs text-slate-400 bg-slate-100 px-2 py-0.5 rounded-full">You</span>
                   )}
+                  {isManager && member.id !== user.id && member.role !== 'owner' && (user.role === 'owner' || member.role !== 'admin') && (
+                    <RemoveMemberButton id={member.id} name={[member.firstName, member.lastName].filter(Boolean).join(' ') || member.email} />
+                  )}
                 </div>
               </div>
             )
           })}
         </div>
 
-        {canManageTeam && canAddMore && (
+        {pendingInvites.length > 0 && (
+          <div className="border-t border-slate-100">
+            <p className="px-6 pt-4 text-xs font-semibold uppercase tracking-wide text-slate-500">Pending invites (each holds a seat)</p>
+            <div className="divide-y divide-slate-100">
+              {pendingInvites.map(inv => (
+                <div key={inv.id} className="flex flex-wrap items-center gap-x-4 gap-y-2 px-4 sm:px-6 py-3">
+                  <div className="flex-1 min-w-0">
+                    <p className="text-sm text-slate-900 truncate">{inv.email}</p>
+                    <p className="text-xs text-slate-500">{inv.role} · expires {new Date(inv.expiresAt).toLocaleDateString('en-US')}</p>
+                  </div>
+                  <RevokeInviteButton id={inv.id} />
+                </div>
+              ))}
+            </div>
+          </div>
+        )}
+
+        {canManageTeam && isManager && canAddMore && (
           <div className="px-6 py-4 bg-slate-50 border-t border-slate-100">
             <Link href="/dashboard/team/invite" className="flex items-center gap-2 text-sm text-amber-700 font-medium hover:underline">
               <Plus className="w-4 h-4" />
-              Invite another agent ({maxAgents - teamMembers.length} seat{maxAgents - teamMembers.length !== 1 ? 's' : ''} remaining)
+              Invite another agent ({maxAgents - seatsUsed} seat{maxAgents - seatsUsed !== 1 ? 's' : ''} remaining)
             </Link>
           </div>
         )}
@@ -138,11 +164,17 @@ export default async function TeamPage() {
             <Shield className="w-4 h-4 text-amber-400" />
             <span className="text-amber-400 text-xs font-semibold uppercase tracking-widest">Brokerage Features Active</span>
           </div>
+          <div className="flex flex-wrap gap-x-6 gap-y-2 mb-4 text-sm">
+            <Link href="/dashboard/analytics" className="text-amber-300 underline">Agent performance →</Link>
+            <Link href="/dashboard/team/activity" className="text-amber-300 underline">Team activity log →</Link>
+            <a href="/api/team/export" className="text-amber-300 underline">Export all campaigns (CSV)</a>
+            <span className="text-xs text-slate-400">Owners and admins only</span>
+          </div>
           <div className="grid sm:grid-cols-3 gap-4">
             {[
-              { icon: '🎨', title: 'White-Label', desc: 'Your brand on all outputs — no ListOps branding shown to agents or clients.' },
-              { icon: '📊', title: 'Admin Dashboard', desc: 'See campaign activity across all agents in your workspace.' },
-              { icon: '📋', title: 'Audit Logs', desc: 'Full compliance trail of all actions for all agents.' },
+              { icon: '🎨', title: 'White-Label', desc: 'Your brokerage name, logo and colors on all generated content and flyers (set up in Brand Kit).' },
+              { icon: '📊', title: 'Agent Performance', desc: 'Campaigns generated, microsite views and last activity for every agent, plus CSV export of all team campaigns.' },
+              { icon: '📋', title: 'Team Activity Log', desc: 'A record of sensitive actions: invitations, listing deletions, outreach sends and billing events.' },
             ].map(f => (
               <div key={f.title} className="bg-slate-800 rounded-xl p-4">
                 <div className="text-xl mb-2">{f.icon}</div>
