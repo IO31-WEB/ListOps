@@ -9,12 +9,15 @@ import { UserButton } from '@clerk/nextjs'
 import {
   Zap, LayoutDashboard, FolderOpen, Plus, Palette,
   CreditCard, Users, BarChart2, Settings, ChevronLeft, Gift,
-  ChevronRight, Menu, X, HelpCircle, Building2, Inbox, CalendarDays
+  ChevronRight, Menu, X, HelpCircle, Building2, Inbox, CalendarDays,
+  type LucideIcon,
 } from 'lucide-react'
 import { cn } from '@/lib/utils'
-import { canAccess, type PlanTier } from '@/lib/plans'
+import { canAccess, type PlanTier, type Feature } from '@/lib/plans'
 
-const NAV_ITEMS = [
+type NavItem = { label: string; href: string; icon: LucideIcon; highlight?: boolean; feature?: Feature }
+
+const NAV_ITEMS: NavItem[] = [
   { label: 'Dashboard', href: '/dashboard', icon: LayoutDashboard },
   { label: 'New Campaign', href: '/dashboard/generate', icon: Plus, highlight: true },
   { label: 'My Campaigns', href: '/dashboard/campaigns', icon: FolderOpen },
@@ -87,7 +90,7 @@ export function DashboardSidebar() {
 
       {/* Main nav */}
       <nav className={cn('flex-1 p-3 overflow-y-auto', mobile ? 'space-y-2' : 'space-y-1')}>
-        {NAV_ITEMS.filter(item => !('feature' in item) || (!!billing && canAccess(billing.planTier as PlanTier, item.feature))).map((item) => {
+        {NAV_ITEMS.filter(item => !item.feature || (!!billing && canAccess(billing.planTier as PlanTier, item.feature))).map((item) => {
           const isActive = pathname === item.href || (item.href !== '/dashboard' && pathname.startsWith(item.href))
           return (
             <Link
