@@ -31,7 +31,7 @@ export async function POST(req: NextRequest) {
     if (!res.ok) throw new ApiError(res.status, res.error)
 
     trackReferralSignup({ referrerId: res.referrerClerkId, newUserId: userId, referralCode: code })
-    return NextResponse.json({ success: true, message: 'Referral applied! It's counted as upgraded once you subscribe to a paid plan.' })
+    return NextResponse.json({ success: true, message: "Referral applied! It's counted as upgraded once you subscribe to a paid plan." })
   } catch (err) {
     return handleApiError(err, { route: 'referral/redeem' })
   }
