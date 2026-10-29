@@ -362,9 +362,15 @@ async function createJson(
     outTok += msg.usage.output_tokens
     msg.usage.input_tokens = inTok
     msg.usage.output_tokens = outTok
-    if (msg.stop_reason !== 'max_tokens' || attempt >= 1 || budget >= MAX_TOKENS_CEILING) {
-      return msg
+    const truncated = msg.stop_reason === 'max_tokens'
+    if (!truncated) {
+      // Complete reply: make sure it actually parses (after the repair passes). If not, one fresh attempt usually fixes it.
+      try { parseJSON(extractText(msg, label), label); return msg } catch { /* fall through to retry */ }
+      if (attempt >= 1) return msg // let the caller's parse surface the user-facing error
+      console.error(`[generate] ${label} returned unparseable JSON; retrying once`)
+      continue
     }
+    if (attempt >= 1 || budget >= MAX_TOKENS_CEILING) return msg
     console.error(`[generate] ${label} hit max_tokens=${budget} (blocks=${msg.content.map(b => b.type).join(',')}, out=${msg.usage.output_tokens}); retrying with a larger budget`)
     budget = Math.min(Math.ceil(budget * 2), MAX_TOKENS_CEILING)
   }
@@ -401,6 +407,35 @@ function sanitizeControlCharsInStrings(text: string): string {
   return result
 }
 
+// FIX: the other common way well-formed-looking JSON fails: an UNESCAPED double quote inside a string value
+// (e.g. "the "Oak" floor plan", or 6" rails). Walk the text; inside a string, a quote only counts as the closing quote
+// if the next non-space character is what could legally follow a string (, } ] :) — and for a comma, what follows it
+// must start a new string/object/array. Any other quote is escaped. Also escapes raw control characters.
+function repairJsonStrings(text: string): string {
+  let out = ''
+  let inString = false
+  for (let i = 0; i < text.length; i++) {
+    const ch = text[i]
+    if (!inString) { if (ch === '"') inString = true; out += ch; continue }
+    if (ch === '\\') { out += ch + (text[i + 1] ?? ''); i++; continue }
+    if (ch === '\n') { out += '\\n'; continue }
+    if (ch === '\r') { out += '\\r'; continue }
+    if (ch === '\t') { out += '\\t'; continue }
+    if (ch !== '"') { out += ch; continue }
+    let j = i + 1
+    while (j < text.length && /\s/.test(text[j])) j++
+    const next = text[j]
+    let closing = next === undefined || next === '}' || next === ']' || next === ':'
+    if (next === ',') {
+      let k = j + 1
+      while (k < text.length && /\s/.test(text[k])) k++
+      closing = text[k] === '"' || text[k] === '{' || text[k] === '[' || text[k] === undefined
+    }
+    if (closing) { inString = false; out += ch } else { out += '\\"' }
+  }
+  return out
+}
+
 function parseJSON(raw: string, label: string) {
   const cleaned = raw.replace(/```json\n?/g, '').replace(/```\n?/g, '').trim()
 
@@ -415,10 +450,20 @@ function parseJSON(raw: string, label: string) {
 
   // Attempt 4: sanitize raw control characters inside string values, then parse
   const sanitized = sanitizeControlCharsInStrings(extracted)
-  try { return JSON.parse(sanitized) } catch { /* fall through to throw below */ }
+  try { return JSON.parse(sanitized) } catch { /* try next */ }
 
+  // Attempt 5: also repair stray unescaped quotes inside strings
+  let lastErr = ''
+  try { return JSON.parse(repairJsonStrings(extracted)) } catch (e) { lastErr = e instanceof Error ? e.message : String(e) }
+
+  // Log WHERE the original text breaks (position + surrounding characters) so the cause is visible in Vercel logs.
+  let where = ''
+  try { JSON.parse(extracted) } catch (e) {
+    const m = (e instanceof Error ? e.message : '').match(/position (\d+)/)
+    if (m) { const pos = Number(m[1]); where = ` Break@${pos}: ${JSON.stringify(extracted.slice(Math.max(0, pos - 80), pos + 80))}` }
+  }
   console.error(
-    `[generate] ${label} JSON parse failed. Head: ${cleaned.slice(0, 300)} ... Tail: ${cleaned.slice(-300)}`
+    `[generate] ${label} JSON parse failed (repair: ${lastErr}).${where} Head: ${cleaned.slice(0, 200)} ... Tail: ${cleaned.slice(-200)}`
   )
   throw new ApiError(502, 'We could not read the AI response. Please try again.')
 }
