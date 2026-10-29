@@ -55,9 +55,6 @@ const GENERATION_MODEL = process.env.GENERATION_MODEL || 'claude-sonnet-5'
 const MAX_VISION_PHOTOS = 4
 const MAX_VISION_BYTES = 5 * 1024 * 1024
 
-// System prompt for every generation call: injection guard + strict JSON.
-const JSON_SYSTEM = INJECTION_GUARD + ' Reply with one JSON object only: start with "{", end with "}", no markdown, no commentary.'
-
 // A generation older than this is considered dead (the function's maxDuration is 300 s) and stops blocking retries.
 const STALE_GENERATING_MS = 6 * 60 * 1000
 
@@ -339,6 +336,40 @@ function assertNotTruncated(msg: Anthropic.Message, label: string) {
   }
 }
 
+// FIX (truncation 502s): every generation call goes through here.
+//  1. Extended/adaptive thinking is explicitly DISABLED. Thinking tokens are counted against max_tokens, so on a thinking-capable
+//     model the visible JSON could be cut off even with a 10k budget ("Campaign generation was cut off").
+//  2. If a reply still stops at max_tokens, retry ONCE with a larger budget before giving up. 20k is the ceiling that is
+//     still safe for a non-streaming request in the SDK.
+//  3. Usage from every attempt is summed onto the returned message, so spend/cost tracking stays accurate.
+const MAX_TOKENS_CEILING = 20000
+async function createJson(
+  a: { max_tokens: number; content: string | Array<Anthropic.ImageBlockParam | Anthropic.TextBlockParam> },
+  label: string
+): Promise<Anthropic.Message> {
+  let budget = a.max_tokens
+  let inTok = 0
+  let outTok = 0
+  for (let attempt = 0; ; attempt++) {
+    const msg = await anthropic.messages.create({
+      model: GENERATION_MODEL,
+      max_tokens: budget,
+      thinking: { type: 'disabled' },
+      system: INJECTION_GUARD + ' Reply with one JSON object only: start with "{", end with "}", no markdown, no commentary.',
+      messages: [{ role: 'user', content: a.content }],
+    })
+    inTok += msg.usage.input_tokens
+    outTok += msg.usage.output_tokens
+    msg.usage.input_tokens = inTok
+    msg.usage.output_tokens = outTok
+    if (msg.stop_reason !== 'max_tokens' || attempt >= 1 || budget >= MAX_TOKENS_CEILING) {
+      return msg
+    }
+    console.error(`[generate] ${label} hit max_tokens=${budget} (blocks=${msg.content.map(b => b.type).join(',')}, out=${msg.usage.output_tokens}); retrying with a larger budget`)
+    budget = Math.min(Math.ceil(budget * 2), MAX_TOKENS_CEILING)
+  }
+}
+
 // FIX: on parse failure, log a snippet of the actual raw text so Vercel logs show *why*
 // it failed (stray preamble, unescaped newline, etc.) instead of just the fact that it did.
 //
@@ -437,17 +468,10 @@ async function generateCommercial(a: {
   const fetched = await Promise.all((listingData.photoKeys ?? []).slice(0, MAX_VISION_PHOTOS).map(fetchPhotoAsBase64))
   for (const photo of fetched) if (photo) photoBlocks.push({ type: 'image', source: { type: 'base64', media_type: photo.mediaType, data: photo.data } })
 
-  const system = INJECTION_GUARD + ' Respond with valid JSON only. Your entire reply must start with "{" and end with "}" — no preamble, no markdown code fences, no closing remarks.'
   const photoNote = photoBlocks.length ? '\n\nThe attached photos show the property. Use them only to describe what is visibly there (building type, frontage, condition, signage, site). Never infer tenants, occupancy or condition beyond what is visible or stated.' : ''
   const [offeringMsg, outreachMsg] = await Promise.all([
-    anthropic.messages.create({
-      model: GENERATION_MODEL, max_tokens: 12000, system,
-      messages: [{ role: 'user', content: [...photoBlocks, { type: 'text', text: buildOfferingPrompt(input) + photoNote }] }],
-    }),
-    anthropic.messages.create({
-      model: GENERATION_MODEL, max_tokens: 10000, system,
-      messages: [{ role: 'user', content: buildOutreachPrompt(input) }],
-    }),
+    createJson({ max_tokens: 12000, content: [...photoBlocks, { type: 'text', text: buildOfferingPrompt(input) + photoNote }] }, 'Commercial offering'),
+    createJson({ max_tokens: 10000, content: buildOutreachPrompt(input) }, 'Commercial outreach'),
   ])
   const inTok = offeringMsg.usage.input_tokens + outreachMsg.usage.input_tokens
   const outTok = offeringMsg.usage.output_tokens + outreachMsg.usage.output_tokens
@@ -652,27 +676,11 @@ export async function POST(request: NextRequest) {
     // if you try. So JSON-only compliance has to come entirely from prompt instructions +
     // the parser being resilient, not from constraining the response mechanically.
     const [socialMessage, listingMessage, proMessage] = await Promise.all([
-      anthropic.messages.create({
-        model: GENERATION_MODEL,
-        max_tokens: 10000,
-        system: JSON_SYSTEM,
-        messages: [{ role: 'user', content: socialPromptText }],
-      }),
-      anthropic.messages.create({
-        model: GENERATION_MODEL,
-        max_tokens: 10000,
-        system: JSON_SYSTEM,
-        messages: [{ role: 'user', content: listingMessageContent }],
-      }),
+      createJson({ max_tokens: 10000, content: socialPromptText }, 'Social/email'),
+      createJson({ max_tokens: 10000, content: listingMessageContent }, 'Listing/print/photo'),
       isProPlan
-        ? anthropic.messages.create({
-            model: GENERATION_MODEL,
-            // Pro output (6 weeks × TikTok/LinkedIn/X/Stories/Reels + virtual tours) is the
-            // largest single payload — keep its own generous budget.
-            max_tokens: 16000,
-            system: JSON_SYSTEM,
-            messages: [{ role: 'user', content: [{ type: 'text', text: buildProPrompt(listingData, planTier, brandKit, (user as any).aiPersona) }] }],
-          })
+        // Pro output (6 weeks × TikTok/LinkedIn/X/Stories/Reels + virtual tours) is the largest single payload.
+        ? createJson({ max_tokens: 16000, content: [{ type: 'text', text: buildProPrompt(listingData, planTier, brandKit, (user as any).aiPersona) }] }, 'Pro video/social')
         : Promise.resolve(null),
     ])
 
