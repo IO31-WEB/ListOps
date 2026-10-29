@@ -275,7 +275,8 @@ async function regenerateCommercial(a: {
   const prompt = (source === 'offering' ? buildOfferingPrompt(input) + photoNote : buildOutreachPrompt(input))
   const message = await anthropic.messages.create({
     model: process.env.GENERATION_MODEL || 'claude-sonnet-5',
-    max_tokens: source === 'offering' ? 12000 : 10000,
+    max_tokens: source === 'offering' ? 16000 : 14000, // headroom; thinking disabled so tokens go to the JSON, not reasoning
+    thinking: { type: 'disabled' },
     system: JSON_SYSTEM,
     messages: [{ role: 'user', content: [...photoBlocks, { type: 'text', text: prompt }] }],
   })
@@ -383,7 +384,8 @@ export async function POST(
     // Call Claude with targeted mini-prompt
     const message = await anthropic.messages.create({
       model: process.env.GENERATION_MODEL || 'claude-sonnet-5',
-      max_tokens: 8000,
+      max_tokens: 12000,
+      thinking: { type: 'disabled' },
       system: JSON_SYSTEM,
       messages: [{ role: 'user', content: prompt }],
     })
