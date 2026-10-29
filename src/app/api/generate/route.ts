@@ -436,7 +436,7 @@ function repairJsonStrings(text: string): string {
   return out
 }
 
-function parseJSON(raw: string, label: string) {
+function parseJSONRaw(raw: string, label: string) {
   const cleaned = raw.replace(/```json\n?/g, '').replace(/```\n?/g, '').trim()
 
   // Attempt 1: parse as-is
@@ -456,6 +456,14 @@ function parseJSON(raw: string, label: string) {
   let lastErr = ''
   try { return JSON.parse(repairJsonStrings(extracted)) } catch (e) { lastErr = e instanceof Error ? e.message : String(e) }
 
+  // Attempt 6: the model sometimes finishes one (or more) closing brace/bracket short. Close what is still open.
+  try {
+    const closed = closeUnbalanced(repairJsonStrings(extracted))
+    const parsed = JSON.parse(closed)
+    console.warn(`[generate] ${label} JSON was missing closing brackets; auto-closed (structure is re-checked by the caller)`)
+    return parsed
+  } catch { /* fall through to the failure log */ }
+
   // Log WHERE the original text breaks (position + surrounding characters) so the cause is visible in Vercel logs.
   let where = ''
   try { JSON.parse(extracted) } catch (e) {
@@ -466,6 +474,61 @@ function parseJSON(raw: string, label: string) {
     `[generate] ${label} JSON parse failed (repair: ${lastErr}).${where} Head: ${cleaned.slice(0, 200)} ... Tail: ${cleaned.slice(-200)}`
   )
   throw new ApiError(502, 'We could not read the AI response. Please try again.')
+}
+
+// FIX: append any closing } / ] the model forgot at the end (ignores brackets inside strings).
+function closeUnbalanced(text: string): string {
+  const stack: string[] = []
+  let inString = false
+  for (let i = 0; i < text.length; i++) {
+    const ch = text[i]
+    if (inString) {
+      if (ch === '\\') i++
+      else if (ch === '"') inString = false
+      continue
+    }
+    if (ch === '"') inString = true
+    else if (ch === '{') stack.push('}')
+    else if (ch === '[') stack.push(']')
+    else if ((ch === '}' || ch === ']') && stack[stack.length - 1] === ch) stack.pop()
+  }
+  if (inString) return text // truncated mid-string: not something we can safely repair
+  return text + stack.reverse().join('')
+}
+
+// Top-level keys each call must return. If the model closed an object too late, a key can end up NESTED inside a
+// sibling (e.g. printMaterials inside listingCopy); hoist it back up. Missing required keys => treated as a parse failure
+// (createJson then retries once).
+const EXPECTED_KEYS: Record<string, { keys: string[]; required: string[] }> = {
+  'Social/email': { keys: ['facebook', 'instagram', 'emailJustListed', 'emailStillAvailable', 'emailDrip'], required: ['facebook', 'instagram'] },
+  'Listing/print/photo': { keys: ['listingCopy', 'printMaterials', 'photoCaptions', 'micrositeCopy'], required: ['listingCopy', 'printMaterials'] },
+}
+
+function hoistMisnested(obj: any, keys: string[]) {
+  const isObj = (v: unknown): v is Record<string, any> => !!v && typeof v === 'object' && !Array.isArray(v)
+  for (const key of keys) {
+    if (key in obj) continue
+    const queue: Array<Record<string, any>> = Object.values(obj).filter(isObj)
+    for (let depth = 0; queue.length && depth < 20; depth++) {
+      const holder = queue.shift()!
+      if (key in holder) { obj[key] = holder[key]; delete holder[key]; console.warn(`[generate] hoisted misnested key "${key}" to top level`); break }
+      queue.push(...Object.values(holder).filter(isObj))
+    }
+  }
+}
+
+function parseJSON(raw: string, label: string) {
+  const obj = parseJSONRaw(raw, label)
+  const spec = EXPECTED_KEYS[label]
+  if (spec && obj && typeof obj === 'object') {
+    hoistMisnested(obj, spec.keys)
+    const missing = spec.required.filter(k => !(k in obj))
+    if (missing.length) {
+      console.error(`[generate] ${label} JSON parsed but is missing required keys: ${missing.join(', ')}. Keys: ${Object.keys(obj).join(',')}`)
+      throw new ApiError(502, 'We could not read the AI response. Please try again.')
+    }
+  }
+  return obj
 }
 
 // FIX: never assume content[0] is the text block. Newer models can return a
