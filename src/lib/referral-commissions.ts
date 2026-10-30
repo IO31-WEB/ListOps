@@ -107,13 +107,13 @@ export async function getReferrerSummaries(now = new Date()): Promise<ReferrerSu
   ])
   const ids = [...new Set([...refRows.map(r => r.referrerId), ...comRows.map(c => c.referrerId)])]
   if (!ids.length) return []
-  const people = await db.select({ id: users.id, name: users.name, email: users.email, payoutEmail: users.payoutEmail }).from(users).where(inArray(users.id, ids))
+  const people = await db.select({ id: users.id, firstName: users.firstName, lastName: users.lastName, email: users.email, payoutEmail: users.payoutEmail }).from(users).where(inArray(users.id, ids))
   const byId = new Map(people.map(p => [p.id, p]))
   const out = ids.map((id): ReferrerSummary => {
     const mine = comRows.filter(c => c.referrerId === id)
     const p = byId.get(id)
     return {
-      referrerId: id, name: p?.name ?? '', email: p?.email ?? '', payoutEmail: p?.payoutEmail ?? null,
+      referrerId: id, name: [p?.firstName, p?.lastName].filter(Boolean).join(' '), email: p?.email ?? '', payoutEmail: p?.payoutEmail ?? null,
       referredCount: refRows.filter(r => r.referrerId === id).length,
       payingCount: new Set(mine.filter(c => c.status !== 'void').map(c => c.referredUserId)).size,
       lastPaidAt: mine.reduce<Date | null>((a, c) => (c.paidAt && (!a || c.paidAt > a) ? c.paidAt : a), null),
