@@ -5,12 +5,12 @@
  *    then the Equal Housing line — each part only once even if the agent already typed it
  */
 
-export const LOCKABLE_FIELDS = ['brokerageName', 'brokerageLogo', 'logoUrl', 'primaryColor', 'accentColor', 'tagline'] as const
+export const LOCKABLE_FIELDS = ['brokerageName', 'brokerageLogo', 'logoUrl', 'primaryColor', 'accentColor', 'extraColors', 'tagline'] as const
 export type LockableField = (typeof LOCKABLE_FIELDS)[number]
 
 export const LOCK_LABELS: Record<LockableField, string> = {
   brokerageName: 'Brokerage name', brokerageLogo: 'Brokerage logo', logoUrl: 'Agent/team logo',
-  primaryColor: 'Primary color', accentColor: 'Accent color', tagline: 'Tagline',
+  primaryColor: 'Primary color', accentColor: 'Accent color', extraColors: 'Additional colors', tagline: 'Tagline',
 }
 
 export const EQUAL_HOUSING_LINE = 'Equal Housing Opportunity.'
@@ -42,6 +42,16 @@ export function buildDisclaimer(agentDisclaimer: string | null | undefined, org:
   return parts.join(' ')
 }
 
+/** Locked extra colors are stored as a JSON string. Returns null when malformed so a bad value never wipes the agent's colors. */
+export function parseLockedColors(v: string): Array<{ name: string; value: string }> | null {
+  try {
+    const raw = JSON.parse(v)
+    if (!Array.isArray(raw)) return null
+    const out = raw.filter((c: any) => c && typeof c.name === 'string' && /^#[0-9a-fA-F]{6}$/.test(c.value)).slice(0, 8).map((c: any) => ({ name: c.name.slice(0, 30), value: c.value as string }))
+    return out.length ? out : null
+  } catch { return null }
+}
+
 /** Returns the brand kit with org locks + forced disclaimer applied. Works with a missing kit (agent never set one up). */
 export function applyCompliance<T extends Record<string, any>>(bk: T | null | undefined, org: OrgCompliance | null, agentLicense?: string | null): T {
   const base = (bk ?? {}) as T
@@ -49,7 +59,10 @@ export function applyCompliance<T extends Record<string, any>>(bk: T | null | un
   const out: Record<string, any> = { ...base }
   for (const k of LOCKABLE_FIELDS) {
     const v = org.locked[k]
-    if (typeof v === 'string' && v.trim()) out[k] = v
+    if (typeof v !== 'string' || !v.trim()) continue
+    // extraColors is stored in the (string-valued) lock map as JSON; brokerage palette replaces whatever the agent saved.
+    if (k === 'extraColors') { const arr = parseLockedColors(v); if (arr) out[k] = arr; continue }
+    out[k] = v
   }
   out.disclaimer = buildDisclaimer(base.disclaimer, org, agentLicense)
   return out as T

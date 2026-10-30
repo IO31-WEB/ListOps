@@ -165,7 +165,7 @@ function story(d: KitData): ReactElement {
       {gradient(w, photoH, 0, 'linear-gradient(180deg, rgba(8,15,30,0.4) 0%, rgba(8,15,30,0) 30%, rgba(8,15,30,0.0) 70%, rgba(8,15,30,0.85) 100%)')}
       <div style={flex({ position: 'absolute', top: 290, left: 64 })}>{badge(BADGE_TEXT.justListed, d, 34)}</div>
       <div style={{ position: 'absolute', top: panelTop, left: 0, width: w, height: barTop - panelTop, display: 'flex', overflow: 'hidden', background: d.primary, flexDirection: 'column', padding: '44px 72px 0' }}>
-        <div style={{ display: 'flex', width: 90, height: 4, background: d.accent }} />
+        <div style={{ display: 'flex', width: 90, height: 4, background: d.rule ?? d.accent }} />
         <div style={{ display: 'flex', fontSize: 60, color: '#fff', marginTop: 24, lineHeight: 1.1 }}>{d.street}</div>
         <div style={{ display: 'flex', fontSize: 28, color: 'rgba(255,255,255,0.7)', marginTop: 8, letterSpacing: 3, textTransform: 'uppercase' }}>{d.cityState}</div>
         <div style={flex({ marginTop: 24 })}>{priceBlock(d, 84, 'ig-story')}</div>
@@ -189,7 +189,7 @@ function story2(d: KitData): ReactElement {
       {gradient(w, 420, 0, 'linear-gradient(180deg, rgba(8,15,30,0.5) 0%, rgba(8,15,30,0) 100%)')}
       <div style={flex({ position: 'absolute', top: 290, left: 64 })}>{badge(BADGE_TEXT.justListed, d, 34)}</div>
       <div style={flex({ position: 'absolute', left: 72, right: 72, top: 1230, flexDirection: 'column' })}>
-        <div style={{ display: 'flex', width: 90, height: 4, background: d.accent }} />
+        <div style={{ display: 'flex', width: 90, height: 4, background: d.rule ?? d.accent }} />
         <div style={{ display: 'flex', fontSize: 100, color: d.accent, marginTop: 26 }}>{d.price}</div>
         <div style={{ display: 'flex', fontSize: 62, color: '#fff', marginTop: 12, lineHeight: 1.1 }}>{d.street}</div>
         <div style={{ display: 'flex', fontSize: 28, color: 'rgba(255,255,255,0.78)', marginTop: 8, letterSpacing: 3, textTransform: 'uppercase' }}>{d.cityState}</div>
@@ -293,7 +293,7 @@ function openHouse(d: KitData): ReactElement {
       <div style={flex({ position: 'absolute', top: photoH, left: 0, width: w, height: h - photoH - bar, background: d.primary, flexDirection: 'column', alignItems: 'center', padding: '34px 60px 0' })}>
         <div style={{ display: 'flex', fontSize: 30, color: d.accent, letterSpacing: 10, textTransform: 'uppercase' }}>You&apos;re invited</div>
         <div style={{ display: 'flex', fontSize: 110, color: '#fff', letterSpacing: 6, textTransform: 'uppercase', marginTop: 6 }}>Open House</div>
-        <div style={{ display: 'flex', width: 120, height: 4, background: d.accent, margin: '14px 0 18px' }} />
+        <div style={{ display: 'flex', width: 120, height: 4, background: d.rule ?? d.accent, margin: '14px 0 18px' }} />
         <div style={{ display: 'flex', fontSize: 46, color: d.accent }}>{[d.date, d.time].filter(Boolean).join('   ·   ') || 'Date & time to be announced'}</div>
         <div style={{ display: 'flex', fontSize: 38, color: '#fff', marginTop: 16 }}>{d.street}</div>
         <div style={{ display: 'flex', fontSize: 22, color: 'rgba(255,255,255,0.7)', marginTop: 6, letterSpacing: 3, textTransform: 'uppercase' }}>{d.cityState}  ·  {d.price}</div>

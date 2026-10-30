@@ -8,19 +8,36 @@ interface ReferralData {
   code: string
   referralUrl: string
   stats: { total: number; signedUp: number; upgraded: number; rewardsEarned: number }
+  earnings?: { holdCents: number; payableCents: number; paidCents: number; payoutEmail: string | null; ratePct: number; holdDays: number }
 }
+
+const usd = (cents: number) => `$${(cents / 100).toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`
 
 export default function ReferralPage() {
   const [data, setData] = useState<ReferralData | null>(null)
   const [loading, setLoading] = useState(true)
   const [copied, setCopied] = useState(false)
+  const [payoutEmail, setPayoutEmail] = useState('')
+  const [savingPayout, setSavingPayout] = useState(false)
 
   useEffect(() => {
     fetch('/api/referral')
       .then(r => r.json())
-      .then(d => { setData(d); setLoading(false) })
+      .then(d => { setData(d); setPayoutEmail(d?.earnings?.payoutEmail ?? ''); setLoading(false) })
       .catch(() => setLoading(false))
   }, [])
+
+  const savePayoutEmail = async (e: React.FormEvent) => {
+    e.preventDefault()
+    setSavingPayout(true)
+    try {
+      const res = await fetch('/api/referral/payout-email', { method: 'PUT', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ payoutEmail }) })
+      const d = await res.json().catch(() => ({}))
+      if (!res.ok) throw new Error(d.error || 'Could not save')
+      toast.success('Payout email saved')
+    } catch (err: any) { toast.error(err.message || 'Could not save') }
+    finally { setSavingPayout(false) }
+  }
 
   const copyLink = () => {
     if (!data?.referralUrl) return
@@ -70,7 +87,7 @@ export default function ReferralPage() {
           {[
             { step: '1', text: 'Share your unique link with another agent' },
             { step: '2', text: 'They sign up and upgrade to any paid plan' },
-            { step: '3', text: 'We credit a free month to your account (applied by our team)' },
+            { step: '3', text: `You earn ${data?.earnings?.ratePct ?? 20}% of what they pay, paid out to you by our team` },
           ].map(({ step, text }) => (
             <div key={step} className="text-center">
               <div className="w-8 h-8 rounded-full bg-amber-400 text-slate-900 font-bold text-sm flex items-center justify-center mx-auto mb-2">{step}</div>
@@ -117,7 +134,7 @@ export default function ReferralPage() {
           { label: 'Total Referred', value: data?.stats.total ?? 0, icon: Share2 },
           { label: 'Signed Up', value: data?.stats.signedUp ?? 0, icon: Users },
           { label: 'Upgraded', value: data?.stats.upgraded ?? 0, icon: ArrowRight },
-          { label: 'Months Earned', value: data?.stats.rewardsEarned ?? 0, icon: DollarSign },
+          { label: 'Total Earned', value: usd((data?.earnings?.paidCents ?? 0) + (data?.earnings?.payableCents ?? 0) + (data?.earnings?.holdCents ?? 0)), icon: DollarSign },
         ].map(({ label, value, icon: Icon }) => (
           <div key={label} className="bg-white border border-slate-200 rounded-xl p-4 text-center">
             <Icon className="w-4 h-4 text-slate-400 mx-auto mb-1" />
@@ -125,6 +142,31 @@ export default function ReferralPage() {
             <div className="text-xs text-slate-500 mt-0.5">{label}</div>
           </div>
         ))}
+      </div>
+
+      {/* Earnings + payout */}
+      <div className="bg-white border border-slate-200 rounded-2xl p-6 space-y-4">
+        <h2 className="font-semibold text-slate-900">Your earnings</h2>
+        <div className="grid grid-cols-3 gap-3 text-center">
+          {[
+            { label: 'Pending', value: usd(data?.earnings?.holdCents ?? 0), hint: `${data?.earnings?.holdDays ?? 30}-day hold` },
+            { label: 'Ready to pay', value: usd(data?.earnings?.payableCents ?? 0), hint: 'next payout' },
+            { label: 'Paid', value: usd(data?.earnings?.paidCents ?? 0), hint: 'all time' },
+          ].map(s => (
+            <div key={s.label} className="rounded-xl bg-slate-50 border border-slate-100 p-3">
+              <div className="text-lg sm:text-xl font-bold text-slate-900">{s.value}</div>
+              <div className="text-xs font-medium text-slate-600">{s.label}</div>
+              <div className="text-[11px] text-slate-400">{s.hint}</div>
+            </div>
+          ))}
+        </div>
+        <form onSubmit={savePayoutEmail} className="flex flex-col sm:flex-row gap-2">
+          <label className="sr-only" htmlFor="payout-email">Payout email</label>
+          <input id="payout-email" type="email" inputMode="email" autoComplete="email" value={payoutEmail} onChange={e => setPayoutEmail(e.target.value)}
+            placeholder="PayPal or Zelle email for payouts" className="flex-1 min-w-0 border border-slate-200 rounded-xl px-4 py-3 text-base sm:text-sm" />
+          <button disabled={savingPayout} className="bg-slate-900 text-white px-5 py-3 rounded-xl text-sm font-semibold hover:bg-slate-800 disabled:opacity-60">{savingPayout ? 'Saving…' : 'Save'}</button>
+        </form>
+        <p className="text-xs text-slate-400">Commission accrues on each payment your referral makes and becomes payable after the hold period. Payouts are sent manually, usually within a few business days of becoming payable. Refunded payments are not paid.</p>
       </div>
 
       {/* Terms */}

@@ -34,6 +34,10 @@ interface Form {
   propertyType: string; description: string
 }
 
+/** Optional HOA block. hasHoa '' = the agent hasn't answered, so nothing about an HOA is sent or written. */
+interface HoaForm { hasHoa: '' | 'yes' | 'no'; fee: string; notes: string }
+const EMPTY_HOA: HoaForm = { hasHoa: '', fee: '', notes: '' }
+
 const EMPTY_FORM: Form = {
   address: '', city: '', state: '', zip: '', price: '', bedrooms: '', bathrooms: '',
   sqft: '', yearBuilt: '', propertyType: '', description: '',
@@ -155,6 +159,7 @@ export default function GeneratePage() {
   const [form, setForm] = useState<Form>(EMPTY_FORM)
   const [mode, setMode] = useState<Mode>('residential')
   const [cre, setCre] = useState<CreForm>(EMPTY_CRE)
+  const [hoa, setHoa] = useState<HoaForm>(EMPTY_HOA)
   const [features, setFeatures] = useState<string[]>([])
   const [featureInput, setFeatureInput] = useState('')
   const [photos, setPhotos] = useState<Photo[]>([])
@@ -355,6 +360,7 @@ export default function GeneratePage() {
       if (!cre.useType) return 'Choose the property type.'
       if (!form.sqft.trim() && !cre.units.trim() && !cre.lotAcres.trim()) return 'Enter the size: square feet, units or acres.'
     }
+    if (!commercial && hoa.hasHoa === 'yes' && hoa.fee.trim() && !/^\$?\s*\d[\d,]*(\.\d{1,2})?$/.test(hoa.fee.trim())) return 'Enter the monthly HOA fee as a number, e.g. 350.'
     if (uploadedKeys.length < 1) return 'Add at least one photo of the property.'
     if (stillUploading) return 'Photos are still uploading — one moment.'
     return null
@@ -394,6 +400,11 @@ export default function GeneratePage() {
       propertyType: form.propertyType || undefined,
       features,
       description: form.description.trim() || undefined,
+      hoa: hoa.hasHoa === ''
+        ? undefined
+        : hoa.hasHoa === 'no'
+          ? { hasHoa: false }
+          : { hasHoa: true, monthlyFee: hoa.fee.trim() ? Math.round(num(hoa.fee) as number) : null, notes: hoa.notes.trim() || undefined },
       photoKeys: uploadedKeys,
       source: enrichedFrom ? 'enriched' : 'manual',
       enrichmentProvider: enrichedFrom ?? undefined,
@@ -492,13 +503,15 @@ export default function GeneratePage() {
           <label className={labelCls}>Street address <span className="text-red-400">*</span></label>
           <input className={inputCls} value={form.address} onChange={set('address')} placeholder="905 Woodside Creek Ln" maxLength={120} disabled={busy} autoComplete="street-address" />
         </div>
-        <div className="grid grid-cols-6 gap-4">
-          <div className="col-span-3"><label className={labelCls}>City <span className="text-red-400">*</span></label>
-            <input className={inputCls} value={form.city} onChange={set('city')} maxLength={80} disabled={busy} /></div>
-          <div className="col-span-1"><label className={labelCls}>State <span className="text-red-400">*</span></label>
-            <input className={`${inputCls} uppercase`} value={form.state} onChange={set('state')} maxLength={2} placeholder="SC" disabled={busy} /></div>
-          <div className="col-span-2"><label className={labelCls}>ZIP</label>
-            <input className={inputCls} value={form.zip} onChange={set('zip')} maxLength={10} inputMode="numeric" disabled={busy} /></div>
+        {/* Phones: City on its own row, then State | ZIP. (State used to be 1/6 of the row = ~4px of usable width.) */}
+        <div className="grid grid-cols-6 gap-3 sm:gap-4">
+          <div className="col-span-6 sm:col-span-3"><label className={labelCls}>City <span className="text-red-400">*</span></label>
+            <input className={inputCls} value={form.city} onChange={set('city')} maxLength={80} disabled={busy} autoComplete="address-level2" /></div>
+          <div className="col-span-2 sm:col-span-1"><label className={labelCls}>State <span className="text-red-400">*</span></label>
+            <input className={`${inputCls} !px-3 uppercase text-base sm:text-sm text-center`} value={form.state} onChange={e => setForm(prev => ({ ...prev, state: e.target.value.replace(/[^a-zA-Z]/g, '').slice(0, 2) }))}
+              maxLength={2} placeholder="SC" disabled={busy} autoComplete="address-level1" autoCapitalize="characters" autoCorrect="off" spellCheck={false} aria-label="State (2 letters)" /></div>
+          <div className="col-span-4 sm:col-span-2"><label className={labelCls}>ZIP</label>
+            <input className={inputCls} value={form.zip} onChange={set('zip')} maxLength={10} inputMode="numeric" disabled={busy} autoComplete="postal-code" /></div>
         </div>
         {enrichEnabled && !commercial && (
           <div className="flex items-center gap-3">
@@ -574,6 +587,31 @@ export default function GeneratePage() {
               {PROPERTY_TYPES.map(t => <option key={t} value={t}>{t}</option>)}
             </select></div>
         </div>
+        )}
+
+        {!commercial && (
+          <div className="rounded-xl border border-slate-200 p-4 space-y-3">
+            <div>
+              <div className={labelCls}>Is there an HOA? <span className="font-normal text-slate-400">(optional)</span></div>
+              <div role="radiogroup" aria-label="Is there an HOA?" className="inline-flex bg-slate-100 rounded-xl p-1">
+                {([['yes', 'Yes'], ['no', 'No']] as const).map(([v, l]) => (
+                  <button key={v} type="button" role="radio" aria-checked={hoa.hasHoa === v} disabled={busy}
+                    onClick={() => setHoa(prev => ({ ...prev, hasHoa: prev.hasHoa === v ? '' : v }))}
+                    className={`px-6 py-2 text-sm font-semibold rounded-lg transition-colors min-w-[72px] ${hoa.hasHoa === v ? 'bg-white text-slate-900 shadow-sm' : 'text-slate-500 hover:text-slate-800'}`}>{l}</button>
+                ))}
+              </div>
+              <p className="text-xs text-slate-500 mt-1.5">Tap again to clear. Leave unanswered and the copy won&apos;t mention an HOA either way.</p>
+            </div>
+            {hoa.hasHoa === 'yes' && (
+              <div className="grid sm:grid-cols-3 gap-3 sm:gap-4">
+                <div><label className={labelCls} htmlFor="hoa-fee">Monthly HOA fee ($)</label>
+                  <input id="hoa-fee" className={inputCls} value={hoa.fee} onChange={e => setHoa(prev => ({ ...prev, fee: e.target.value }))} placeholder="350" inputMode="decimal" maxLength={9} disabled={busy} /></div>
+                <div className="sm:col-span-2"><label className={labelCls} htmlFor="hoa-notes">Other HOA notes <span className="font-normal text-slate-400">(optional)</span></label>
+                  <textarea id="hoa-notes" className={`${inputCls} resize-none`} rows={2} value={hoa.notes} onChange={e => setHoa(prev => ({ ...prev, notes: e.target.value }))} maxLength={500} disabled={busy}
+                    placeholder="e.g. Covers lawn care, pool and trash. Rentals allowed after 12 months." /></div>
+              </div>
+            )}
+          </div>
         )}
 
         <div>

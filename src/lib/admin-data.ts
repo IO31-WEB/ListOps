@@ -6,16 +6,28 @@
 import { and, count, desc, eq, gte, ilike, or, sql } from 'drizzle-orm'
 import { db } from '@/lib/db'
 import { aiUsage, auditLogs, campaigns, listings, users } from '@/lib/db/schema'
+import { stripe } from '@/lib/stripe'
 import { CAMPAIGN_LIMITS } from '@/lib/plans'
 import type { PlanTier } from '@/lib/plans'
 import { resolvePlan } from '@/lib/plan-resolve'
+import { effectiveUsed } from '@/lib/quota-period'
 
 const UUID_RE = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i
 const escapeLike = (s: string) => s.replace(/[\\%_]/g, m => `\\${m}`)
 
 type UserWithPlan = {
   role?: string | null
-  organization?: { plan?: string | null; subscriptions?: Array<{ plan?: string | null; status?: string | null }> | null } | null
+  organization?: { plan?: string | null; subscriptions?: Array<{ plan?: string | null; status?: string | null; stripeCurrentPeriodEnd?: Date | null }> | null } | null
+}
+
+/**
+ * Generations used in the CURRENT billing period. The stored counter is reset lazily (on the user's next generation
+ * or by the daily sweep), so the admin views must not show the raw column — it keeps last period's number for
+ * anyone who hasn't been active since the rollover.
+ */
+export function usedThisPeriodOf(u: UserWithPlan & { campaignsUsedThisMonth: number; lastResetAt: Date }): number {
+  const periodEnd = u.organization?.subscriptions?.[0]?.stripeCurrentPeriodEnd ?? null
+  return effectiveUsed(u, periodEnd)
 }
 
 /** Effective plan (see lib/plan-resolve.ts): members only inherit while the org subscription is active/trialing. */
@@ -85,7 +97,7 @@ export async function getUserDetail(id: string) {
 
   const plan = planOf(user)
   return {
-    user, plan, limit: monthlyLimitOf(plan),
+    user, plan, limit: monthlyLimitOf(plan), usedThisPeriod: usedThisPeriodOf(user),
     recentCampaigns, recentUsage, auditEntries,
     spend30d: { cost: Number(usage30d[0]?.cost ?? 0), calls: Number(usage30d[0]?.calls ?? 0) },
   }
@@ -201,4 +213,71 @@ export async function getViewAsUser(id: string) {
 
 function daysAgo(n: number): Date {
   return new Date(Date.now() - n * 24 * 60 * 60 * 1000)
+}
+
+
+// ── Revenue (Stripe is the source of truth; the DB has no amounts) ─────────────────────────────
+
+export interface RevenueOverview {
+  ok: boolean
+  /** Gross cash collected since the 1st of this month (UTC), from PAID invoices, before refunds/fees/tax adjustments. */
+  mtdCents: number
+  mtdInvoices: number
+  /** Monthly recurring revenue: active + past_due subscriptions, annual plans / 12, list price × quantity, after percent/amount-off coupons. */
+  mrrCents: number
+  payingSubscriptions: number
+  asOf: Date
+}
+
+/** Normalise one recurring price to cents per month. Pure — unit-tested. */
+export function monthlyCents(unitAmountCents: number, interval: string, intervalCount = 1, quantity = 1): number {
+  const n = Math.max(1, intervalCount)
+  const perInterval = unitAmountCents * Math.max(0, quantity)
+  switch (interval) {
+    case 'month': return perInterval / n
+    case 'year': return perInterval / (12 * n)
+    case 'week': return (perInterval * 52) / (12 * n)
+    case 'day': return (perInterval * 365) / (12 * n)
+    default: return 0
+  }
+}
+
+let revenueCache: { at: number; value: RevenueOverview } | null = null
+
+/** Cached 60s so reloading the admin page does not hammer Stripe. Never throws: on failure returns ok:false (UI shows "—"). */
+export async function getRevenueOverview(now = new Date()): Promise<RevenueOverview> {
+  if (revenueCache && Date.now() - revenueCache.at < 60_000) return revenueCache.value
+  const empty: RevenueOverview = { ok: false, mtdCents: 0, mtdInvoices: 0, mrrCents: 0, payingSubscriptions: 0, asOf: now }
+  try {
+    const monthStart = Math.floor(Date.UTC(now.getUTCFullYear(), now.getUTCMonth(), 1) / 1000)
+    let mtdCents = 0, mtdInvoices = 0, seen = 0
+    for await (const inv of stripe.invoices.list({ status: 'paid', created: { gte: monthStart }, limit: 100 })) {
+      mtdCents += inv.amount_paid ?? 0
+      if ((inv.amount_paid ?? 0) > 0) mtdInvoices++
+      if (++seen >= 5000) break
+    }
+    let mrr = 0, subs = 0
+    for (const status of ['active', 'past_due'] as const) {
+      let n = 0
+      for await (const sub of stripe.subscriptions.list({ status, limit: 100, expand: ['data.discount.coupon'] })) {
+        let monthly = 0
+        for (const item of sub.items.data) {
+          const p = item.price
+          if (!p?.recurring || p.unit_amount == null) continue
+          monthly += monthlyCents(p.unit_amount, p.recurring.interval, p.recurring.interval_count, item.quantity ?? 1)
+        }
+        const c = (sub as any).discount?.coupon
+        if (c?.percent_off) monthly *= 1 - c.percent_off / 100
+        else if (c?.amount_off && monthly > 0) monthly = Math.max(0, monthly - monthlyCents(c.amount_off, sub.items.data[0]?.price?.recurring?.interval ?? 'month', sub.items.data[0]?.price?.recurring?.interval_count ?? 1, 1))
+        if (monthly > 0) { mrr += monthly; subs++ }
+        if (++n >= 5000) break
+      }
+    }
+    const value: RevenueOverview = { ok: true, mtdCents, mtdInvoices, mrrCents: Math.round(mrr), payingSubscriptions: subs, asOf: now }
+    revenueCache = { at: Date.now(), value }
+    return value
+  } catch (err) {
+    console.error('[admin] revenue overview failed:', err)
+    return empty
+  }
 }

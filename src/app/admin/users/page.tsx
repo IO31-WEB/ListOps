@@ -1,6 +1,6 @@
 import Link from 'next/link'
 import { requireAdminPage } from '@/lib/admin'
-import { searchUsers, planOf, monthlyLimitOf } from '@/lib/admin-data'
+import { searchUsers, planOf, monthlyLimitOf, usedThisPeriodOf } from '@/lib/admin-data'
 import { logAudit } from '@/lib/audit'
 import { Badge, Card, DesktopTable, KV, MobileItem, MobileList, fmtDate, linkCls, searchBtnCls, searchInputCls, td, th } from '../_lib'
 
@@ -34,7 +34,7 @@ export default async function AdminUsers({ searchParams }: { searchParams: Promi
                     <td className={`${td} break-all`}><Link prefetch={false} className="text-amber-700 underline" href={`/admin/users/${u.id}`}>{u.email}</Link></td>
                     <td className={td}>{[u.firstName, u.lastName].filter(Boolean).join(' ') || '—'}</td>
                     <td className={td}><Badge tone="slate">{plan}</Badge></td>
-                    <td className={td}>{u.campaignsUsedThisMonth} / {monthlyLimitOf(plan)}</td>
+                    <td className={td}>{usedThisPeriodOf(u)} / {monthlyLimitOf(plan)}</td>
                     <td className={td}>{fmtDate(u.createdAt)}</td>
                     <td className={td}>{statusBadge(u)}</td>
                   </tr>)})}</tbody></DesktopTable>
@@ -45,7 +45,7 @@ export default async function AdminUsers({ searchParams }: { searchParams: Promi
                   <Link prefetch={false} className={`${linkCls} block py-1 font-medium`} href={`/admin/users/${u.id}`}>{u.email}</Link>
                   <KV label="Name">{[u.firstName, u.lastName].filter(Boolean).join(' ') || '—'}</KV>
                   <KV label="Plan"><Badge tone="slate">{plan}</Badge></KV>
-                  <KV label="Used / limit">{u.campaignsUsedThisMonth} / {monthlyLimitOf(plan)}</KV>
+                  <KV label="Used / limit">{usedThisPeriodOf(u)} / {monthlyLimitOf(plan)}</KV>
                   <KV label="Joined">{fmtDate(u.createdAt)}</KV>
                   <KV label="Status">{statusBadge(u)}</KV>
                 </MobileItem>)})}</MobileList>

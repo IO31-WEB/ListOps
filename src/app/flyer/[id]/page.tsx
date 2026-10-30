@@ -10,8 +10,9 @@ import { resolveListingPhotos } from '@/lib/photos'
 import { getCampaign, checkCampaignQuota } from '@/lib/user-service'
 import { canAccess } from '@/lib/plans'
 import { loadEffectiveBrandKit } from '@/lib/compliance/load'
-import { SCHEME_IDS, resolveScheme, luminance, readableOn } from '@/lib/color-schemes'
+import { SCHEME_IDS, resolvePalette, paletteAt, luminance, readableOn } from '@/lib/color-schemes'
 import { verifyPrintToken } from '@/lib/print-token'
+import { hoaChip, readHoa } from '@/lib/hoa'
 import { PrintButton } from './print-button'
 import { USE_TYPE_LABEL, readCommercial } from '@/lib/commercial/types'
 import { encodeQr, qrPath } from '@/lib/qr/encode'
@@ -100,7 +101,9 @@ export default async function FlyerPage({
   const yearBuilt = (listing as any)?.yearBuilt ?? ''
   const photos = ((listing?.photos as string[]) ?? []).slice(0, 6)
   const description = clip((cre ? crePrint?.oneSheetBody : '') || listing?.description || '', template === 'modern' ? 520 : 600)
-  const features = (((listing as any)?.features as string[] | undefined) ?? []).slice(0, 6)
+  // HOA (agent-entered, residential): always shown as the last chip when there is one — it must not be cut by the 6-feature cap.
+  const hoaBadge = cre ? null : hoaChip(readHoa((listing as any)?.hoa))
+  const features = [...(((listing as any)?.features as string[] | undefined) ?? []).slice(0, hoaBadge ? 5 : 6), ...(hoaBadge ? [hoaBadge] : [])]
 
   const agentName = bk?.agentName ?? ''
   const agentTitle = bk?.agentTitle ?? 'REALTOR®'
@@ -124,7 +127,10 @@ export default async function FlyerPage({
     } catch (err) { console.error('[flyer] qr failed', err) }
   }
 
-  const { primary: primaryColor, accent: accentColor } = resolveScheme(scheme, bk?.primaryColor, bk?.accentColor)
+  // Brand scheme: primary + accent + every extra color the agent added (and, for brokerages, locked). Presets are fixed palettes.
+  const { primary: primaryColor, accent: accentColor, extras: extraColors, palette } = resolvePalette(scheme, bk?.primaryColor, bk?.accentColor, (bk as any)?.extraColors)
+  /** i-th decorative color; with no extras this returns the original fallback so existing flyers render exactly as before. */
+  const tint = (i: number, fallback: string) => (extraColors.length ? paletteAt(palette, i) : fallback)
   const onAccent = readableOn(accentColor)
   const mainPhoto = photos[0] ?? null
   const hasEvent = badge === 'openHouse'
@@ -277,7 +283,7 @@ export default async function FlyerPage({
             {statItems.length > 0 && (
               <div style={{ display: 'flex', margin: '22px 44px 0', borderTop: '1px solid #e2e8f0', borderBottom: '1px solid #e2e8f0', flexShrink: 0 }}>
                 {statItems.map((s, i) => (
-                  <div key={s.label} style={{ flex: 1, textAlign: 'center', padding: '14px 0', borderRight: i < statItems.length - 1 ? '1px solid #e2e8f0' : 'none' }}>
+                  <div key={s.label} style={{ flex: 1, textAlign: 'center', padding: '14px 0', borderRight: i < statItems.length - 1 ? '1px solid #e2e8f0' : 'none', boxShadow: extraColors.length ? `inset 0 -3px 0 ${paletteAt(palette, i)}` : undefined }}>
                     <div style={{ fontFamily: SERIF, fontSize: 24, fontWeight: 700, color: primaryColor }}>{s.value}</div>
                     <div style={{ fontFamily: SANS, fontSize: 8.5, letterSpacing: 3, color: '#94a3b8', marginTop: 3, ...CAPS }}>{s.label}</div>
                   </div>
@@ -293,8 +299,8 @@ export default async function FlyerPage({
                 </p>
                 {features.length > 0 && (
                   <div style={{ display: 'flex', flexWrap: 'wrap', gap: 6, marginTop: 14 }}>
-                    {features.map(f => (
-                      <span key={f} style={{ fontFamily: SANS, fontSize: 9.5, color: primaryColor, border: `1px solid ${primaryColor}33`, borderRadius: 2, padding: '3px 9px', fontWeight: 600 }}>{f}</span>
+                    {features.map((f, i) => (
+                      <span key={f} style={{ fontFamily: SANS, fontSize: 9.5, color: primaryColor, border: `1px solid ${tint(i, `${primaryColor}33`)}`, borderRadius: 2, padding: '3px 9px', fontWeight: 600 }}>{f}</span>
                     ))}
                   </div>
                 )}
@@ -422,14 +428,14 @@ export default async function FlyerPage({
               )}
 
               <div style={{ padding: '22px 30px', flex: 1, overflow: 'hidden', minHeight: 0 }}>
-                <div style={{ width: 28, height: 2, background: primaryColor, marginBottom: 14 }} />
+                <div style={{ width: 28, height: 2, background: tint(1, primaryColor), marginBottom: 14 }} />
                 <p style={{ fontFamily: SERIF, fontSize: 12, lineHeight: 1.85, color: '#475569' }}>
                   {description || 'Contact us for more information about this exceptional property.'}
                 </p>
                 {features.length > 0 && (
                   <div style={{ marginTop: 14, display: 'flex', flexWrap: 'wrap', gap: 5 }}>
-                    {features.map(f => (
-                      <span key={f} style={{ fontFamily: SANS, fontSize: 9, color: primaryColor, border: `1px solid ${primaryColor}30`, padding: '2px 8px', fontWeight: 600 }}>{f}</span>
+                    {features.map((f, i) => (
+                      <span key={f} style={{ fontFamily: SANS, fontSize: 9, color: primaryColor, border: `1px solid ${tint(i, `${primaryColor}30`)}`, padding: '2px 8px', fontWeight: 600 }}>{f}</span>
                     ))}
                   </div>
                 )}

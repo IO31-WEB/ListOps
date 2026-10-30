@@ -227,6 +227,7 @@ export default function BrandPage() {
   const isLocked = (k: LockableField) => locked.has(k)
   // What outputs will actually use (locks + forced disclaimer applied) — drives the warnings.
   const effective = applyCompliance(form, compliance, form.licenseNumber)
+  const shownExtras: BrandColor[] = isLocked('extraColors') && Array.isArray(effective.extraColors) ? effective.extraColors : form.extraColors
   const warnings = brandWarnings(effective, { licenseNumber: form.licenseNumber })
 
   useEffect(() => {
@@ -431,10 +432,11 @@ export default function BrandPage() {
           <LockWrap locked={isLocked('primaryColor')}><ColorPicker label="Primary Color" value={isLocked('primaryColor') ? effective.primaryColor : form.primaryColor} onChange={set('primaryColor')} /></LockWrap>
           <LockWrap locked={isLocked('accentColor')}><ColorPicker label="Accent Color" value={isLocked('accentColor') ? effective.accentColor : form.accentColor} onChange={set('accentColor')} /></LockWrap>
         </div>
-        {/* Additional named colors */}
-        {form.extraColors.length > 0 && (
+        {/* Additional named colors — a brokerage can lock the whole set */}
+        <LockWrap locked={isLocked('extraColors')}>
+        {shownExtras.length > 0 && (
           <div className="grid sm:grid-cols-2 gap-5 mb-5">
-            {form.extraColors.map((c, i) => (
+            {shownExtras.map((c, i) => (
               <div key={i} className="relative">
                 <div className="flex items-center justify-between gap-2 mb-1.5">
                   <input
@@ -465,11 +467,12 @@ export default function BrandPage() {
             <Plus className="w-4 h-4" /> Add another color
           </button>
         )}
+        </LockWrap>
 
         {/* Color Preview */}
-        {form.extraColors.length > 0 && (
+        {shownExtras.length > 0 && (
           <div className="flex h-8 rounded-lg overflow-hidden border border-slate-200 mb-3" aria-label="Your palette">
-            {[{ name: 'Primary', value: form.primaryColor }, { name: 'Accent', value: form.accentColor }, ...form.extraColors].map((c, i) => (
+            {[{ name: 'Primary', value: effective.primaryColor }, { name: 'Accent', value: effective.accentColor }, ...shownExtras].map((c, i) => (
               <div key={i} title={`${c.name}: ${c.value}`} style={{ backgroundColor: c.value }} className="flex-1" />
             ))}
           </div>

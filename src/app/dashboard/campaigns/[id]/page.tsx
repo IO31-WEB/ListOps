@@ -109,6 +109,50 @@ const ACCENT_CLASSES: Record<AccentColor, string> = {
   slate:  'bg-slate-100 text-slate-700',
 }
 
+const SECTION_LABELS: Record<string, string> = {
+  listingCopy: 'Listing Copy',
+  offering: 'Offering copy',
+  om: 'OM sections',
+  emails: 'Email sequence',
+  social: 'Social Calendar',
+  email: 'Email Campaigns',
+  emailDrip: 'Email Templates',
+  print: 'Print Materials',
+  video: 'Video & Reel Scripts',
+  microsite: 'Microsite Copy',
+  photoCaptions: 'Photo Captions',
+}
+
+/** Confirms before a regenerate so an accidental click can't trigger a new AI call. */
+function RegenerateConfirm({ section, onCancel, onConfirm }: { section: string; onCancel: () => void; onConfirm: () => void }) {
+  useEffect(() => {
+    const onKey = (e: KeyboardEvent) => { if (e.key === 'Escape') onCancel() }
+    window.addEventListener('keydown', onKey)
+    const prev = document.body.style.overflow
+    document.body.style.overflow = 'hidden'
+    return () => { window.removeEventListener('keydown', onKey); document.body.style.overflow = prev }
+  }, [onCancel])
+  const label = SECTION_LABELS[section] ?? section
+  return (
+    <div className="fixed inset-0 z-50 flex items-end sm:items-center justify-center p-4 bg-slate-900/50" onClick={onCancel}>
+      <div role="alertdialog" aria-modal="true" aria-labelledby="regen-title" aria-describedby="regen-desc"
+        className="w-full max-w-md bg-white rounded-2xl shadow-2xl p-6" onClick={e => e.stopPropagation()}>
+        <div className="flex items-start gap-3">
+          <span className="shrink-0 w-10 h-10 rounded-full bg-amber-100 text-amber-600 flex items-center justify-center"><RefreshCw className="w-5 h-5" /></span>
+          <div>
+            <h2 id="regen-title" className="font-display font-semibold text-slate-900 text-lg">Regenerate {label}?</h2>
+            <p id="regen-desc" className="text-sm text-slate-600 mt-1">Are you sure you want to regenerate? This will replace the current {label.toLowerCase()} with a new version.</p>
+          </div>
+        </div>
+        <div className="mt-6 flex flex-col-reverse sm:flex-row sm:justify-end gap-2">
+          <button type="button" autoFocus onClick={onCancel} className="px-4 py-2.5 rounded-xl border border-slate-200 text-sm font-semibold text-slate-700 hover:bg-slate-50">Cancel</button>
+          <button type="button" onClick={onConfirm} className="px-4 py-2.5 rounded-xl bg-amber-500 hover:bg-amber-600 text-white text-sm font-semibold">Regenerate</button>
+        </div>
+      </div>
+    </div>
+  )
+}
+
 function Section({ title, badge, icon: Icon, accent = 'amber', defaultOpen = false, onRegenerate, regenerating, children }: {
   title: string; badge?: string; icon: React.ComponentType<{ className?: string }>
   accent?: AccentColor; defaultOpen?: boolean
@@ -697,6 +741,7 @@ export default function CampaignDetailPage() {
   const [lightbox, setLightbox] = useState<number | null>(null)
   const [planTier, setPlanTier] = useState<string>('free')
   const [regenerating, setRegenerating] = useState<string | null>(null)  // section key being regenerated
+  const [pendingRegen, setPendingRegen] = useState<string | null>(null)   // section awaiting the confirmation dialog
 
   useEffect(() => {
     fetchCampaign()
@@ -717,22 +762,9 @@ export default function CampaignDetailPage() {
     finally { setLoading(false) }
   }
 
-  const handleRegenerate = useCallback(async (section: string) => {
+  const runRegenerate = useCallback(async (section: string) => {
     if (!id) return
     setRegenerating(section)
-    const sectionLabels: Record<string, string> = {
-      listingCopy: 'Listing Copy',
-      offering: 'Offering copy',
-      om: 'OM sections',
-      emails: 'Email sequence',
-      social: 'Social Calendar',
-      email: 'Email Campaigns',
-      emailDrip: 'Email Templates',
-      print: 'Print Materials',
-      video: 'Video & Reel Scripts',
-      microsite: 'Microsite Copy',
-      photoCaptions: 'Photo Captions',
-    }
     try {
       const res = await fetch(`/api/campaigns/${id}/regenerate`, {
         method: 'POST',
@@ -742,7 +774,7 @@ export default function CampaignDetailPage() {
       const data = await res.json()
       if (!res.ok) throw new Error(data.error || 'Failed to regenerate')
 
-      toast.success(`${sectionLabels[section] ?? section} regenerated!`)
+      toast.success(`${SECTION_LABELS[section] ?? section} regenerated!`)
       // Refresh campaign data to show new content
       await fetchCampaign()
     } catch (err: any) {
@@ -751,6 +783,9 @@ export default function CampaignDetailPage() {
       setRegenerating(null)
     }
   }, [id])
+
+  /** Every Regenerate button goes through the confirmation dialog; nothing is spent until the agent confirms. */
+  const handleRegenerate = useCallback((section: string) => { if (!regenerating) setPendingRegen(section) }, [regenerating])
 
   const toggleMicrosite = async () => {
     if (!campaign) return
@@ -789,6 +824,10 @@ export default function CampaignDetailPage() {
 
   return (
     <div className="max-w-4xl mx-auto space-y-4">
+      {pendingRegen && (
+        <RegenerateConfirm section={pendingRegen} onCancel={() => setPendingRegen(null)}
+          onConfirm={() => { const sec = pendingRegen; setPendingRegen(null); void runRegenerate(sec) }} />
+      )}
       {/* Header */}
       <div>
         <Link href="/dashboard/campaigns" className="inline-flex items-center gap-1.5 text-sm text-slate-500 hover:text-slate-900 mb-4 transition-colors">

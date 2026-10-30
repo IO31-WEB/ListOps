@@ -1,5 +1,6 @@
 'use client'
 
+import { REFUND_SUMMARY } from '@/lib/refund-policy'
 import { LogoMark } from '@/components/ui/logo'
 import { useState } from 'react'
 import Link from 'next/link'
@@ -44,7 +45,7 @@ const FEATURE_CATEGORIES: { name: string; features: FeatureRow[] }[] = [
       { name: 'Brand kit (logo, colors, headshot)',           free: false,   starter: true,    pro: true, commercial: true,        brokerage: true },
       { name: 'AI writing persona (tone selector)',           free: false,   starter: true,    pro: true, commercial: true,        brokerage: true },
       { name: 'Custom agent tagline',                         free: false,   starter: true,    pro: true, commercial: true,        brokerage: true },
-      { name: 'Flyer templates',                              free: '1',     starter: '3',     pro: '3 + 5 color schemes', commercial: '3 + 5 color schemes', brokerage: '3 + 5 color schemes' },
+      { name: 'Flyer templates',                              free: '1',     starter: '3',     pro: '3 + 12 color schemes', commercial: '3 + 12 color schemes', brokerage: '3 + 12 color schemes' },
       { name: 'Brokerage brand override on all content',      free: false,   starter: false,   pro: false, commercial: false,       brokerage: true },
       { name: 'Fair Housing language check + one-click rewrites', free: true,  starter: true,    pro: true, commercial: true,        brokerage: true },
       { name: 'Brokerage compliance profile (required disclaimer, locked fields)', free: false, starter: false, pro: false, commercial: false, brokerage: true },
@@ -203,21 +204,33 @@ export default function PricingPage() {
                     >
                       {plan.cta}
                     </Link>
-                    {plan.id !== 'free' && (
-                      <RenewalNotice
-                        className="mt-3 text-center"
-                        dark={plan.highlighted}
-                        planName={plan.name}
-                        price={annual ? (plan.yearlyPrice ?? 0) : (plan.monthlyPrice ?? 0)}
-                        interval={annual ? 'year' : 'month'}
-                        trialDays={plan.id === 'brokerage' ? 14 : undefined}
-                      />
-                    )}
+                    {/* Fixed-height disclosure slot: notices differ in length (trial copy, annual vs monthly), and a variable footer
+                        pushed each card's button to a different height. The slot keeps every CTA on the same baseline on wide screens. */}
+                    <div className="mt-3 xl:min-h-[11rem]">
+                      {plan.id !== 'free' ? (
+                        <RenewalNotice
+                          className="text-center"
+                          dark={plan.highlighted}
+                          planName={plan.name}
+                          price={annual ? (plan.yearlyPrice ?? 0) : (plan.monthlyPrice ?? 0)}
+                          interval={annual ? 'year' : 'month'}
+                          trialDays={plan.id === 'brokerage' ? 14 : undefined}
+                        />
+                      ) : (
+                        <p className="text-[11px] leading-snug text-center text-slate-500">No credit card required. Upgrade or cancel anytime.</p>
+                      )}
+                    </div>
                   </div>
                 </div>
               )
             })}
           </div>
+
+          {/* Billing footnote: auto-renewal + refund disclosure applies to every paid card above */}
+          <p className="-mt-14 mb-16 text-center text-xs text-slate-500 max-w-2xl mx-auto">
+            Paid plans renew automatically until cancelled; cancel anytime in Billing. {REFUND_SUMMARY}{' '}
+            <Link href="/refunds" className="underline hover:text-slate-700">Refund policy</Link> · <Link href="/terms#billing" className="underline hover:text-slate-700">Terms</Link>. Prices in USD; taxes may apply.
+          </p>
 
           {/* Full Feature Comparison Table */}
           <div className="mb-20">

@@ -11,6 +11,7 @@ import { users, referrals } from '@/lib/db/schema'
 import { eq } from 'drizzle-orm'
 import { getUserWithDetails } from '@/lib/user-service'
 import { trackReferralSignup } from '@/lib/posthog'
+import { getMyEarnings } from '@/lib/referral-commissions'
 // FIX: Math.random() produces predictable codes — an attacker with enough samples
 // can predict future codes. nanoid uses crypto.getRandomValues() under the hood.
 import { nanoid } from 'nanoid'
@@ -52,5 +53,6 @@ export async function GET() {
 
   const referralUrl = `${process.env.NEXT_PUBLIC_APP_URL}/sign-up?ref=${code}`
 
-  return NextResponse.json({ code, referralUrl, stats, referred })
+  const earnings = await getMyEarnings(user.id)
+  return NextResponse.json({ code, referralUrl, stats, referred, earnings })
 }

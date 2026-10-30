@@ -40,6 +40,13 @@ export const PROPERTY_TYPES = [
 
 const currentYear = new Date().getFullYear()
 
+/** Optional HOA block (residential). Fee in whole dollars; notes are plain text. */
+export const HoaInputSchema = z.object({
+  hasHoa: z.boolean(),
+  monthlyFee: z.number().min(0).max(100_000).nullable().optional(),
+  notes: z.string().transform(s => cleanText(s).replace(/[<>]/g, '')).pipe(z.string().max(500)).optional(),
+})
+
 export const ListingInputSchema = z.object({
   address: addrLine(3, 120),
   city: addrLine(1, 80),
@@ -57,6 +64,8 @@ export const ListingInputSchema = z.object({
   photoKeys: z.array(z.string().max(200)).max(20).default([]),
   /** v13: present only for commercial listings. Residential rows keep this undefined/null. */
   commercial: CommercialDetailsSchema.optional(),
+  /** Optional HOA details. Omitted = the agent didn't say (nothing is stated in the copy). */
+  hoa: HoaInputSchema.optional(),
   /** Where the structured data came from. */
   source: z.enum(['manual', 'enriched']).default('manual'),
   enrichmentProvider: optLine(40),

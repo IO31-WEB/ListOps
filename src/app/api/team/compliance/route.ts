@@ -30,6 +30,7 @@ async function adminBrand(userDbId: string) {
   const vals: Record<LockableField, string> = {
     brokerageName: bk?.brokerageName ?? '', brokerageLogo: bk?.brokerageLogo ?? '', logoUrl: bk?.logoUrl ?? '',
     primaryColor: bk?.primaryColor ?? '', accentColor: bk?.accentColor ?? '', tagline: bk?.tagline ?? '',
+    extraColors: Array.isArray(bk?.extraColors) && bk!.extraColors.length ? JSON.stringify(bk!.extraColors) : '',
   }
   return vals
 }

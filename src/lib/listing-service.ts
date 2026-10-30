@@ -9,6 +9,7 @@ import { deleteFromR2 } from '@/lib/r2'
 import { photoUrl } from '@/lib/photos'
 import { inArray } from 'drizzle-orm'
 import { assertOwnPhotoKeys, type ListingInput } from '@/lib/listing-schemas'
+import { readHoa } from '@/lib/hoa'
 
 function toRow(clerkId: string, input: ListingInput) {
   const keys = assertOwnPhotoKeys(clerkId, input.photoKeys)
@@ -25,6 +26,8 @@ function toRow(clerkId: string, input: ListingInput) {
     propertyType: input.propertyType ?? null,
     description: input.description ?? null,
     commercial: input.commercial ?? null,
+    // No HOA fee/notes are kept when the agent answered "No"; omitted = not answered (null).
+    hoa: input.hoa ? readHoa(input.hoa) : null,
     features: input.features,
     photoKeys: keys,
     photos: keys.map(photoUrl),

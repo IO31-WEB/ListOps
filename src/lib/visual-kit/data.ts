@@ -6,7 +6,7 @@
 import { getFromR2 } from '@/lib/r2'
 import { sniffImage } from '@/lib/image-validate'
 import { isListingPhotoKey } from '@/lib/listing-schemas'
-import { resolveScheme } from '@/lib/color-schemes'
+import { resolvePalette } from '@/lib/color-schemes'
 import { formatListingAddress, formatStreet, formatCity, formatState } from '@/lib/address'
 import { readCommercial } from '@/lib/commercial/types'
 import { sanitizeForPrompt } from '@/lib/prompt-safety'
@@ -25,6 +25,8 @@ export interface KitData {
   agentName: string; agentTitle: string; phone: string; email: string; website: string; brokerage: string; tagline: string
   logo: string | null; brokerageLogo: string | null; headshot: string | null
   primary: string; accent: string
+  /** Decorative rule color: the agent's first extra brand color when they set one, otherwise the accent. */
+  rule?: string
   disclaimer: string
   date: string; time: string
   watermark: boolean
@@ -71,7 +73,7 @@ const clean = (s: unknown, max: number) => sanitizeForPrompt(s, max).replace(/\s
 export async function loadKitData(campaign: any, opts: KitOptions, includeBrand: boolean, kind: KitKind = 'ig-square'): Promise<KitData> {
   const l = campaign.listing ?? {}
   const bk = includeBrand ? await loadEffectiveBrandKit(campaign.brandKit ?? null, campaign.agentId) : null
-  const { primary, accent } = resolveScheme(opts.scheme, bk?.primaryColor, bk?.accentColor)
+  const { primary, accent, extras } = resolvePalette(opts.scheme, bk?.primaryColor, bk?.accentColor, (bk as any)?.extraColors)
 
   // Each graphic starts from its own photo slot (+ the agent's optional shuffle), so a set of graphics mixes the photos.
   const meta = KIT_CATALOG[kind]
@@ -96,7 +98,7 @@ export async function loadKitData(campaign: any, opts: KitOptions, includeBrand:
     agentName: clean(bk?.agentName, 60), agentTitle: clean(bk?.agentTitle || '', 40), phone: clean(bk?.agentPhone, 30),
     email: clean(bk?.agentEmail, 80), website: clean(bk?.agentWebsite, 80), brokerage: clean(bk?.brokerageName, 70), tagline: clean(bk?.tagline, 90),
     logo, brokerageLogo, headshot,
-    primary, accent,
+    primary, accent, rule: extras[0] ?? accent,
     disclaimer: clean(bk?.disclaimer, 240),
     date: clean(opts.date, 40), time: clean(opts.time, 40),
     watermark: opts.watermark,

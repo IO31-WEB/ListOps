@@ -1,7 +1,7 @@
 'use client'
 
 import { useEffect, useState } from 'react'
-import { LOCKABLE_FIELDS, LOCK_LABELS, buildDisclaimer, type LockableField, type OrgCompliance } from '@/lib/compliance/brand'
+import { LOCKABLE_FIELDS, LOCK_LABELS, buildDisclaimer, parseLockedColors, type LockableField, type OrgCompliance } from '@/lib/compliance/brand'
 
 interface Loaded { profile: OrgCompliance | null; ownBrand: Record<LockableField, string> }
 const box = 'w-full bg-slate-50 border border-slate-200 rounded-xl px-4 py-3 text-sm focus:outline-none focus:ring-2 focus:ring-amber-400'
@@ -64,11 +64,13 @@ export function ComplianceForm() {
         {LOCKABLE_FIELDS.map(k => {
           const v = data.ownBrand[k]
           const isImg = k === 'brokerageLogo' || k === 'logoUrl'
+          const extras = k === 'extraColors' && v ? (parseLockedColors(v) ?? []) : []
           return (
             <label key={k} className="flex items-center gap-3 text-sm text-slate-700 border border-slate-100 rounded-xl px-4 py-3">
               <input type="checkbox" disabled={!v} checked={locks.includes(k)} onChange={e => setLocks(e.target.checked ? [...locks, k] : locks.filter(x => x !== k))} />
               <span className="font-medium w-36">{LOCK_LABELS[k]}</span>
-              <span className="text-slate-500 truncate">{!v ? 'Not set in your Brand Kit' : isImg ? 'Your uploaded image' : v}</span>
+              <span className="text-slate-500 truncate">{!v ? 'Not set in your Brand Kit' : isImg ? 'Your uploaded image' : k === 'extraColors' ? `${extras.length} color${extras.length === 1 ? '' : 's'}` : v}</span>
+              {extras.length > 0 && <span className="flex gap-1">{extras.map((c, i) => <span key={i} title={`${c.name}: ${c.value}`} className="w-5 h-5 rounded border border-slate-200" style={{ background: c.value }} />)}</span>}
               {v && (k === 'primaryColor' || k === 'accentColor') && <span className="w-5 h-5 rounded border border-slate-200" style={{ background: v }} />}
             </label>
           )

@@ -1,3 +1,4 @@
+import { readExtraColors } from '@/lib/color-schemes'
 import { isCommercialLocked } from '@/lib/plan-resolve'
 import { notFound, permanentRedirect } from 'next/navigation'
 import { normalizeListing } from '@/lib/address'
@@ -83,6 +84,7 @@ export default async function MicrositePage({ params }: { params: Promise<{ slug
   const description = (cre ? creAnalytics.commercial?.narrative : '') || listing?.description || ''
   const primaryColor = bk?.primaryColor ?? '#1e3a5f'
   const accentColor = bk?.accentColor ?? '#c9a84c'
+  const extraColors = readExtraColors((bk as any)?.extraColors)   // agent's additional brand colors (brokerage-locked set applies)
   const agentName = bk?.agentName ?? ''
   const agentTitle = bk?.agentTitle ?? 'REALTOR®'
   const agentPhone = bk?.agentPhone ?? ''
@@ -163,8 +165,8 @@ export default async function MicrositePage({ params }: { params: Promise<{ slug
         {/* Feature pills */}
         {features && features.length > 0 && (
           <div style={{ display: 'flex', flexWrap: 'wrap', gap: 8, marginBottom: 48 }}>
-            {features.slice(0, 10).map((f: string) => (
-              <span key={f} style={{ fontFamily: 'Arial, sans-serif', fontSize: 12, background: `${primaryColor}10`, color: primaryColor, border: `1px solid ${primaryColor}25`, borderRadius: 24, padding: '6px 16px', fontWeight: 600 }}>{f}</span>
+            {features.slice(0, 10).map((f: string, i: number) => (
+              <span key={f} style={{ fontFamily: 'Arial, sans-serif', fontSize: 12, background: `${primaryColor}10`, color: primaryColor, border: `1px solid ${extraColors.length ? extraColors[i % extraColors.length] : `${primaryColor}25`}`, borderRadius: 24, padding: '6px 16px', fontWeight: 600 }}>{f}</span>
             ))}
           </div>
         )}

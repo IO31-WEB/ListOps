@@ -27,7 +27,7 @@ export default async function AdminUserDetail({ params }: { params: Promise<{ id
       </div>
 
       <div className="grid grid-cols-2 lg:grid-cols-4 gap-3 sm:gap-4">
-        <Stat label="Used this month" value={`${u.campaignsUsedThisMonth} / ${d.limit}`} sub={`period last reset ${fmtDate(u.lastResetAt)}`} />
+        <Stat label="Used this month" value={`${d.usedThisPeriod} / ${d.limit}`} sub={`period last reset ${fmtDate(u.lastResetAt)}`} />
         <Stat label="Generations all-time" value={u.campaignsUsedTotal} />
         <Stat label="AI spend, 30 days (est.)" value={usd(d.spend30d.cost)} sub={`${d.spend30d.calls} calls`} />
         <Stat label="Joined" value={<span className="text-base">{fmtDate(u.createdAt)}</span>} sub={`role: ${u.role}`} />

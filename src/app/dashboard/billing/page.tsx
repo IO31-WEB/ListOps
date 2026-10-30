@@ -33,7 +33,7 @@ const FEATURE_COMPARISON = [
     { name: 'Email copy (Just Listed + Still Available)', free: true, starter: true, pro: true, brokerage: true },
     { name: 'Print-ready flyer (PDF)', free: true, starter: true, pro: true, brokerage: true },
     { name: 'Video & Reel scripts', free: false, starter: false, pro: true, brokerage: true },
-    { name: 'Flyer templates', free: '1', starter: '3', pro: '3 + 5 color schemes', brokerage: '3 + Custom' },
+    { name: 'Flyer templates', free: '1', starter: '3', pro: '3 + 12 color schemes', brokerage: '3 + Custom' },
   ]},
   { category: 'Brand & Customization', features: [
     { name: 'Brand kit (logo, colors, photo)', free: false, starter: true, pro: true, brokerage: true },
@@ -181,6 +181,14 @@ export default function BillingPage() {
   }
 
   const currentPlan = billingInfo?.planTier ?? 'free'
+  const currentPlanDef = PLANS.find(p => p.id === currentPlan)
+  const currentInterval = billingInfo?.subscription?.billingInterval === 'year' || billingInfo?.subscription?.billingInterval === 'annual' ? 'year' : 'month'
+  const currentSub = currentPlanDef && currentPlanDef.id !== 'free'
+    ? { per: currentInterval, money: `$${((currentInterval === 'year' ? currentPlanDef.yearlyPrice : currentPlanDef.monthlyPrice) ?? 0).toLocaleString('en-US')}` }
+    : null
+  const periodEndLabel = billingInfo?.subscription?.stripeCurrentPeriodEnd
+    ? new Date(billingInfo.subscription.stripeCurrentPeriodEnd).toLocaleDateString('en-US', { year: 'numeric', month: 'long', day: 'numeric' })
+    : null
 
   // Label comes from the price-ranked comparison in lib/plans.ts (Upgrade / Downgrade / Current Plan).
   // The checkout, portal and cancel flows are unchanged — only the wording is derived differently.
@@ -259,6 +267,16 @@ export default function BillingPage() {
             </button>
           )}
         </div>
+
+        {/* Subscription disclosures for the plan the customer is on now (same terms shown before purchase on /pricing) */}
+        {currentPlan !== 'free' && currentSub && (
+          <div className="mt-5 pt-4 border-t border-slate-100 text-xs text-slate-500 leading-relaxed" data-testid="current-plan-disclosure">
+            {billingInfo?.subscription?.cancelAtPeriodEnd
+              ? <p><span className="font-semibold text-slate-700">Your plan will not renew.</span> You keep {currentPlan} access until {periodEndLabel ?? 'the end of your paid period'}, then your account returns to Free. You can resume anytime in Manage Billing.</p>
+              : <p><span className="font-semibold text-slate-700">Auto-renews {periodEndLabel ? `on ${periodEndLabel} ` : ''}at {currentSub.money}/{currentSub.per}</span> until you cancel. Cancel anytime in Manage Billing; access continues to the end of the period you paid for. Taxes may apply.</p>}
+            <p className="mt-1"><Link href="/refunds" className="underline hover:text-slate-700">Refund policy</Link> · <Link href="/terms#billing" className="underline hover:text-slate-700">Subscription terms</Link></p>
+          </div>
+        )}
       </div>
 
       {/* Billing toggle */}
@@ -363,16 +381,18 @@ export default function BillingPage() {
               >
                 {isLoading ? <Loader2 className="w-4 h-4 animate-spin" /> : cta}
               </button>
-              {plan.id !== 'free' && !isCurrent && !isDowngradeCta && (
-                <RenewalNotice
-                  className="mt-3"
-                  dark={isDark}
-                  planName={plan.name}
-                  price={annual ? (plan.yearlyPrice ?? 0) : (plan.monthlyPrice ?? 0)}
-                  interval={annual ? 'year' : 'month'}
-                  trialDays={plan.id === 'brokerage' ? 14 : undefined}
-                />
-              )}
+              {/* Fixed-height disclosure slot keeps every CTA on one baseline on wide screens (same fix as /pricing). */}
+              <div className="mt-3 xl:min-h-[11rem]">
+                {plan.id !== 'free' && !isCurrent && !isDowngradeCta && (
+                  <RenewalNotice
+                    dark={isDark}
+                    planName={plan.name}
+                    price={annual ? (plan.yearlyPrice ?? 0) : (plan.monthlyPrice ?? 0)}
+                    interval={annual ? 'year' : 'month'}
+                    trialDays={plan.id === 'brokerage' ? 14 : undefined}
+                  />
+                )}
+              </div>
             </div>
           )
         })}

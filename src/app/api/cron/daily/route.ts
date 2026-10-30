@@ -11,6 +11,7 @@ import { GET as cleanupUploads } from '../cleanup-uploads/route'
 import { GET as retention } from '../retention/route'
 import { captureError } from '@/lib/monitoring'
 import { sendSocialDigests } from '@/lib/social/digest'
+import { resetStaleUsageCounters } from '@/lib/user-service'
 
 export const maxDuration = 300
 
@@ -24,7 +25,8 @@ export async function GET(request: NextRequest) {
   const social = await task('social-digest', () => sendSocialDigests())
   const uploads = await task('cleanup-uploads', async () => (await cleanupUploads(request)).json())
   const retained = await task('retention', async () => (await retention(request)).json())
-  const failed = [outreach, social, uploads, retained].some(r => !!r && typeof r === 'object' && 'error' in (r as object))
+  const usage = await task('usage-reset', () => resetStaleUsageCounters())
+  const failed = [outreach, social, uploads, retained, usage].some(r => !!r && typeof r === 'object' && 'error' in (r as object))
   // 500 when any task failed so Vercel's cron log shows a failure (details are already in Sentry); the other tasks still ran.
-  return NextResponse.json({ ok: !failed, outreach, social, uploads, retention: retained }, { status: failed ? 500 : 200 })
+  return NextResponse.json({ ok: !failed, outreach, social, uploads, retention: retained, usage }, { status: failed ? 500 : 200 })
 }

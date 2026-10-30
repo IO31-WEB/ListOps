@@ -16,8 +16,9 @@ import { resolveListingPhotos } from '@/lib/photos'
 import { getCampaign, checkCampaignQuota } from '@/lib/user-service'
 import { canAccess } from '@/lib/plans'
 import { loadEffectiveBrandKit } from '@/lib/compliance/load'
-import { SCHEME_IDS, resolveScheme, readableOn } from '@/lib/color-schemes'
+import { SCHEME_IDS, resolvePalette, paletteAt, readableOn, accentInk } from '@/lib/color-schemes'
 import { verifyPrintToken } from '@/lib/print-token'
+import { hoaChip, readHoa } from '@/lib/hoa'
 import { USE_TYPE_LABEL, readCommercial } from '@/lib/commercial/types'
 import { encodeQr, qrPath } from '@/lib/qr/encode'
 import { qrTargetUrl } from '@/lib/qr/codes'
@@ -65,7 +66,8 @@ export default async function BrochurePage({ params, searchParams }: {
   // ── Load campaign: signed-in owner, OR the short-lived signed token our PDF renderer carries ──
   let campaign: Awaited<ReturnType<typeof getCampaign>> | undefined
   let planTier: Awaited<ReturnType<typeof checkCampaignQuota>>['planTier'] = 'free'
-  if (verifyPrintToken(id, sp.pt)) {
+  const forPdf = Boolean(sp.pt) && verifyPrintToken(id, sp.pt)
+  if (forPdf) {
     const row = await db.query.campaigns.findFirst({ where: (c, { eq: e }) => e(c.id, id), with: { listing: true, brandKit: true } })
     if (row) {
       const owner = await db.query.users.findFirst({ where: eq(users.id, row.agentId) })
@@ -96,7 +98,8 @@ export default async function BrochurePage({ params, searchParams }: {
   const baths = listing?.bathrooms ?? 0
   const sqft = listing?.sqft?.toLocaleString() ?? ''
   const yearBuilt = (listing as any)?.yearBuilt ?? ''
-  const features = (((listing as any)?.features as string[] | undefined) ?? []).map(f => short(f, 48)).filter(Boolean).slice(0, 8)
+  const hoaBadge = cre ? null : hoaChip(readHoa((listing as any)?.hoa))
+  const features = [...(((listing as any)?.features as string[] | undefined) ?? []).map(f => short(f, 48)).filter(Boolean).slice(0, hoaBadge ? 7 : 8), ...(hoaBadge ? [hoaBadge] : [])]
   const photos = ((listing?.photos as string[]) ?? []).slice(0, 8)
   const badgeLabel = cre ? (cre.offering === 'lease' ? 'For Lease' : 'For Sale') : 'Just Listed'
 
@@ -139,7 +142,11 @@ export default async function BrochurePage({ params, searchParams }: {
     } catch (err) { console.error('[brochure] qr failed', err) }
   }
 
-  const { primary, accent } = resolveScheme(scheme, bk?.primaryColor, bk?.accentColor)
+  const { primary, accent, extras, palette } = resolvePalette(scheme, bk?.primaryColor, bk?.accentColor, (bk as any)?.extraColors)
+  /** i-th decorative color: accent, then the agent's extra brand colors. With no extras it is just the accent (unchanged look). */
+  const tone = (i: number) => paletteAt(palette, i)
+  // Accent used as TEXT on the cream/white panels must stay readable even for pastel / sand accents.
+  const accentText = accentInk(accent)
   const onPrimary = readableOn(primary)
   const onAccent = readableOn(accent)
   const CREAM = '#fbf8f3'
@@ -152,7 +159,7 @@ export default async function BrochurePage({ params, searchParams }: {
     return src
       // eslint-disable-next-line @next/next/no-img-element
       ? <img src={src} alt="" style={{ width: '100%', height: h, objectFit: 'cover', display: 'block' }} />
-      : <div style={{ height: h, background: `linear-gradient(135deg, ${primary}, #0b1220)` }} />
+      : <div style={{ height: h, background: `linear-gradient(135deg, ${primary}, ${extras[0] ?? '#0b1220'})` }} />
   }
   const label = (text: string, color: string) => (
     <div style={{ display: 'flex', alignItems: 'center', gap: 10, marginBottom: 14 }}>
@@ -178,7 +185,7 @@ export default async function BrochurePage({ params, searchParams }: {
     </>
   )
   const sheet = (key: string, name: string, last: boolean, children: ReactNode) => (
-    <section key={key} className="sheet-block">
+    <section key={key} className={last ? 'sheet-block last' : 'sheet-block'}>
       <div className="no-print sheet-label">{name}</div>
       <div className={last ? 'sheet last' : 'sheet'} style={{ position: 'relative', width: SHEET_W, height: SHEET_H, background: 'white', overflow: 'hidden', margin: '0 auto' }}>
         {children}
@@ -193,11 +200,11 @@ export default async function BrochurePage({ params, searchParams }: {
   // ── Sheet 1 — OUTSIDE: inside flap · back panel · front cover ──
   const flap = panel(0, CREAM, (
     <>
-      {label('At a glance', accent)}
+      {label('At a glance', accentText)}
       {stats.length > 0 && (
         <div style={{ display: 'flex', flexWrap: 'wrap', gap: '18px 0' }}>
-          {stats.map(([lab, val]) => (
-            <div key={lab} style={{ width: '50%', borderLeft: `3px solid ${accent}`, paddingLeft: 12 }}>
+          {stats.map(([lab, val], i) => (
+            <div key={lab} style={{ width: '50%', borderLeft: `3px solid ${tone(i)}`, paddingLeft: 12 }}>
               <div style={{ fontFamily: SERIF, fontSize: 26, fontWeight: 700, color: primary, lineHeight: 1.05 }}>{val}</div>
               <div style={{ fontFamily: SANS, fontSize: 8.5, letterSpacing: 2.5, color: '#64748b', marginTop: 4, ...CAPS }}>{lab}</div>
             </div>
@@ -206,11 +213,11 @@ export default async function BrochurePage({ params, searchParams }: {
       )}
       {features.length > 0 && (
         <div style={{ marginTop: 34 }}>
-          {label('Highlights', accent)}
+          {label('Highlights', accentText)}
           <div style={{ display: 'flex', flexDirection: 'column', gap: 10 }}>
-            {features.map(f => (
+            {features.map((f, i) => (
               <div key={f} style={{ display: 'flex', gap: 10, alignItems: 'flex-start' }}>
-                <div style={{ width: 7, height: 7, marginTop: 6, background: accent, flexShrink: 0 }} />
+                <div style={{ width: 7, height: 7, marginTop: 6, background: tone(i), flexShrink: 0 }} />
                 <div style={{ fontFamily: SANS, fontSize: 13, lineHeight: 1.45, color: INK }}>{f}</div>
               </div>
             ))}
@@ -234,7 +241,7 @@ export default async function BrochurePage({ params, searchParams }: {
         {agentPhoto && <img src={agentPhoto} alt="" style={{ width: 104, height: 104, borderRadius: 104, objectFit: 'cover', border: `3px solid ${accent}`, marginBottom: 16 }} />}
         {agentName && <div style={{ fontFamily: SERIF, fontSize: 24, fontWeight: 700, color: onPrimary, lineHeight: 1.15 }}>{agentName}</div>}
         {(agentTitle || brokerageName) && <div style={{ fontFamily: SANS, fontSize: 9.5, letterSpacing: 2.5, color: accent, marginTop: 6, ...CAPS }}>{[agentTitle, brokerageName].filter(Boolean).join('  ·  ')}</div>}
-        <div style={{ width: 36, height: 2, background: accent, margin: '16px 0 10px' }} />
+        <div style={{ width: 36, height: 2, background: extras[0] ?? accent, margin: '16px 0 10px' }} />
         {contactLine(agentPhone, onPrimary)}
         {contactLine(agentEmail, onPrimary)}
         {contactLine(agentWebsite, onPrimary)}
@@ -283,7 +290,7 @@ export default async function BrochurePage({ params, searchParams }: {
   // ── Sheet 2 — INSIDE: three panels ──
   const in1 = panel(0, 'white', (
     <>
-      {label('The property', accent)}
+      {label('The property', accentText)}
       <div style={{ fontFamily: SERIF, fontSize: 25, fontWeight: 700, color: primary, lineHeight: 1.18, marginBottom: 16 }}>{streetAddress}</div>
       {para(copyA)}
       <div style={{ marginTop: 'auto' }}>{photoBox(2, 210)}</div>
@@ -292,11 +299,11 @@ export default async function BrochurePage({ params, searchParams }: {
   const in2 = panel(1, CREAM, (
     <>
       {photoBox(3, 230)}
-      <div style={{ marginTop: 24 }}>{label('Make it yours', accent)}</div>
+      <div style={{ marginTop: 24 }}>{label('Make it yours', accentText)}</div>
       {para(copyB || copyA)}
       {features.length > 4 && (
         <div style={{ marginTop: 'auto', display: 'flex', flexWrap: 'wrap', gap: 6 }}>
-          {features.slice(4).map(f => <span key={f} style={{ fontFamily: SANS, fontSize: 10, color: primary, border: `1px solid ${accent}`, padding: '4px 9px' }}>{f}</span>)}
+          {features.slice(4).map((f, i) => <span key={f} style={{ fontFamily: SANS, fontSize: 10, color: primary, border: `1px solid ${tone(i + 4)}`, padding: '4px 9px' }}>{f}</span>)}
         </div>
       )}
     </>
@@ -320,7 +327,12 @@ export default async function BrochurePage({ params, searchParams }: {
   return (
     <>
       <style>{`
-        @page { size: ${SHEET_W / 96}in ${SHEET_H / 96}in; margin: 0; }
+        /* PRINT = exactly two pages (front, back). Two modes:
+           - PDF render (?pt=): page is the full bleed sheet (11.25 x 8.75in) so the printer gets bleed.
+           - Browser print: page is US Letter landscape (11 x 8.5in); the sheet is shifted by the bleed so the trim box fills the page.
+           Each block is fixed-size, clips overflow and is 1px short of the page: a block exactly equal to the page height spills a
+           sub-pixel sliver onto a third page in Chromium, which is what produced the multi-page preview. */
+        @page { size: ${forPdf ? `${SHEET_W / 96}in ${SHEET_H / 96}in` : `${TRIM_W / 96}in ${TRIM_H / 96}in`}; margin: 0; }
         * { box-sizing: border-box; margin: 0; padding: 0; }
         html, body { margin: 0; padding: 0; height: auto; }
         body { background: #c8cdd4; -webkit-print-color-adjust: exact; print-color-adjust: exact; }
@@ -329,10 +341,12 @@ export default async function BrochurePage({ params, searchParams }: {
         .sheet-label { font-family: ${SANS}; font-size: 12px; font-weight: 600; color: #475569; text-align: center; margin-bottom: 10px; }
         .sheet { box-shadow: 0 8px 40px rgba(0,0,0,0.2); }
         @media print {
+          html, body { background: white !important; width: auto !important; height: auto !important; }
           .no-print { display: none !important; }
-          .sheet-block { padding: 0 !important; }
-          .sheet { width: ${SHEET_W / 96}in !important; height: ${SHEET_H / 96}in !important; zoom: 1 !important; box-shadow: none !important; margin: 0 !important; page-break-after: always; break-after: page; }
-          .sheet.last { page-break-after: auto; break-after: auto; }
+          .sheet-block { padding: 0 !important; margin: 0 !important; position: relative; overflow: hidden; break-inside: avoid; page-break-inside: avoid;
+            width: ${forPdf ? SHEET_W / 96 : TRIM_W / 96}in !important; height: calc(${forPdf ? SHEET_H / 96 : TRIM_H / 96}in - 1px) !important; break-after: page; page-break-after: always; }
+          .sheet-block.last { break-after: auto; page-break-after: auto; }
+          .sheet { position: absolute !important; left: ${forPdf ? 0 : -BLEED}px !important; top: ${forPdf ? 0 : -BLEED}px !important; width: ${SHEET_W / 96}in !important; height: ${SHEET_H / 96}in !important; zoom: 1 !important; box-shadow: none !important; margin: 0 !important; }
         }
         ${ZOOMS.map(([w, z]) => `@media screen and (max-width: ${w}px) { .sheet { zoom: ${z}; } }`).join('\n        ')}
       `}</style>

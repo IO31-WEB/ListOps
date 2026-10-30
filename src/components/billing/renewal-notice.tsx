@@ -24,7 +24,7 @@ export function renewalSummary({ planName, price, interval, trialDays }: Omit<Pr
     : `${money}/${per}, charged today. `
   return (
     `${planName}: ${start}Renews automatically every ${per} at ${money} until you cancel. ` +
-    `Cancel anytime in Dashboard → Billing → Manage subscription; your plan stays active until the end of the period you paid for (no refunds for partial periods). Taxes may apply.`
+    `Cancel anytime in Dashboard → Billing → Manage subscription; your plan stays active until the end of the period you paid for (no refunds for partial periods, except as in our refund policy). Taxes may apply.`
   )
 }
 
@@ -39,8 +39,8 @@ export function RenewalNotice({ planName, price, interval, trialDays, dark, clas
         {trialDays ? `Free for ${trialDays} days, then ${money}/${per}.` : `${money}/${per}.`}
       </span>{' '}
       {trialDays ? 'Your card is charged automatically when the trial ends. ' : ''}
-      Renews automatically every {per} until you cancel. Cancel anytime in Billing → Manage subscription; access continues to the end of the paid period (no partial-period refunds). Taxes may apply.{' '}
-      <Link href="/terms#billing" className="underline">Terms</Link>
+      Renews automatically every {per} until you cancel. Cancel anytime in Billing → Manage subscription; access continues to the end of the paid period. Taxes may apply.{' '}
+      <Link href="/refunds" className="underline">Refund policy</Link>{' · '}<Link href="/terms#billing" className="underline">Terms</Link>
     </p>
   )
 }

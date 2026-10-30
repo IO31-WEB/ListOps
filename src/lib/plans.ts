@@ -49,7 +49,7 @@ export const FEATURE_GATES = {
   visual_kit_pdf:       ['pro', 'commercial', 'brokerage', 'enterprise'],                    // PDF export of graphics
   flyer_templates:      ['starter', 'pro', 'commercial', 'brokerage', 'enterprise'],         // Luxury + Modern (Classic is free)
   flyer_variants:       ['starter', 'pro', 'commercial', 'brokerage', 'enterprise'],         // Open House / Price Improvement flyers
-  flyer_schemes:        ['pro', 'commercial', 'brokerage', 'enterprise'],                    // 5 color schemes
+  flyer_schemes:        ['pro', 'commercial', 'brokerage', 'enterprise'],                    // 12 color schemes
   // Microsite lead capture (Round 7)
   lead_capture:         ['starter', 'pro', 'commercial', 'brokerage', 'enterprise'],         // forms on the microsite + leads inbox + email alert
   lead_export:          ['pro', 'commercial', 'brokerage', 'enterprise'],                    // CSV export
@@ -212,7 +212,7 @@ export const PLANS: Plan[] = [
       { text: 'TikTok, LinkedIn, X & Stories content', included: true, highlight: true },
       { text: 'Hashtag strategy packs (3 sets)', included: true },
       { text: '2 team seats (you + 1 teammate)', included: true },
-      { text: '3 flyer templates + 5 color schemes', included: true },
+      { text: '3 flyer templates + 12 color schemes', included: true },
       { text: 'Visual kit PDF export', included: true },
       { text: 'Lead CSV export + Zapier-ready webhook', included: true },
       { text: 'Shareable branded seller report (always current)', included: true, highlight: true },

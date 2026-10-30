@@ -34,7 +34,7 @@ export async function GET(_req: NextRequest, ctx: Ctx) {
         id: row.id, ...normalizeListing({ address: row.address, city: row.city, state: row.state }), zip: row.zip,
         price: row.price ? Number(row.price) : null, bedrooms: row.bedrooms,
         bathrooms: row.bathrooms ? Number(row.bathrooms) : null, sqft: row.sqft, yearBuilt: row.yearBuilt,
-        propertyType: row.propertyType, description: row.description, features: row.features ?? [],
+        propertyType: row.propertyType, description: row.description, features: row.features ?? [], hoa: row.hoa ?? null,
         photos: resolveListingPhotos(row), photoKeys: row.photoKeys ?? [], source: row.source,
       },
     })

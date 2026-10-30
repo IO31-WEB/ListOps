@@ -1,7 +1,7 @@
 import { auth } from '@clerk/nextjs/server'
 import { redirect } from 'next/navigation'
 import Link from 'next/link'
-import { Users, Plus, Mail, Lock, ArrowRight, Crown, Shield, User } from 'lucide-react'
+import { Users, Plus, Mail, Lock, ArrowRight, Crown, Shield, User, BarChart2, ClipboardList, Download } from 'lucide-react'
 import { getDashboardStats, getTeamMembers } from '@/lib/user-service'
 import { listPendingInvites } from '@/lib/team-invites'
 import { canAccess, seatLimitFor } from '@/lib/plans'
@@ -164,11 +164,17 @@ export default async function TeamPage() {
             <Shield className="w-4 h-4 text-amber-400" />
             <span className="text-amber-400 text-xs font-semibold uppercase tracking-widest">Brokerage Features Active</span>
           </div>
-          <div className="flex flex-wrap gap-x-6 gap-y-2 mb-4 text-sm">
-            <Link href="/dashboard/analytics" className="text-amber-300 underline">Agent performance →</Link>
-            <Link href="/dashboard/team/activity" className="text-amber-300 underline">Team activity log →</Link>
-            <a href="/api/team/export" className="text-amber-300 underline">Export all campaigns (CSV)</a>
-            <span className="text-xs text-slate-400">Owners and admins only</span>
+          <div className="flex flex-col sm:flex-row sm:flex-wrap sm:items-center gap-3 mb-5">
+            <Link href="/dashboard/analytics" className="inline-flex items-center justify-center gap-2 bg-amber-400 text-slate-900 text-sm font-semibold px-4 py-2.5 rounded-xl hover:bg-amber-300 shadow-sm transition-colors">
+              <BarChart2 className="w-4 h-4" />Agent performance
+            </Link>
+            <Link href="/dashboard/team/activity" className="inline-flex items-center justify-center gap-2 border border-white/20 bg-white/5 text-white text-sm font-semibold px-4 py-2.5 rounded-xl hover:bg-white/10 transition-colors">
+              <ClipboardList className="w-4 h-4" />Team activity log
+            </Link>
+            <a href="/api/team/export" download className="inline-flex items-center justify-center gap-2 border border-white/20 bg-white/5 text-white text-sm font-semibold px-4 py-2.5 rounded-xl hover:bg-white/10 transition-colors">
+              <Download className="w-4 h-4" />Export campaigns (CSV)
+            </a>
+            <span className="text-xs text-slate-400 sm:ml-1">Owners and admins only</span>
           </div>
           <div className="grid sm:grid-cols-3 gap-4">
             {[

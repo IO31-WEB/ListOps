@@ -20,6 +20,7 @@ import { enforceSeatLimits, markReferralsUpgraded } from '@/lib/team-invites'
 import { trackPlanUpgraded } from '@/lib/posthog'
 import { captureError } from '@/lib/monitoring'
 import { planFromPriceId } from '@/lib/plans'
+import { recordCommissionForInvoice, reverseCommissionForInvoice } from '@/lib/referral-commissions'
 import type Stripe from 'stripe'
 
 export const runtime = 'nodejs'
@@ -198,8 +199,22 @@ export async function POST(request: NextRequest) {
           await db.update(subscriptions)
             .set({ status: 'active', updatedAt: new Date() })
             .where(eq(subscriptions.orgId, org.id))
+          // Referral commission (idempotent on the invoice id). Never let bookkeeping fail the billing webhook.
+          try {
+            await recordCommissionForInvoice({ orgId: org.id, invoiceId: invoice.id, amountPaidCents: invoice.amount_paid ?? 0 })
+          } catch (err) { captureError(err, { context: 'referral_commission', invoiceId: invoice.id }) }
         }
         console.log(`💳 Payment succeeded: ${invoice.id}`)
+        break
+      }
+
+      case 'charge.refunded': {
+        // Void (or flag for clawback) the referral commission earned on the refunded invoice. Requires `charge.refunded` to be enabled on the webhook endpoint.
+        const charge = event.data.object as Stripe.Charge
+        const invoiceId = typeof (charge as any).invoice === 'string' ? (charge as any).invoice : (charge as any).invoice?.id
+        if (invoiceId && charge.refunded) {
+          try { await reverseCommissionForInvoice(invoiceId) } catch (err) { captureError(err, { context: 'referral_commission_reverse', invoiceId }) }
+        }
         break
       }
 

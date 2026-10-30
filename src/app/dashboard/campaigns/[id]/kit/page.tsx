@@ -6,7 +6,7 @@ import Link from 'next/link'
 import { ArrowLeft, Download, FileText, Lock, ImageOff, Shuffle } from 'lucide-react'
 import { getBillingInfo } from '@/lib/billing-client'
 import { canAccess, type PlanTier } from '@/lib/plans'
-import { COLOR_SCHEMES } from '@/lib/color-schemes'
+import { schemesByGroup } from '@/lib/color-schemes'
 import { KIT_CATALOG, KIT_KINDS, kindAllowed, kitWatermarked, type KitKind } from '@/lib/visual-kit/catalog'
 
 export default function VisualKitPage() {
@@ -81,7 +81,11 @@ export default function VisualKitPage() {
           <div className="text-xs font-semibold text-slate-500 uppercase tracking-wide mb-1">Colors</div>
           <select value={scheme} onChange={e => setScheme(e.target.value)} disabled={!schemesOk} title={schemesOk ? '' : 'Color schemes are a Pro feature'}
             className="w-full border border-slate-200 rounded-lg px-3 py-2 text-sm text-slate-900 disabled:bg-slate-50 disabled:text-slate-400">
-            {COLOR_SCHEMES.map(s => <option key={s.id} value={s.id}>{s.label} — {s.desc}</option>)}
+            {schemesByGroup().map(g => (
+              <optgroup key={g.group} label={g.group}>
+                {g.schemes.map(s => <option key={s.id} value={s.id}>{s.label} — {s.desc}</option>)}
+              </optgroup>
+            ))}
           </select>
         </div>
         <div className="flex gap-2">

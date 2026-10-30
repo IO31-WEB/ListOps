@@ -27,7 +27,7 @@ export default async function ViewAsUser({ params }: { params: Promise<{ id: str
         {' '}<Link prefetch={false} className="underline inline-flex items-center min-h-10" href={`/admin/users/${d.user.id}`}>← Back to user</Link>
       </div>
       <Card title="Account as the user sees it">
-        <p className="text-sm text-slate-700">Plan <Badge tone="slate">{d.plan}</Badge> · {d.user.campaignsUsedThisMonth} of {d.limit} generations used this month · {d.user.onboardingComplete ? 'onboarding complete' : 'onboarding NOT complete'}</p>
+        <p className="text-sm text-slate-700">Plan <Badge tone="slate">{d.plan}</Badge> · {d.usedThisPeriod} of {d.limit} generations used this month · {d.user.onboardingComplete ? 'onboarding complete' : 'onboarding NOT complete'}</p>
       </Card>
       <Card title={`Campaigns (latest ${d.campaignViews.length})`}>
         {d.campaignViews.length === 0 ? <p className="text-sm text-slate-500">None.</p> : (

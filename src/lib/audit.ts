@@ -13,7 +13,7 @@ import { captureError } from '@/lib/monitoring'
 export type AuditAction =
   | 'admin.search_users' | 'admin.view_user' | 'admin.view_as_user' | 'admin.quota_adjust' | 'admin.delete_account'
   | 'user.age_confirmed' | 'user.age_blocked' | 'user.deleted' | 'listing.deleted' | 'billing.checkout_started'
-  | 'team.invite_sent' | 'team.invite_accepted' | 'team.invite_revoked' | 'team.member_removed' | 'referral.claimed' | 'outreach.batch_sent' | 'outreach.cancelled'
+  | 'team.invite_sent' | 'team.invite_accepted' | 'team.invite_revoked' | 'team.member_removed' | 'referral.claimed' | 'outreach.batch_sent' | 'outreach.cancelled' | 'admin.referral_payout' | 'user.payout_email_set'
 
 export function requestIp(request?: Request): string | undefined {
   const raw = request?.headers.get('x-forwarded-for')?.split(',')[0]?.trim()

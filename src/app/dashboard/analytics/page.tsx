@@ -1,9 +1,10 @@
 import { auth } from '@clerk/nextjs/server'
 import { redirect } from 'next/navigation'
 import Link from 'next/link'
-import { BarChart2, TrendingUp, Eye, FileText, Clock, Zap, Lock, ArrowRight } from 'lucide-react'
+import { BarChart2, TrendingUp, Eye, FileText, Clock, Zap, Lock, ArrowRight, Download } from 'lucide-react'
 import { getDashboardStats } from '@/lib/user-service'
 import { getOrgAgentStats, getTeamAdminContext } from '@/lib/team-data'
+import { formatListingAddress } from '@/lib/address'
 
 export const metadata = { title: 'Analytics' }
 
@@ -47,7 +48,7 @@ export default async function AnalyticsPage() {
 
       {/* Recent campaign performance */}
       <div className="bg-white rounded-2xl border border-slate-200 overflow-hidden">
-        <div className="px-6 py-4 border-b border-slate-100 flex items-center justify-between">
+        <div className="px-4 sm:px-6 py-4 border-b border-slate-100 flex items-center justify-between gap-3">
           <h3 className="font-display font-semibold text-slate-900">Recent Campaign Performance</h3>
           <Link href="/dashboard/campaigns" className="text-sm text-amber-600 hover:text-amber-700 font-medium flex items-center gap-1">
             View all <ArrowRight className="w-3.5 h-3.5" />
@@ -64,29 +65,29 @@ export default async function AnalyticsPage() {
         ) : (
           <div className="divide-y divide-slate-100">
             {recentCampaigns.map((campaign: any) => {
-              const address = [campaign.listing?.address, campaign.listing?.city, campaign.listing?.state]
-                .filter(Boolean).join(', ')
+              const address = formatListingAddress(campaign.listing)
               return (
-                <div key={campaign.id} className="flex items-center justify-between px-6 py-4 hover:bg-slate-50 transition-colors">
-                  <div className="flex items-center gap-3 min-w-0">
+                // Phones: stacked card (address on top, stats + actions wrap beneath). >= sm: the original single row.
+                <div key={campaign.id} className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3 px-4 sm:px-6 py-4 hover:bg-slate-50 transition-colors">
+                  <div className="flex items-start sm:items-center gap-3 min-w-0">
                     <div className="w-9 h-9 bg-amber-100 rounded-xl flex items-center justify-center flex-shrink-0">
                       <FileText className="w-4 h-4 text-amber-700" />
                     </div>
                     <div className="min-w-0">
-                      <p className="text-sm font-semibold text-slate-900 truncate">{address || 'Campaign'}</p>
+                      <p className="text-sm font-semibold text-slate-900 break-words sm:truncate">{address || 'Campaign'}</p>
                       <p className="text-xs text-slate-500">
                         {campaign.generationMs ? `${(campaign.generationMs / 1000).toFixed(1)}s to generate` : 'Generated'}
                       </p>
                     </div>
                   </div>
-                  <div className="flex items-center gap-4 flex-shrink-0">
+                  <div className="flex flex-wrap items-center gap-x-4 gap-y-2 pl-12 sm:pl-0 sm:flex-shrink-0">
                     {campaign.micrositePublished && (
-                      <div className="text-right">
-                        <p className="text-sm font-semibold text-slate-900">{campaign.micrositeViews ?? 0}</p>
-                        <p className="text-xs text-slate-500">Microsite views</p>
+                      <div className="sm:text-right">
+                        <span className="text-sm font-semibold text-slate-900">{campaign.micrositeViews ?? 0}</span>
+                        <span className="text-xs text-slate-500 ml-1 sm:ml-0 sm:block">Microsite views</span>
                       </div>
                     )}
-                    <Link href={`/dashboard/campaigns/${campaign.id}/performance`} className="text-xs font-semibold text-amber-700 underline">Performance</Link>
+                    <Link href={`/dashboard/campaigns/${campaign.id}/performance`} className="inline-flex items-center min-h-9 text-xs font-semibold text-amber-700 hover:text-amber-800 underline">Performance</Link>
                     <span className={`text-xs font-medium px-2.5 py-1 rounded-full capitalize ${campaign.status === 'complete' ? 'bg-green-100 text-green-700' : 'bg-amber-100 text-amber-700'}`}>
                       {campaign.status}
                     </span>
@@ -101,9 +102,9 @@ export default async function AnalyticsPage() {
       {/* Brokerage Analytics — locked for lower tiers */}
       {teamCtx && (
         <div className="bg-white border border-slate-200 rounded-2xl p-6">
-          <div className="flex items-center justify-between mb-4">
+          <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 mb-4">
             <h2 className="font-display text-lg font-semibold text-slate-900">Agent performance</h2>
-            <a href="/api/team/export" className="text-sm font-medium text-amber-700 underline">Export all campaigns (CSV)</a>
+            <a href="/api/team/export" download className="inline-flex items-center justify-center gap-2 border border-slate-300 bg-white text-slate-800 text-sm font-semibold px-4 py-2.5 rounded-xl hover:bg-slate-50 hover:border-slate-400 shadow-sm transition-colors"><Download className="w-4 h-4" />Export campaigns (CSV)</a>
           </div>
           <div className="overflow-x-auto">
             <table className="w-full text-sm">

@@ -10,11 +10,11 @@
  */
 
 import { normalizeListing } from '@/lib/address'
-import { needsBillingReset, quotaWindow } from '@/lib/quota-period'
+import { effectiveUsed, needsBillingReset, quotaWindow } from '@/lib/quota-period'
 import { resolveListingPhotos } from '@/lib/photos'
 import { db } from './db'
 import { users, organizations, brandKits, subscriptions, campaigns, auditLogs } from './db/schema'
-import { eq, and, desc, count, sql, isNull } from 'drizzle-orm'
+import { eq, and, desc, count, sql, isNull, lt, gt } from 'drizzle-orm'
 import { generateReferralCode, slugify } from './utils'
 import type { PlanTier } from './plans'
 import { CAMPAIGN_LIMITS } from './plans'
@@ -303,9 +303,12 @@ export async function consumeCampaignQuota(clerkId: string): Promise<{
   const needsReset = needsBillingReset(user.lastResetAt, periodEnd, now)
 
   if (needsReset) {
+    // Conditional on the stored reset time still being older than this window: when two generations race across a
+    // rollover only ONE of them zeroes the counter. An unconditional UPDATE let the second reset wipe the first's
+    // increment (a free generation).
     await db.update(users)
       .set({ campaignsUsedThisMonth: 0, lastResetAt: now })
-      .where(eq(users.id, user.id))
+      .where(and(eq(users.id, user.id), lt(users.lastResetAt, quotaWindow(periodEnd, now).start)))
     // After reset, counter is 0 — proceed as normal from 0
   }
 
@@ -388,14 +391,16 @@ export async function getDashboardStats(clerkId: string) {
   const now = new Date()
   const periodEnd = sub?.stripeCurrentPeriodEnd
   const nextReset = quotaWindow(periodEnd, now).next
+  const usedThisPeriod = effectiveUsed(user, periodEnd, now)
   const daysUntilReset = Math.ceil((nextReset.getTime() - now.getTime()) / (1000 * 60 * 60 * 24))
 
   return {
     user, planTier,
     totalCampaigns: totalResult[0]?.count ?? 0,
-    campaignsThisMonth: user.campaignsUsedThisMonth,
+    campaignsThisMonth: usedThisPeriod, // period-aware: never last period's stale counter
     campaignLimit: CAMPAIGN_LIMITS[planTier],
-    recentCampaigns,
+    // Display-time title-casing so "Recent Campaigns" matches every other place addresses are shown.
+    recentCampaigns: recentCampaigns.map(c => ({ ...c, listing: normalizeListing(c.listing) })),
     avgGenTimeMs: Math.round(genTimeResult[0]?.avg ?? 0),
     micrositeViews: viewsResult[0]?.total ?? 0,
     daysUntilReset,
@@ -510,4 +515,29 @@ export async function refundCampaignQuota(clerkId: string): Promise<void> {
       campaignsUsedTotal: sql`GREATEST(campaigns_used_total - 1, 0)`,
     })
     .where(eq(users.id, user.id))
+}
+
+/**
+ * Daily housekeeping: physically zero the usage counter for everyone whose billing window has rolled over.
+ * Display code already treats those counters as 0 (effectiveUsed), so this just keeps the stored data honest
+ * (exports, SQL, any future reader). Safe to re-run: the UPDATE only touches rows whose last reset predates the window.
+ */
+export async function resetStaleUsageCounters(now: Date = new Date()): Promise<{ checked: number; reset: number }> {
+  const rows = await db.query.users.findMany({
+    where: gt(users.campaignsUsedThisMonth, 0),
+    columns: { id: true, lastResetAt: true, campaignsUsedThisMonth: true },
+    with: { organization: { columns: { id: true }, with: { subscriptions: { columns: { stripeCurrentPeriodEnd: true } } } } },
+  })
+  let reset = 0
+  for (const u of rows) {
+    const periodEnd = u.organization?.subscriptions?.[0]?.stripeCurrentPeriodEnd ?? null
+    if (!needsBillingReset(u.lastResetAt, periodEnd, now)) continue
+    const start = quotaWindow(periodEnd, now).start
+    const done = await db.update(users)
+      .set({ campaignsUsedThisMonth: 0, lastResetAt: now })
+      .where(and(eq(users.id, u.id), lt(users.lastResetAt, start)))
+      .returning({ id: users.id })
+    reset += done.length
+  }
+  return { checked: rows.length, reset }
 }

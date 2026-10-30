@@ -42,7 +42,7 @@ export default function AffiliatesPage() {
           <p style={{ fontSize: 18, color: '#94a3b8', lineHeight: 1.7, marginBottom: 36 }}>
             Refer real estate agents to ListOps and earn a percentage of their subscription every month — for as long as they stay subscribed.
           </p>
-          <a href="mailto:affiliates@listops.io?subject=Affiliate Program Application" style={{ background: '#f59e0b', color: '#0f172a', padding: '16px clamp(16px, 5vw, 40px)', borderRadius: 12, fontWeight: 800, fontSize: 17, textDecoration: 'none', display: 'inline-block' }}>
+          <a href="mailto:isaiah@listops.io?subject=Affiliate Program Application" style={{ background: '#f59e0b', color: '#0f172a', padding: '16px clamp(16px, 5vw, 40px)', borderRadius: 12, fontWeight: 800, fontSize: 17, textDecoration: 'none', display: 'inline-block' }}>
             Apply to Join →
           </a>
         </div>
@@ -94,7 +94,7 @@ export default function AffiliatesPage() {
         <div style={{ background: '#0f172a', borderRadius: 20, padding: 'clamp(28px, 6vw, 48px)', textAlign: 'center' }}>
           <h2 style={{ fontSize: 26, fontWeight: 800, color: 'white', marginBottom: 12 }}>Ready to start earning?</h2>
           <p style={{ color: '#94a3b8', marginBottom: 28, fontSize: 16 }}>Email us to apply. We'll get back to you within 2 business days.</p>
-          <a href="mailto:affiliates@listops.io?subject=Affiliate Program Application" style={{ background: '#f59e0b', color: '#0f172a', padding: '14px 36px', borderRadius: 12, fontWeight: 800, fontSize: 16, textDecoration: 'none', display: 'inline-block' }}>
+          <a href="mailto:isaiah@listops.io?subject=Affiliate Program Application" style={{ background: '#f59e0b', color: '#0f172a', padding: '14px 36px', borderRadius: 12, fontWeight: 800, fontSize: 16, textDecoration: 'none', display: 'inline-block' }}>
             Apply Now →
           </a>
         </div>

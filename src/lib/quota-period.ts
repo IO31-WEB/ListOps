@@ -42,3 +42,16 @@ export function quotaWindow(periodEnd: Date | null | undefined, now: Date): Quot
 export function needsBillingReset(lastResetAt: Date, periodEnd: Date | null | undefined, now: Date): boolean {
   return lastResetAt.getTime() < quotaWindow(periodEnd, now).start.getTime()
 }
+
+/**
+ * Generations used in the CURRENT quota window. The stored counter is only zeroed lazily (when the user next
+ * generates, or by the daily sweep), so every place that DISPLAYS usage must go through this instead of reading
+ * `campaignsUsedThisMonth` directly — otherwise an inactive user shows last period's "3/5" forever.
+ */
+export function effectiveUsed(
+  user: { campaignsUsedThisMonth: number; lastResetAt: Date },
+  periodEnd: Date | null | undefined,
+  now: Date = new Date(),
+): number {
+  return needsBillingReset(user.lastResetAt, periodEnd, now) ? 0 : user.campaignsUsedThisMonth
+}

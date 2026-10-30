@@ -97,6 +97,8 @@ export const users = pgTable('users', {
   lastResetAt: timestamp('last_reset_at').notNull().defaultNow(),
 
   referralCode: text('referral_code'),
+  /** Where referral commissions are sent (PayPal / Zelle / ACH contact). Set by the referrer; used only by the manual payout. */
+  payoutEmail: text('payout_email'),
   referredBy: uuid('referred_by'),
 
   onboardingComplete: boolean('onboarding_complete').notNull().default(false),
@@ -218,6 +220,7 @@ export const listings = pgTable('listings', {
   officeName: text('office_name'),
 
   commercial: jsonb('commercial'),                  // v13: CRE details (null = residential). See lib/commercial/types.ts
+  hoa: jsonb('hoa').$type<{ hasHoa: boolean; monthlyFee?: number | null; notes?: string }>(), // v19: optional HOA info (see lib/hoa.ts)
   rawData: jsonb('raw_data'),
   status: listingStatusEnum('status').notNull().default('active'),
   fetchedAt: timestamp('fetched_at').notNull().defaultNow(),
@@ -318,6 +321,32 @@ export const referrals = pgTable('referrals', {
 }, (t) => ({
   referrerIdx: index('referral_referrer_idx').on(t.referrerId),
   referredUserIdx: index('referral_referred_user_idx').on(t.referredUserId),
+}))
+
+// ── Referral commissions ──────────────────────────────────────
+// One row per PAID Stripe invoice of a referred customer (UNIQUE on stripe_invoice_id => webhook retries never double-accrue).
+// status: pending (accruing / on hold / payable once eligible_at passes) -> paid (admin paid it out manually)
+//         void (invoice refunded before payout) | clawback (invoice refunded AFTER payout: recover or offset manually)
+export const referralCommissions = pgTable('referral_commissions', {
+  id: uuid('id').primaryKey().defaultRandom(),
+  referralId: uuid('referral_id').notNull().references(() => referrals.id, { onDelete: 'cascade' }),
+  referrerId: uuid('referrer_id').notNull().references(() => users.id),
+  referredUserId: uuid('referred_user_id').notNull().references(() => users.id),
+  stripeInvoiceId: text('stripe_invoice_id').notNull(),
+  amountPaidCents: integer('amount_paid_cents').notNull(),
+  commissionCents: integer('commission_cents').notNull(),
+  rateBps: integer('rate_bps').notNull(),
+  status: text('status').notNull().default('pending'),
+  eligibleAt: timestamp('eligible_at').notNull(),
+  paidAt: timestamp('paid_at'),
+  paidMethod: text('paid_method'),
+  paidReference: text('paid_reference'),
+  paidBy: uuid('paid_by'),
+  createdAt: timestamp('created_at').notNull().defaultNow(),
+}, (t) => ({
+  invoiceUnique: uniqueIndex('referral_commission_invoice_idx').on(t.stripeInvoiceId),
+  referrerIdx: index('referral_commission_referrer_idx').on(t.referrerId, t.status),
+  referralIdx: index('referral_commission_referral_idx').on(t.referralId),
 }))
 
 // ── Team seat invites ──────────────────────────────────────────
@@ -656,7 +685,7 @@ export const orgCompliance = pgTable('org_compliance', {
   // Present key = that brand field is locked to this value for every agent in the org.
   locked: jsonb('locked').$type<{
     brokerageName?: string; brokerageLogo?: string; logoUrl?: string
-    primaryColor?: string; accentColor?: string; tagline?: string
+    primaryColor?: string; accentColor?: string; extraColors?: string; tagline?: string
   }>().notNull().default({}),
   updatedBy: uuid('updated_by'),
   updatedAt: timestamp('updated_at').notNull().defaultNow(),

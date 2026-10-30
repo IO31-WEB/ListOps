@@ -78,7 +78,7 @@ describe('images & colors', () => {
     expect(resolveScheme('brand', '#112233', '#aabbcc')).toEqual({ primary: '#112233', accent: '#aabbcc' })
     expect(resolveScheme('navy', '#112233', '#aabbcc').primary).toBe('#1a2744')
     expect(resolveScheme('brand', 'red', null).primary).toBe('#1e3a5f')
-    expect(COLOR_SCHEMES.length).toBe(5)
+    expect(COLOR_SCHEMES.length).toBe(12) // brand + 4 classic + 3 pastel + 2 earth + 2 beach
   })
   test('readable text color', () => { expect(readableOn('#ffffff')).toBe('#0f172a'); expect(readableOn('#0b1220')).toBe('#ffffff') })
 })

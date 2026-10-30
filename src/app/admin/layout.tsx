@@ -5,7 +5,7 @@ export const metadata = { title: 'Admin · ListOps', robots: { index: false, fol
 
 export default async function AdminLayout({ children }: { children: React.ReactNode }) {
   const admin = await requireAdminPage() // layouts don't re-run on client navigation — each page ALSO checks.
-  const nav = [['/admin', 'Overview'], ['/admin/users', 'Users'], ['/admin/failures', 'Failures'], ['/admin/audit', 'Audit log']]
+  const nav = [['/admin', 'Overview'], ['/admin/users', 'Users'], ['/admin/referrals', 'Referrals'], ['/admin/failures', 'Failures'], ['/admin/audit', 'Audit log']]
   return (
     <div className="min-h-screen bg-slate-100 overflow-x-hidden">
       <div className="sticky top-0 z-30 bg-slate-900 text-white">

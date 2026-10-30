@@ -5,6 +5,7 @@ import Link from 'next/link'
 import { Plus, TrendingUp, Zap, ArrowRight, Clock, FileText, BarChart2, Palette, Users, CheckCircle, AlertTriangle } from 'lucide-react'
 import { getDashboardStats } from '@/lib/user-service'
 import { formatDate } from '@/lib/utils'
+import { formatListingAddress } from '@/lib/address'
 
 export const metadata = { title: 'Dashboard' }
 
@@ -192,9 +193,8 @@ export default async function DashboardPage() {
         ) : (
           <div className="divide-y divide-slate-100">
             {recentCampaigns.map((campaign) => {
-              const address = campaign.listing
-                ? `${campaign.listing.address ?? ''}, ${campaign.listing.city ?? ''} ${campaign.listing.state ?? ''}`.trim().replace(/^,|,$/g, '')
-                : 'Listing Campaign'
+              // One shared formatter (lib/address.ts): "136 Sharp Lane, Elizabethton, TN" — same as every other screen.
+              const address = campaign.listing ? formatListingAddress(campaign.listing) : 'Listing Campaign'
 
               return (
                 <Link
@@ -282,6 +282,13 @@ export default async function DashboardPage() {
           </div>
         ))}
       </div>
+
+      {planTier !== 'free' && (
+        <p className="text-xs text-slate-500 text-center">
+          Your {planTier} subscription renews automatically until you cancel. Cancel anytime in <Link href="/dashboard/billing" className="underline hover:text-slate-700">Billing</Link>
+          {' · '}<Link href="/refunds" className="underline hover:text-slate-700">Refund policy</Link>
+        </p>
+      )}
     </div>
   )
 }

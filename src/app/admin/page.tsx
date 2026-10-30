@@ -1,15 +1,17 @@
+import { formatStreet } from '@/lib/address'
 import Link from 'next/link'
 import { requireAdminPage } from '@/lib/admin'
-import { countFailures, getOverviewCounts, getRecentFailures, getSpendOverview } from '@/lib/admin-data'
+import { countFailures, getOverviewCounts, getRecentFailures, getRevenueOverview, getSpendOverview } from '@/lib/admin-data'
 import { Badge, Card, DesktopTable, KV, MobileItem, MobileList, Stat, fmtDate, linkCls, searchBtnCls, searchInputCls, td, th, usd } from './_lib'
 
 export const dynamic = 'force-dynamic'
 
 export default async function AdminOverview() {
   await requireAdminPage()
-  const [spend, counts, fail24, fail7, failures] = await Promise.all([
-    getSpendOverview(), getOverviewCounts(), countFailures(1), countFailures(7), getRecentFailures(8, 7),
+  const [spend, counts, fail24, fail7, failures, revenue] = await Promise.all([
+    getSpendOverview(), getOverviewCounts(), countFailures(1), countFailures(7), getRecentFailures(8, 7), getRevenueOverview(),
   ])
+  const money = (cents: number) => (revenue.ok ? `$${(cents / 100).toLocaleString('en-US', { maximumFractionDigits: 0 })}` : '—')
   const dailyCap = Number(process.env.AI_DAILY_BUDGET_USD) || 40
   const monthlyCap = Number(process.env.AI_MONTHLY_BUDGET_USD) || 400
 
@@ -19,6 +21,13 @@ export default async function AdminOverview() {
         <input name="q" placeholder="Look up a user by email, name, user id…" className={searchInputCls} />
         <button className={searchBtnCls}>Search</button>
       </form>
+
+      <div className="grid grid-cols-2 lg:grid-cols-4 gap-3 sm:gap-4">
+        <Stat label="MTD sales" value={money(revenue.mtdCents)} sub={revenue.ok ? `${revenue.mtdInvoices} paid invoices this month (UTC)` : 'Stripe unavailable'} />
+        <Stat label="MRR" value={money(revenue.mrrCents)} sub={revenue.ok ? `${revenue.payingSubscriptions} paying subscriptions` : 'Stripe unavailable'} />
+        <Stat label="ARR (MRR × 12)" value={money(revenue.mrrCents * 12)} sub="run-rate, not booked revenue" />
+        <Stat label="Paying customers" value={revenue.ok ? revenue.payingSubscriptions : '—'} sub={`${counts.totalUsers} total users`} />
+      </div>
 
       <div className="grid grid-cols-2 lg:grid-cols-4 gap-3 sm:gap-4">
         <Stat label="AI spend today (est.)" value={usd(spend.today.cost)} sub={`${spend.today.calls} calls · cap ${usd(dailyCap)}`} />
@@ -61,14 +70,14 @@ export default async function AdminOverview() {
                 <tr key={f.id}>
                   <td className={td}>{fmtDate(f.createdAt)}</td>
                   <td className={`${td} break-all`}>{f.userId ? <Link prefetch={false} className="text-amber-700 underline" href={`/admin/users/${f.userId}`}>{f.email}</Link> : '—'}</td>
-                  <td className={td}>{f.address ?? '—'}</td>
+                  <td className={td}>{f.address ? formatStreet(f.address) : '—'}</td>
                   <td className={td}>{f.failureReason ?? <span className="text-slate-400">not recorded</span>} {f.refundedAt && <Badge tone="green">refunded</Badge>}</td>
                 </tr>))}</tbody></DesktopTable>
             <MobileList>{failures.map(f => (
               <MobileItem key={f.id}>
                 <KV label="When">{fmtDate(f.createdAt)}</KV>
                 <KV label="User">{f.userId ? <Link prefetch={false} className={linkCls} href={`/admin/users/${f.userId}`}>{f.email}</Link> : '—'}</KV>
-                <KV label="Property">{f.address ?? '—'}</KV>
+                <KV label="Property">{f.address ? formatStreet(f.address) : '—'}</KV>
                 <KV label="Reason">{f.failureReason ?? <span className="text-slate-400">not recorded</span>} {f.refundedAt && <Badge tone="green">refunded</Badge>}</KV>
               </MobileItem>))}</MobileList>
           </>
